@@ -22,6 +22,7 @@ build/
 *.swp
 *.swo
 *~
+.qwen/
 
 # OS
 .DS_Store
