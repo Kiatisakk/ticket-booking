@@ -18,7 +18,43 @@ git --version     # Should be installed
 
 ---
 
-### Step 1: Start Database
+### Step 1: Create Environment Files
+
+You need to create two `.env` files:
+
+#### 1. Root `.env` file
+
+Create a file named `.env` in the project root:
+
+```env
+# Database Settings
+POSTGRES_USER=admin
+POSTGRES_PASSWORD=password123
+POSTGRES_DB=ticket_booking_db
+PORT_DB=5433
+
+# Server Settings
+PORT_SERVER=4000
+HOST_SERVER=0.0.0.0
+
+# Client Settings
+PORT_CLIENT=3000
+VITE_API_BASE=http://localhost:4000
+```
+
+#### 2. Server `.env` file
+
+Create a file named `.env` inside the `server` folder:
+
+```env
+DATABASE_URL="postgresql://admin:password123@localhost:5433/ticket_booking_db"
+```
+
+> ⚠️ **Important:** These files contain sensitive credentials and are **NOT** uploaded to GitHub. Each developer must create them locally.
+
+---
+
+### Step 2: Start Database
 
 ```bash
 docker-compose up -d database
@@ -28,7 +64,7 @@ docker-compose up -d database
 
 ---
 
-### Step 2: Setup Server
+### Step 3: Setup Server
 
 ```bash
 cd server
@@ -49,7 +85,7 @@ You should see:
 
 ---
 
-### Step 3: Start Server
+### Step 4: Start Server
 
 ```bash
 npm run dev
@@ -63,7 +99,7 @@ You should see:
 
 ---
 
-### Step 4: Test API
+### Step 5: Test API
 
 Open a **new terminal** and run:
 
@@ -76,7 +112,7 @@ All tests should pass ✅
 
 ---
 
-### Step 5: (Optional) Start Frontend
+### Step 6: (Optional) Start Frontend
 
 Open another terminal:
 

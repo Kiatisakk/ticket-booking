@@ -38,7 +38,41 @@ git clone <your-repo-url>
 cd ticket-booking
 ```
 
-### Step 2: Start the Database
+### Step 2: Create Environment Files
+
+You need to create two `.env` files locally (they are not included in the repository for security):
+
+#### Root `.env` file
+
+Create a file named `.env` in the project root:
+
+```env
+# Database Settings
+POSTGRES_USER=admin
+POSTGRES_PASSWORD=password123
+POSTGRES_DB=ticket_booking_db
+PORT_DB=5433
+
+# Server Settings
+PORT_SERVER=4000
+HOST_SERVER=0.0.0.0
+
+# Client Settings
+PORT_CLIENT=3000
+VITE_API_BASE=http://localhost:4000
+```
+
+#### Server `.env` file
+
+Create a file named `.env` inside the `server` folder:
+
+```env
+DATABASE_URL="postgresql://admin:password123@localhost:5433/ticket_booking_db"
+```
+
+> ⚠️ **Note:** These credentials are for local development. Change them for production!
+
+### Step 3: Start the Database
 
 ```bash
 docker-compose up -d database
@@ -46,7 +80,7 @@ docker-compose up -d database
 
 > ⏳ Wait ~15 seconds for the database to initialize.
 
-### Step 3: Setup the Server
+### Step 4: Setup the Server
 
 ```bash
 cd server
@@ -64,7 +98,7 @@ npx prisma db push
 npm run db:seed
 ```
 
-### Step 4: Start the API Server
+### Step 5: Start the API Server
 
 ```bash
 # From server directory
@@ -73,7 +107,7 @@ npm run dev
 
 ✅ **Server running at:** http://localhost:4000
 
-### Step 5: (Optional) Start the Frontend
+### Step 6: (Optional) Start the Frontend
 
 Open a new terminal:
 

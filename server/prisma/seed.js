@@ -6,6 +6,32 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('🌱 Seeding database...');
 
+  // Optional: Clear existing data if re-seeding
+  console.log('Checking for existing data...');
+  const userCount = await prisma.user.count();
+  
+  if (userCount > 0) {
+    console.log('⚠️  Database already has data. Clearing and re-seeding...');
+    await prisma.$transaction([
+      prisma.ticket.deleteMany(),
+      prisma.payment.deleteMany(),
+      prisma.bookingDetail.deleteMany(),
+      prisma.booking.deleteMany(),
+      prisma.showtime.deleteMany(),
+      prisma.seat.deleteMany(),
+      prisma.venue.deleteMany(),
+      prisma.event.deleteMany(),
+      prisma.user.deleteMany(),
+      prisma.seatType.deleteMany(),
+      prisma.eventCategory.deleteMany(),
+      prisma.paymentStatus.deleteMany(),
+      prisma.bookingStatus.deleteMany(),
+      prisma.role.deleteMany(),
+      prisma.paymentMethod.deleteMany(),
+    ]);
+    console.log('✅ Database cleared');
+  }
+
   // Create Roles
   console.log('Creating roles...');
   const adminRole = await prisma.role.create({
