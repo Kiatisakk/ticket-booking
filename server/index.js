@@ -30,13 +30,22 @@ app.post('/api/auth/register', async (req, res) => {
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Create user with default role (Customer = 2, assuming)
+    // Find Customer role dynamically
+    const customerRole = await prisma.role.findFirst({
+      where: { RoleName: 'Customer' }
+    });
+
+    if (!customerRole) {
+      return res.status(500).json({ error: 'Customer role not found in database' });
+    }
+
+    // Create user with Customer role
     const user = await prisma.user.create({
       data: {
         FullName: fullName,
         Email: email,
         Password: hashedPassword,
-        RoleID: 2 // Default to Customer
+        RoleID: customerRole.RoleID
       }
     });
 
@@ -146,8 +155,13 @@ app.get('/api/events/:id', async (req, res) => {
 // Create event (Admin/Staff only)
 app.post('/api/events', authenticateToken, async (req, res) => {
   try {
-    if (req.user.role > 2) { // Assuming 1=Admin, 2=Staff, 3=Customer
-      return res.status(403).json({ error: 'Unauthorized' });
+    // Check if user is Customer role
+    const customerRole = await prisma.role.findFirst({
+      where: { RoleName: 'Customer' }
+    });
+    
+    if (req.user.role === customerRole?.RoleID) {
+      return res.status(403).json({ error: 'Unauthorized. Admin or Staff role required.' });
     }
 
     const { title, description, categoryId } = req.body;
@@ -282,6 +296,37 @@ app.get('/api/showtimes/:id', async (req, res) => {
   }
 });
 
+// Get booked seats for a showtime
+app.get('/api/showtimes/:id/booked-seats', async (req, res) => {
+  try {
+    const pendingStatus = await prisma.bookingStatus.findFirst({
+      where: { StatusName: 'Pending' }
+    });
+    const completedStatus = await prisma.bookingStatus.findFirst({
+      where: { StatusName: 'Completed' }
+    });
+
+    const bookedSeats = await prisma.bookingDetail.findMany({
+      where: {
+        ShowtimeID: parseInt(req.params.id),
+        Booking: {
+          StatusID: {
+            in: [pendingStatus?.StatusID, completedStatus?.StatusID].filter(Boolean)
+          }
+        }
+      },
+      select: {
+        SeatID: true
+      }
+    });
+
+    res.json({ bookedSeatIds: bookedSeats.map(d => d.SeatID) });
+  } catch (error) {
+    console.error('Get booked seats error:', error);
+    res.status(500).json({ error: 'Failed to fetch booked seats' });
+  }
+});
+
 // ==================== BOOKINGS ====================
 
 // Create booking (with seat reservation)
@@ -292,6 +337,11 @@ app.post('/api/bookings', authenticateToken, async (req, res) => {
     if (!showtimeId || !seatIds || seatIds.length === 0) {
       return res.status(400).json({ error: 'Showtime and seats are required' });
     }
+
+    // Get status IDs dynamically
+    const pendingStatus = await prisma.bookingStatus.findFirst({
+      where: { StatusName: 'Pending' }
+    });
 
     // Get showtime info
     const showtime = await prisma.showtime.findUnique({
@@ -311,7 +361,7 @@ app.post('/api/bookings', authenticateToken, async (req, res) => {
       include: {
         Booking: {
           where: {
-            StatusID: 1 // Pending
+            StatusID: pendingStatus?.StatusID
           }
         }
       }
@@ -340,7 +390,7 @@ app.post('/api/bookings', authenticateToken, async (req, res) => {
     const booking = await prisma.booking.create({
       data: {
         UserID: req.user.userId,
-        StatusID: 1, // Pending
+        StatusID: pendingStatus?.StatusID,
         ExpiresAt: expiresAt,
         TotalAmount: totalAmount,
         BookingDetails: {
@@ -434,8 +484,12 @@ app.get('/api/bookings/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Booking not found' });
     }
 
-    // Check if user owns this booking
-    if (booking.UserID !== req.user.userId && req.user.role > 2) {
+    // Check if user owns this booking or is admin/staff
+    const customerRole = await prisma.role.findFirst({
+      where: { RoleName: 'Customer' }
+    });
+
+    if (booking.UserID !== req.user.userId && req.user.role === customerRole?.RoleID) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
@@ -449,6 +503,13 @@ app.get('/api/bookings/:id', authenticateToken, async (req, res) => {
 // Cancel booking
 app.post('/api/bookings/:id/cancel', authenticateToken, async (req, res) => {
   try {
+    const pendingStatus = await prisma.bookingStatus.findFirst({
+      where: { StatusName: 'Pending' }
+    });
+    const cancelledStatus = await prisma.bookingStatus.findFirst({
+      where: { StatusName: 'Cancelled' }
+    });
+
     const booking = await prisma.booking.findUnique({
       where: { BookingID: parseInt(req.params.id) }
     });
@@ -461,13 +522,13 @@ app.post('/api/bookings/:id/cancel', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
-    if (booking.StatusID !== 1) { // Only pending bookings can be cancelled
+    if (booking.StatusID !== pendingStatus?.StatusID) {
       return res.status(400).json({ error: 'Booking cannot be cancelled' });
     }
 
     await prisma.booking.update({
       where: { BookingID: parseInt(req.params.id) },
-      data: { StatusID: 3 } // Cancelled
+      data: { StatusID: cancelledStatus?.StatusID }
     });
 
     res.json({ message: 'Booking cancelled successfully' });
@@ -497,6 +558,17 @@ app.post('/api/payments', authenticateToken, async (req, res) => {
   try {
     const { bookingId, methodId } = req.body;
 
+    // Get status IDs dynamically
+    const pendingStatus = await prisma.bookingStatus.findFirst({
+      where: { StatusName: 'Pending' }
+    });
+    const completedStatus = await prisma.bookingStatus.findFirst({
+      where: { StatusName: 'Completed' }
+    });
+    const successPaymentStatus = await prisma.paymentStatus.findFirst({
+      where: { StatusName: 'Success' }
+    });
+
     // Get booking
     const booking = await prisma.booking.findUnique({
       where: { BookingID: bookingId }
@@ -510,7 +582,7 @@ app.post('/api/payments', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
-    if (booking.StatusID !== 1) {
+    if (booking.StatusID !== pendingStatus?.StatusID) {
       return res.status(400).json({ error: 'Booking is not pending' });
     }
 
@@ -526,7 +598,7 @@ app.post('/api/payments', authenticateToken, async (req, res) => {
       data: {
         BookingID: bookingId,
         MethodID: methodId,
-        StatusID: 2, // Success (mock - in real app, integrate with payment gateway)
+        StatusID: successPaymentStatus?.StatusID,
         TransactionID: transactionId,
         Amount: booking.TotalAmount,
         PaidAt: new Date()
@@ -536,7 +608,7 @@ app.post('/api/payments', authenticateToken, async (req, res) => {
     // Update booking status to completed
     await prisma.booking.update({
       where: { BookingID: bookingId },
-      data: { StatusID: 2 } // Completed
+      data: { StatusID: completedStatus?.StatusID }
     });
 
     // Generate tickets
