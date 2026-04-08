@@ -1,0 +1,66 @@
+services:
+  database:
+    image: postgres:17-alpine
+    container_name: ticket-db
+    restart: always
+    shm_size: 128mb
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: password123
+      POSTGRES_DB: ticket_booking_db
+    volumes:
+      - ticket_pgdata:/var/lib/postgresql/data
+    networks:
+      - ticket-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d ticket_booking_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: ticket-server
+    restart: always
+    ports:
+      - "${PORT_SERVER:-4000}:4000"
+    environment:
+      PORT: 4000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-password123}@database:5432/${POSTGRES_DB:-ticket_booking_db}
+    depends_on:
+      database:
+        condition: service_healthy
+    networks:
+      - ticket-network
+
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    container_name: ticket-client
+    restart: always
+    ports:
+      - "${PORT_CLIENT:-3000}:3000"
+    depends_on:
+      - server
+    networks:
+      - ticket-network
+
+  adminer:
+    image: adminer
+    container_name: ticket-adminer
+    restart: always
+    ports:
+      - "8080:8080"
+    networks:
+      - ticket-network
+
+volumes:
+  ticket_pgdata:
+
+networks:
+  ticket-network: {}
