@@ -14,6 +14,8 @@ model Role {
   RoleID      Int      @id @default(autoincrement()) @map("RoleID")
   RoleName    String?  @map("RoleName")
   Description String?  @map("Description")
+  CreatedAt   DateTime @default(now()) @map("CreatedAt")
+  UpdatedAt   DateTime @updatedAt @map("UpdatedAt")
   Users       User[]
 
   @@map("Roles")
@@ -22,6 +24,8 @@ model Role {
 model BookingStatus {
   StatusID   Int      @id @default(autoincrement()) @map("StatusID")
   StatusName String?  @map("StatusName")
+  CreatedAt  DateTime @default(now()) @map("CreatedAt")
+  UpdatedAt  DateTime @updatedAt @map("UpdatedAt")
   Bookings   Booking[]
 
   @@map("BookingStatuses")
@@ -30,6 +34,8 @@ model BookingStatus {
 model EventCategory {
   CategoryID Int     @id @default(autoincrement()) @map("CategoryID")
   CategoryName String? @map("CategoryName")
+  CreatedAt  DateTime @default(now()) @map("CreatedAt")
+  UpdatedAt  DateTime @updatedAt @map("UpdatedAt")
   Events     Event[]
 
   @@map("EventCategories")
@@ -39,52 +45,62 @@ model SeatType {
   SeatTypeID    Int     @id @default(autoincrement()) @map("SeatTypeID")
   TypeName      String? @map("TypeName")
   PriceModifier Decimal @map("PriceModifier")
+  CreatedAt     DateTime @default(now()) @map("CreatedAt")
+  UpdatedAt     DateTime @updatedAt @map("UpdatedAt")
   Seats         Seat[]
 
   @@map("SeatTypes")
 }
 
 model User {
-  UserID   Int     @id @default(autoincrement()) @map("UserID")
-  RoleID   Int?    @map("RoleID")
-  FullName String? @map("FullName")
-  Email    String? @unique @map("Email")
-  Password String? @map("Password")
-  Role     Role?   @relation(fields: [RoleID], references: [RoleID])
+  UserID   Int      @id @default(autoincrement()) @map("UserID")
+  RoleID   Int      @map("RoleID")
+  FullName String   @map("FullName")
+  Email    String   @unique @map("Email")
+  Password String   @map("Password")
+  CreatedAt DateTime @default(now()) @map("CreatedAt")
+  UpdatedAt DateTime @updatedAt @map("UpdatedAt")
+  Role     Role     @relation(fields: [RoleID], references: [RoleID], onDelete: SetNull)
   Bookings Booking[]
 
   @@map("Users")
 }
 
 model Venue {
-  VenueID  Int     @id @default(autoincrement()) @map("VenueID")
-  VenueName String? @map("VenueName")
-  Location String? @map("Location")
-  Seats    Seat[]
+  VenueID   Int      @id @default(autoincrement()) @map("VenueID")
+  VenueName String?  @map("VenueName")
+  Location  String?  @map("Location")
+  CreatedAt DateTime @default(now()) @map("CreatedAt")
+  UpdatedAt DateTime @updatedAt @map("UpdatedAt")
+  Seats     Seat[]
   Showtimes Showtime[]
 
   @@map("Venues")
 }
 
 model Event {
-  EventID    Int     @id @default(autoincrement()) @map("EventID")
-  CategoryID Int?    @map("CategoryID")
-  Title      String? @map("Title")
-  Description String? @map("Description")
-  Category   EventCategory? @relation(fields: [CategoryID], references: [CategoryID])
-  Showtimes  Showtime[]
+  EventID     Int      @id @default(autoincrement()) @map("EventID")
+  CategoryID  Int      @map("CategoryID")
+  Title       String?  @map("Title")
+  Description String?  @map("Description")
+  CreatedAt   DateTime @default(now()) @map("CreatedAt")
+  UpdatedAt   DateTime @updatedAt @map("UpdatedAt")
+  Category    EventCategory @relation(fields: [CategoryID], references: [CategoryID], onDelete: SetNull)
+  Showtimes   Showtime[]
 
   @@map("Events")
 }
 
 model Seat {
-  SeatID     Int     @id @default(autoincrement()) @map("SeatID")
-  VenueID    Int?    @map("VenueID")
-  SeatTypeID Int?    @map("SeatTypeID")
-  RowLabel   String? @map("RowLabel")
-  SeatNumber String? @map("SeatNumber")
-  Venue      Venue?  @relation(fields: [VenueID], references: [VenueID])
-  SeatType   SeatType? @relation(fields: [SeatTypeID], references: [SeatTypeID])
+  SeatID       Int      @id @default(autoincrement()) @map("SeatID")
+  VenueID      Int      @map("VenueID")
+  SeatTypeID   Int      @map("SeatTypeID")
+  RowLabel     String?  @map("RowLabel")
+  SeatNumber   String?  @map("SeatNumber")
+  CreatedAt    DateTime @default(now()) @map("CreatedAt")
+  UpdatedAt    DateTime @updatedAt @map("UpdatedAt")
+  Venue        Venue    @relation(fields: [VenueID], references: [VenueID], onDelete: Cascade)
+  SeatType     SeatType @relation(fields: [SeatTypeID], references: [SeatTypeID], onDelete: Restrict)
   BookingDetails BookingDetail[]
 
   @@map("Seats")
@@ -92,12 +108,14 @@ model Seat {
 
 model Showtime {
   ShowtimeID     Int       @id @default(autoincrement()) @map("ShowtimeID")
-  EventID        Int?      @map("EventID")
-  VenueID        Int?      @map("VenueID")
-  StartDateTime  DateTime? @map("StartDateTime")
-  BasePrice      Decimal?  @map("BasePrice")
-  Event          Event?    @relation(fields: [EventID], references: [EventID])
-  Venue          Venue?    @relation(fields: [VenueID], references: [VenueID])
+  EventID        Int       @map("EventID")
+  VenueID        Int       @map("VenueID")
+  StartDateTime  DateTime  @map("StartDateTime")
+  BasePrice      Decimal   @map("BasePrice")
+  CreatedAt      DateTime  @default(now()) @map("CreatedAt")
+  UpdatedAt      DateTime  @updatedAt @map("UpdatedAt")
+  Event          Event     @relation(fields: [EventID], references: [EventID], onDelete: Cascade)
+  Venue          Venue     @relation(fields: [VenueID], references: [VenueID], onDelete: Restrict)
   BookingDetails BookingDetail[]
 
   @@map("Showtimes")
@@ -105,13 +123,15 @@ model Showtime {
 
 model Booking {
   BookingID        Int       @id @default(autoincrement()) @map("BookingID")
-  UserID           Int?      @map("UserID")
-  StatusID         Int?      @map("StatusID")
-  BookingTimestamp DateTime? @default(now()) @map("BookingTimestamp")
-  ExpiresAt        DateTime? @map("ExpiresAt")
-  TotalAmount      Decimal?  @map("TotalAmount")
-  User             User?     @relation(fields: [UserID], references: [UserID])
-  Status           BookingStatus? @relation(fields: [StatusID], references: [StatusID])
+  UserID           Int       @map("UserID")
+  StatusID         Int       @map("StatusID")
+  BookingTimestamp DateTime  @default(now()) @map("BookingTimestamp")
+  ExpiresAt        DateTime  @map("ExpiresAt")
+  TotalAmount      Decimal   @map("TotalAmount")
+  CreatedAt        DateTime  @default(now()) @map("CreatedAt")
+  UpdatedAt        DateTime  @updatedAt @map("UpdatedAt")
+  User             User      @relation(fields: [UserID], references: [UserID], onDelete: Cascade)
+  Status           BookingStatus @relation(fields: [StatusID], references: [StatusID], onDelete: Restrict)
   BookingDetails   BookingDetail[]
   Payment          Payment?
 
@@ -119,9 +139,11 @@ model Booking {
 }
 
 model PaymentMethod {
-  MethodID   Int     @id @default(autoincrement()) @map("MethodID")
-  MethodName String? @map("MethodName")
-  IsActive   Boolean @default(true) @map("IsActive")
+  MethodID   Int      @id @default(autoincrement()) @map("MethodID")
+  MethodName String?  @map("MethodName")
+  IsActive   Boolean  @default(true) @map("IsActive")
+  CreatedAt  DateTime @default(now()) @map("CreatedAt")
+  UpdatedAt  DateTime @updatedAt @map("UpdatedAt")
   Payments   Payment[]
 
   @@map("PaymentMethods")
@@ -129,20 +151,25 @@ model PaymentMethod {
 
 model BookingDetail {
   DetailID   Int @id @default(autoincrement()) @map("DetailID")
-  BookingID  Int? @map("BookingID")
-  ShowtimeID Int? @map("ShowtimeID")
-  SeatID     Int? @map("SeatID")
-  Booking    Booking? @relation(fields: [BookingID], references: [BookingID])
-  Showtime   Showtime? @relation(fields: [ShowtimeID], references: [ShowtimeID])
-  Seat       Seat? @relation(fields: [SeatID], references: [SeatID])
+  BookingID  Int @map("BookingID")
+  ShowtimeID Int @map("ShowtimeID")
+  SeatID     Int @map("SeatID")
+  CreatedAt  DateTime @default(now()) @map("CreatedAt")
+  UpdatedAt  DateTime @updatedAt @map("UpdatedAt")
+  Booking    Booking  @relation(fields: [BookingID], references: [BookingID], onDelete: Cascade)
+  Showtime   Showtime @relation(fields: [ShowtimeID], references: [ShowtimeID], onDelete: Restrict)
+  Seat       Seat     @relation(fields: [SeatID], references: [SeatID], onDelete: Restrict)
   Ticket     Ticket?
 
+  @@unique([ShowtimeID, SeatID], name: "unique_pending_seat")
   @@map("BookingDetails")
 }
 
 model PaymentStatus {
-  StatusID   Int     @id @default(autoincrement()) @map("StatusID")
-  StatusName String? @map("StatusName")
+  StatusID   Int      @id @default(autoincrement()) @map("StatusID")
+  StatusName String?  @map("StatusName")
+  CreatedAt  DateTime @default(now()) @map("CreatedAt")
+  UpdatedAt  DateTime @updatedAt @map("UpdatedAt")
   Payments   Payment[]
 
   @@map("PaymentStatuses")
@@ -150,25 +177,29 @@ model PaymentStatus {
 
 model Payment {
   PaymentID     Int       @id @default(autoincrement()) @map("PaymentID")
-  BookingID     Int?      @unique @map("BookingID")
-  MethodID      Int?      @map("MethodID")
-  StatusID      Int?      @map("StatusID")
+  BookingID     Int       @unique @map("BookingID")
+  MethodID      Int       @map("MethodID")
+  StatusID      Int       @map("StatusID")
   TransactionID String?   @unique @map("TransactionID")
-  Amount        Decimal?  @map("Amount")
+  Amount        Decimal   @map("Amount")
   PaidAt        DateTime? @map("PaidAt")
-  Booking       Booking?  @relation(fields: [BookingID], references: [BookingID])
-  Method        PaymentMethod? @relation(fields: [MethodID], references: [MethodID])
-  Status        PaymentStatus? @relation(fields: [StatusID], references: [StatusID])
+  CreatedAt     DateTime  @default(now()) @map("CreatedAt")
+  UpdatedAt     DateTime  @updatedAt @map("UpdatedAt")
+  Booking       Booking   @relation(fields: [BookingID], references: [BookingID], onDelete: Cascade)
+  Method        PaymentMethod @relation(fields: [MethodID], references: [MethodID], onDelete: Restrict)
+  Status        PaymentStatus @relation(fields: [StatusID], references: [StatusID], onDelete: Restrict)
 
   @@map("Payments")
 }
 
 model Ticket {
-  TicketID   Int     @id @default(autoincrement()) @map("TicketID")
-  TicketNo   String? @unique @map("TicketNo")
-  DetailID   Int?    @unique @map("DetailID")
-  FinalPrice Decimal @map("FinalPrice")
-  Detail     BookingDetail? @relation(fields: [DetailID], references: [DetailID])
+  TicketID   Int      @id @default(autoincrement()) @map("TicketID")
+  TicketNo   String?  @unique @map("TicketNo")
+  DetailID   Int      @unique @map("DetailID")
+  FinalPrice Decimal  @map("FinalPrice")
+  CreatedAt  DateTime @default(now()) @map("CreatedAt")
+  UpdatedAt  DateTime @updatedAt @map("UpdatedAt")
+  Detail     BookingDetail @relation(fields: [DetailID], references: [DetailID], onDelete: Cascade)
 
   @@map("Tickets")
 }
