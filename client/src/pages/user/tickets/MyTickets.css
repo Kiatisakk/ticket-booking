@@ -1,0 +1,213 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&display=swap');
+
+.my-tickets-page {
+  --bg: #0d0f14; 
+  --surface: #13161d; 
+  --surface2: #1a1e27; 
+  --surface3: #20242f;
+  --border: rgba(255,255,255,0.07); 
+  --border2: rgba(255,255,255,0.11);
+  --indigo: #6366f1; 
+  --indigo-light: #818cf8; 
+  --indigo-dim: rgba(99,102,241,0.12);
+  --text: #f1f5f9; 
+  --muted: #64748b; 
+  --muted2: #94a3b8;
+  --green: #22c55e; 
+  --red: #ef4444; 
+  --yellow: #f59e0b; 
+  --purple: #a855f7;
+
+  background: var(--bg); 
+  color: var(--text); 
+  font-family: 'DM Sans', sans-serif; 
+  min-height: 100vh;
+  width: 100%;
+}
+
+.my-tickets-page .tickets-content-wrapper { 
+  display: block !important; 
+  width: 100%;
+  max-width: 1000px; 
+  margin: 0 auto; 
+  padding: 40px 24px 64px; 
+}
+
+/* PAGE STRUCTURE */
+.my-tickets-page .page-header { margin-bottom: 32px; display: block; }
+.my-tickets-page .page-title { font-family: 'DM Serif Display', serif; font-size: 32px; margin-bottom: 6px; }
+.my-tickets-page .page-sub { font-size: 14px; color: var(--muted); }
+
+/* SYSTEM MESSAGES */
+.my-tickets-page .success-message {
+  margin-bottom: 20px;
+  background: rgba(34, 197, 94, 0.15);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  color: #4ade80;
+  padding: 12px 20px;
+  border-radius: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 500;
+  font-size: 14px;
+}
+.my-tickets-page .close-message {
+  background: none; border: none; color: #4ade80; font-size: 18px; cursor: pointer; padding: 0 5px;
+}
+.my-tickets-page .loading { text-align: center; padding: 60px 20px; color: var(--muted); font-size: 18px; }
+
+/* TABS */
+.my-tickets-page .filter-tabs { display: flex; gap: 6px; margin-bottom: 28px; flex-wrap: wrap; }
+.my-tickets-page .ftab { 
+  padding: 7px 16px; border-radius: 30px; font-size: 13px; font-weight: 600; cursor: pointer; 
+  border: 1px solid var(--border); color: var(--muted2); background: var(--surface); transition: all 0.15s; 
+}
+.my-tickets-page .ftab:hover { border-color: var(--border2); color: var(--text); }
+.my-tickets-page .ftab.active { background: var(--indigo-dim); border-color: var(--indigo-light); color: var(--indigo-light); }
+
+/* TICKET CARDS */
+.my-tickets-page .ticket-list { display: flex; flex-direction: column; gap: 20px; width: 100%; }
+.my-tickets-page .ticket-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 18px; overflow: hidden; display: grid;
+  grid-template-columns: auto 1fr auto;
+  transition: border-color 0.2s;
+}
+.my-tickets-page .ticket-card:hover { border-color: var(--border2); }
+
+/* Left accent stripe */
+.my-tickets-page .ticket-stripe { width: 6px; }
+.my-tickets-page .stripe-upcoming { background: var(--indigo); }
+.my-tickets-page .stripe-past { background: var(--muted); }
+.my-tickets-page .stripe-cancelled{ background: var(--red); }
+
+/* Main content */
+.my-tickets-page .ticket-body { padding: 22px 24px; display: grid; grid-template-columns: auto 1fr; gap: 20px; align-items: center; }
+.my-tickets-page .ticket-emoji { 
+  width: 64px; height: 64px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 32px; flex-shrink: 0; 
+}
+
+.my-tickets-page .ticket-status-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.my-tickets-page .status-badge { font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 5px; }
+.my-tickets-page .status-upcoming { background: rgba(99,102,241,0.15); color: var(--indigo-light); }
+.my-tickets-page .status-completed { background: rgba(34,197,94,0.12); color: #4ade80; }
+.my-tickets-page .status-cancelled { background: rgba(239,68,68,0.12); color: #f87171; }
+
+.my-tickets-page .ticket-title { font-weight: 700; font-size: 16.5px; margin-bottom: 6px; line-height: 1.3; }
+.my-tickets-page .ticket-meta { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12.5px; color: var(--muted2); }
+.my-tickets-page .ticket-meta-item { display: flex; align-items: center; gap: 5px; }
+.my-tickets-page .ticket-meta-item svg { width: 13px; height: 13px; opacity: 0.7; }
+
+.my-tickets-page .ticket-booking-row { 
+  display: flex; align-items: center; gap: 16px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); flex-wrap: wrap; 
+}
+.my-tickets-page .booking-id { font-family: monospace; font-size: 12px; color: var(--muted); background: var(--surface2); border-radius: 5px; padding: 3px 8px; }
+.my-tickets-page .seat-chips { display: flex; gap: 5px; flex-wrap: wrap; }
+.my-tickets-page .seat-chip { background: var(--surface2); border: 1px solid var(--border2); border-radius: 5px; padding: 3px 8px; font-size: 11.5px; font-weight: 600; color: var(--muted2); }
+
+/* Buttons */
+.my-tickets-page .btn-cancel { 
+  background: none; border: none; color: #f87171; font-family: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; transition: color 0.15s; margin-left: auto;
+}
+.my-tickets-page .btn-cancel:hover:not(:disabled) { color: #ef4444; text-decoration: underline; }
+.my-tickets-page .btn-cancel:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Right panel — QR / action */
+.my-tickets-page .ticket-qr-panel { 
+  padding: 22px 20px 22px 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; border-left: 1px dashed var(--border); min-width: 120px; 
+}
+.my-tickets-page .qr-mini { background: white; border-radius: 8px; padding: 8px; display: flex; align-items: center; justify-content: center; }
+.my-tickets-page .qr-ticket-id { font-family: monospace; font-size: 11px; color: var(--muted); text-align: center; }
+.my-tickets-page .btn-view { 
+  background: var(--indigo-dim); border: none; color: var(--indigo-light); font-family: inherit; font-size: 12.5px; font-weight: 700; border-radius: 8px; padding: 7px 14px; cursor: pointer; transition: background 0.15s; white-space: nowrap; 
+}
+.my-tickets-page .btn-view:hover { background: rgba(99,102,241,0.22); }
+
+/* TICKET MODAL */
+.my-tickets-page .modal-overlay { 
+  display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); backdrop-filter: blur(10px); z-index: 200; align-items: center; justify-content: center; padding: 20px; 
+}
+.my-tickets-page .modal-overlay.open { display: flex; }
+.my-tickets-page .ticket-modal {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 20px;
+  width: 100%; max-width: 400px;
+  box-shadow: 0 40px 80px rgba(0,0,0,0.6);
+  animation: popIn 0.25s cubic-bezier(0.16,1,0.3,1);
+  overflow: hidden;
+}
+@keyframes popIn { from { opacity:0; transform:scale(0.93); } to { opacity:1; transform:scale(1); } }
+.my-tickets-page .modal-header-band { padding: 24px; text-align: center; background: linear-gradient(135deg, rgba(99,102,241,0.2) 0%, rgba(168,85,247,0.1) 100%); border-bottom: 1px dashed var(--border); }
+.my-tickets-page .modal-event-emoji { font-size: 48px; margin-bottom: 10px; }
+.my-tickets-page .modal-event-name { font-family: 'DM Serif Display', serif; font-size: 20px; margin-bottom: 6px; }
+.my-tickets-page .modal-event-meta { font-size: 13px; color: var(--muted2); line-height: 1.6; }
+.my-tickets-page .modal-qr-section { padding: 28px; display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.my-tickets-page .modal-qr-box { background: white; border-radius: 14px; padding: 20px; }
+.my-tickets-page .modal-ticket-no { font-family: monospace; font-size: 20px; font-weight: 800; letter-spacing: 0.12em; color: var(--text); text-align: center; }
+.my-tickets-page .modal-ticket-sub { font-size: 12px; color: var(--muted); text-align: center; }
+.my-tickets-page .modal-seats { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.my-tickets-page .modal-seat-chip { background: var(--surface2); border: 1px solid var(--border2); border-radius: 8px; padding: 6px 14px; font-size: 13.5px; font-weight: 700; color: var(--indigo-light); }
+.my-tickets-page .modal-close { 
+  width: 100%; background: var(--surface2); border: none; border-top: 1px solid var(--border); color: var(--muted2); font-family: inherit; font-size: 14px; font-weight: 600; padding: 14px; cursor: pointer; transition: background 0.15s; 
+}
+.my-tickets-page .modal-close:hover { background: var(--surface3); color: var(--text); }
+
+/* EMPTY STATE */
+.my-tickets-page .empty-state { text-align: center; padding: 80px 24px; }
+.my-tickets-page .empty-emoji { font-size: 56px; margin-bottom: 16px; }
+.my-tickets-page .empty-title { font-family: 'DM Serif Display', serif; font-size: 24px; margin-bottom: 8px; }
+.my-tickets-page .empty-sub { font-size: 14px; color: var(--muted); margin-bottom: 24px; }
+.my-tickets-page .btn-browse { 
+  display: inline-block; background: var(--indigo); border: none; color: #fff; font-family: inherit; font-size: 14px; font-weight: 700; border-radius: 10px; padding: 12px 24px; text-decoration: none; transition: background 0.2s; cursor: pointer;
+}
+.my-tickets-page .btn-browse:hover { background: #4f52e0; }
+
+@media (max-width: 600px) {
+  .my-tickets-page .ticket-card { 
+    grid-template-columns: 1fr; 
+    border-radius: 12px;
+  }
+
+  .my-tickets-page .ticket-stripe { 
+    width: 100%; 
+    height: 4px; 
+  }
+
+  .my-tickets-page .ticket-body { 
+    grid-template-columns: auto 1fr; 
+    padding: 16px;
+    gap: 12px;
+  }
+
+  .my-tickets-page .ticket-emoji { 
+    width: 44px; 
+    height: 44px; 
+    font-size: 22px; 
+    display: flex;
+  }
+
+  .my-tickets-page .ticket-qr-panel { 
+    display: flex !important;
+    border-left: none; 
+    border-top: 1px dashed var(--border); 
+    padding: 16px; 
+    flex-direction: row;
+    justify-content: space-between;
+    min-width: unset;
+  }
+
+  /* จัดตำแหน่ง QR ในมือถือ */
+  .my-tickets-page .qr-mini {
+    padding: 4px;
+  }
+
+  .my-tickets-page .qr-ticket-id {
+    text-align: left;
+    margin-top: 4px;
+  }
+
+  /* ขยับปุ่ม Cancel ให้เด่นขึ้นในมือถือ */
+  .my-tickets-page .ticket-booking-row {
+    justify-content: space-between;
+  }
+}

@@ -2,6 +2,7 @@ const prisma = require('../config/prisma');
 
 exports.createBooking = async (req, res) => {
   try {
+    console.log('req.user:', req.user);
     const { showtimeId, seatIds } = req.body;
 
     if (!showtimeId || !seatIds || seatIds.length === 0) {
@@ -69,8 +70,9 @@ exports.createBooking = async (req, res) => {
       booking
     });
   } catch (error) {
-    console.error('Create booking error:', error);
-    res.status(500).json({ error: 'Failed to create booking' });
+    console.error('Create booking error:', error.message); // เพิ่ม .message
+    console.error('Full error:', JSON.stringify(error, null, 2)); // ดู detail
+    res.status(500).json({ error: 'Failed to create booking', detail: error.message }); // ส่ง detail กลับมาด้วย
   }
 };
 

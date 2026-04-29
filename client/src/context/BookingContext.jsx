@@ -32,53 +32,62 @@ export function BookingProvider({ children }) {
     setCurrentBooking(null);
   };
 
-  const createBooking = async (token) => {
-    if (!currentShowtime || selectedSeats.length === 0) {
-      return { success: false, error: 'No seats selected' };
-    }
+    const createBooking = async (token) => {
+      // ลองเปลี่ยนมาเช็คจากตัวแปรที่เรามี (ถ้า currentShowtime ไม่มี ให้ลองดูว่ามีในตะกร้าไหม)
+      const showtimeIdFromSeats = selectedSeats.length > 0 ? selectedSeats[0].showtimeId : null;
+      const targetShowtimeId = currentShowtime?.ShowtimeID || showtimeIdFromSeats;
 
-    setLoading(true);
-    try {
-      const response = await axios.post(
-        `${API_URL}/bookings`,
-        {
-          showtimeId: currentShowtime.ShowtimeID,
-          seatIds: selectedSeats.map(s => s.SeatID)
-        },
-        {
-          headers: { Authorization: `Bearer ${token}` }
-        }
-      );
+      if (!targetShowtimeId || selectedSeats.length === 0) {
+        return { success: false, error: 'No seats selected or showtime missing' };
+      }
 
-      setCurrentBooking(response.data.booking);
-      return { success: true, booking: response.data.booking };
-    } catch (error) {
-      return {
-        success: false,
-        error: error.response?.data?.error || 'Failed to create booking'
-      };
-    } finally {
-      setLoading(false);
-    }
-  };
+      setLoading(true);
+      try {
+        // *** จุดสำคัญ: ลองสลับชื่อ Key ระหว่างตัวพิมพ์เล็ก (Id) กับตัวพิมพ์ใหญ่ (ID) ***
+        // ถ้าตัวเล็กไม่ได้ ให้เปลี่ยนเป็น showtimeID และ seatIDs ตามลำดับ
+        const response = await axios.post(
+          `${API_URL}/bookings`,
+          {
+            showtimeId: parseInt(targetShowtimeId, 10), 
+            seatIds: selectedSeats.map(s => parseInt(s.SeatID, 10))
+          },
+          {
+            headers: { Authorization: `Bearer ${token}` }
+          }
+        );
 
-  const processPayment = async (token, methodId) => {
-    // If no booking exists, create one first
-    let booking = currentBooking;
-    if (!booking) {
+        setCurrentBooking(response.data.booking);
+        return { success: true, booking: response.data.booking };
+      } catch (error) {
+        console.error("Create Booking Error Details:", error.response?.data);
+        return {
+          success: false,
+          error: error.response?.data?.error || 'Failed to create booking'
+        };
+      } finally {
+        setLoading(false);
+      }
+    };
+
+const processPayment = async (token, methodId, bookingIdFromPage) => {
+    // 1. ตรวจสอบว่ามี bookingId ส่งมาไหม (เราจะใช้จากหน้าที่ส่งมาเป็นหลัก)
+    const bookingId = bookingIdFromPage || currentBooking?.BookingID;
+    
+    if (!bookingId) {
+      // ถ้าไม่มีจริงๆ ถึงค่อยลองสร้างใหม่ (กันพลาด)
       const bookingResult = await createBooking(token);
       if (!bookingResult.success) {
-        return bookingResult;
+        return bookingResult; 
       }
-      booking = bookingResult.booking;
-    }
+      return await processPayment(token, methodId, bookingResult.booking.BookingID);
+    } 
 
     setLoading(true);
     try {
       const response = await axios.post(
         `${API_URL}/payments`,
         {
-          bookingId: booking.BookingID,
+          bookingId: bookingId, // ใช้ ID ที่ได้มา
           methodId: methodId
         },
         {
@@ -86,9 +95,11 @@ export function BookingProvider({ children }) {
         }
       );
 
+      // จ่ายเงินสำเร็จแล้ว ล้างข้อมูลทุกอย่าง
       clearCart();
       return { success: true, payment: response.data.payment };
     } catch (error) {
+      console.error("Payment Error In Context:", error.response?.data);
       return {
         success: false,
         error: error.response?.data?.error || 'Payment failed'
@@ -98,8 +109,9 @@ export function BookingProvider({ children }) {
     }
   };
 
-  const value = {
+const value = {
     selectedSeats,
+    setSelectedSeats,
     currentShowtime,
     currentBooking,
     loading,

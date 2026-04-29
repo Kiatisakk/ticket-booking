@@ -4,7 +4,8 @@ exports.getAllEvents = async (req, res) => {
   try {
     const events = await prisma.event.findMany({
       include: {
-        Category: true
+        Category: true,
+        Showtimes: true
       }
     });
     res.json(events);

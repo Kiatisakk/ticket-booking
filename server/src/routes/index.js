@@ -46,3 +46,11 @@ router.get('/tickets/booking/:bookingId', authenticateToken, ticketController.ge
 router.get('/tickets/verify/:ticketNo', ticketController.verifyTicket);
 
 module.exports = router;
+
+router.post('/seats/lock', (req, res) => {
+  res.status(200).json({ success: true, message: 'Seat locked successfully' });
+});
+
+router.post('/seats/unlock', (req, res) => {
+  res.status(200).json({ success: true, message: 'Seat unlocked successfully' });
+});

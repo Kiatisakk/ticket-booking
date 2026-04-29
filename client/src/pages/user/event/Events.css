@@ -1,0 +1,237 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&display=swap');
+
+.events-page {
+  --bg: #0d0f14;
+  --surface: #13161d;
+  --surface2: #1a1e27;
+  --surface3: #20242f;
+  --border: rgba(255, 255, 255, 0.07);
+  --indigo: #6366f1;
+  --indigo-light: #818cf8;
+  --text: #f1f5f9;
+  --muted: #64748b;
+  --muted2: #94a3b8;
+
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  font-family: 'DM Sans', sans-serif;
+}
+
+/* --- Hero Banner Style --- */
+.events-hero {
+  position: relative;
+  overflow: hidden;
+  /* ปรับเฉดสี Gradient ให้เป็นโทนเข้มเนียนๆ แบบในภาพ */
+  background: linear-gradient(to right, #0d0f14 30%, #17153a 80%, #2e1a5a 120%);
+  padding: 80px 24px 60px;
+  margin-bottom: 40px;
+  border-bottom: 1px solid var(--border);
+}
+
+.hero-glow {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 80% 0%, rgba(99, 102, 241, 0.15) 0%, transparent 60%);
+  pointer-events: none;
+}
+
+.events-hero-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  position: relative;
+  z-index: 1;
+  text-align: left; /* จัดให้อยู่ชิดซ้ายแบบในภาพ */
+}
+
+.hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #818cf8; /* สีม่วงอ่อน */
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.15em; /* ให้ตัวอักษรห่างกันนิดๆ */
+  text-transform: uppercase;
+  margin-bottom: 24px;
+}
+
+.hero-title {
+  font-family: 'DM Serif Display', serif;
+  font-size: clamp(40px, 6vw, 64px); /* ให้ตัวอักษรใหญ่สะใจ */
+  line-height: 1.1;
+  margin-bottom: 20px;
+  color: var(--text);
+  letter-spacing: -0.02em;
+}
+
+.hero-highlight {
+  color: var(--indigo-light);
+  font-style: italic; /* ทำตัวเอียงตามเรฟ */
+}
+
+.hero-sub {
+  color: var(--muted2);
+  font-size: 16px;
+  max-width: 500px;
+  line-height: 1.6;
+}
+
+/* --- Main Layout --- */
+.events-main {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 24px 60px;
+}
+
+/* --- Filters (Search & Select) --- */
+.filters {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 40px;
+  flex-wrap: wrap;
+}
+
+.search-input, .filter-select {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 14px 20px;
+  border-radius: 12px;
+  font-size: 15px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.search-input {
+  flex: 1;
+  min-width: 250px;
+}
+
+.filter-select {
+  min-width: 200px;
+  cursor: pointer;
+}
+
+.search-input:focus, .filter-select:focus {
+  border-color: var(--indigo);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+}
+
+/* --- Events Grid --- */
+.events-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 24px;
+}
+
+/* --- Event Card (Adapted from .section-card) --- */
+.event-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 24px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  flex-direction: column;
+}
+
+.event-card:hover {
+  border-color: var(--indigo-light);
+  transform: translateY(-4px);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+}
+
+.event-icon {
+  font-size: 32px;
+  margin-bottom: 16px;
+  width: 60px;
+  height: 60px;
+  background: var(--surface2);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+}
+
+.event-card h3 {
+  font-family: 'DM Serif Display', serif;
+  font-size: 22px;
+  margin-bottom: 12px;
+  color: var(--text);
+  line-height: 1.2;
+}
+
+.event-category {
+  display: inline-block;
+  background: rgba(168, 85, 247, 0.15);
+  color: #e9d5ff;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 6px;
+  margin-bottom: 14px;
+  align-self: flex-start;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.event-description {
+  font-size: 14px;
+  color: var(--muted2);
+  line-height: 1.6;
+  margin-bottom: 24px;
+  flex: 1;
+}
+
+/* --- Button --- */
+.event-button {
+  width: 100%;
+  background: var(--surface2);
+  color: var(--indigo-light);
+  font-family: inherit;
+  font-size: 14.5px;
+  font-weight: 700;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.event-card:hover .event-button {
+  background: var(--indigo);
+  color: #fff;
+  border-color: var(--indigo);
+  box-shadow: 0 4px 20px rgba(99, 102, 241, 0.35);
+}
+
+/* --- Utility --- */
+.loading, .no-events {
+  text-align: center;
+  padding: 80px 20px;
+  color: var(--muted2);
+  font-size: 16px;
+}
+
+.event-booking-deadline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #f97316;
+  margin: 8px 0;
+}
+
+.deadline-item {
+  background: rgba(249, 115, 22, 0.12);
+  border: 1px solid rgba(249, 115, 22, 0.3);
+  border-radius: 4px;
+  padding: 2px 7px;
+  font-weight: 600;
+  white-space: nowrap;
+}

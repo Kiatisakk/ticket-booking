@@ -1,21 +1,25 @@
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom'; // เพิ่ม useLocation
 import { useAuth } from '../context/AuthContext';
 import './Navbar.css';
 
 function Navbar() {
   const { user, isAuthenticated, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation(); // ดึงข้อมูล Path ปัจจุบัน
 
   const handleLogout = () => {
     logout();
     navigate('/');
   };
 
+  // เช็กว่าตอนนี้อยู่หน้า Login หรือ Register หรือเปล่า
+  const isAuthPage = location.pathname === '/' || location.pathname === '/register';
+
   return (
     <nav className="navbar">
       <div className="navbar-container">
         <Link to={isAuthenticated ? '/events' : '/'} className="navbar-logo">
-          🎫 Ticket Booking
+          Ticket<span>App</span>.
         </Link>
 
         <div className="navbar-links">
@@ -29,10 +33,15 @@ function Navbar() {
               </button>
             </>
           ) : (
-            <>
-              <Link to="/" className="navbar-link">Login</Link>
-              <Link to="/register" className="navbar-link">Register</Link>
-            </>
+            /* จะโชว์ปุ่ม Sign In / Register ก็ต่อเมื่อ "ไม่ได้อยู่" หน้า Auth เท่านั้น */
+            !isAuthPage && (
+              <>
+                <Link to="/" className="navbar-link">Sign In</Link>
+                <Link to="/register" className="navbar-btn" style={{ textDecoration: 'none', display: 'inline-block' }}>
+                  Register
+                </Link>
+              </>
+            )
           )}
         </div>
       </div>
