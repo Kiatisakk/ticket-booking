@@ -1,68 +1,112 @@
 const prisma = require('../config/prisma');
+const { Prisma } = require('@prisma/client');
+
+class HttpError extends Error {
+  constructor(statusCode, message) {
+    super(message);
+    this.statusCode = statusCode;
+  }
+}
 
 exports.createBooking = async (req, res) => {
   try {
     console.log('req.user:', req.user);
     const { showtimeId, seatIds } = req.body;
 
-    if (!showtimeId || !seatIds || seatIds.length === 0) {
+    if (!showtimeId || !Array.isArray(seatIds) || seatIds.length === 0) {
       return res.status(400).json({ error: 'Showtime and seats are required' });
     }
 
-    const pendingStatus = await prisma.bookingStatus.findFirst({
-      where: { StatusName: 'Pending' }
-    });
-
-    const showtime = await prisma.showtime.findUnique({
-      where: { ShowtimeID: showtimeId }
-    });
-
-    if (!showtime) {
-      return res.status(404).json({ error: 'Showtime not found' });
+    const normalizedSeatIds = [...new Set(seatIds.map(Number))].filter(Number.isInteger);
+    if (normalizedSeatIds.length !== seatIds.length) {
+      return res.status(400).json({ error: 'Seat IDs must be unique integers' });
     }
 
-    const existingBookings = await prisma.bookingDetail.findMany({
-      where: {
-        ShowtimeID: showtimeId,
-        SeatID: { in: seatIds },
-        Booking: { StatusID: pendingStatus?.StatusID }
+    const booking = await prisma.$transaction(async (tx) => {
+      const pendingStatus = await tx.bookingStatus.findFirst({
+        where: { StatusName: 'Pending' }
+      });
+      const completedStatus = await tx.bookingStatus.findFirst({
+        where: { StatusName: 'Completed' }
+      });
+
+      if (!pendingStatus || !completedStatus) {
+        throw new HttpError(500, 'Booking statuses are not configured');
       }
-    });
 
-    if (existingBookings.length > 0) {
-      return res.status(400).json({ error: 'Some seats are already booked' });
-    }
+      const showtime = await tx.showtime.findUnique({
+        where: { ShowtimeID: Number(showtimeId) }
+      });
 
-    const seats = await prisma.seat.findMany({
-      where: { SeatID: { in: seatIds } },
-      include: { SeatType: true }
-    });
+      if (!showtime) {
+        throw new HttpError(404, 'Showtime not found');
+      }
 
-    let totalAmount = 0;
-    for (const seat of seats) {
-      const seatPrice = parseFloat(showtime.BasePrice) * parseFloat(seat.SeatType.PriceModifier || 1);
-      totalAmount += seatPrice;
-    }
+      if (new Date(showtime.StartDateTime) <= new Date()) {
+        throw new HttpError(400, 'Cannot create booking for a past showtime');
+      }
 
-    const expiresAt = new Date();
-    expiresAt.setMinutes(expiresAt.getMinutes() + 15);
+      const seats = await tx.seat.findMany({
+        where: { SeatID: { in: normalizedSeatIds } },
+        include: { SeatType: true }
+      });
 
-    const booking = await prisma.booking.create({
-      data: {
-        UserID: req.user.userId,
-        StatusID: pendingStatus?.StatusID,
-        ExpiresAt: expiresAt,
-        TotalAmount: totalAmount,
-        BookingDetails: {
-          create: seatIds.map(seatId => ({
-            ShowtimeID: showtimeId,
-            SeatID: seatId
-          }))
+      if (seats.length !== normalizedSeatIds.length) {
+        throw new HttpError(400, 'One or more seats were not found');
+      }
+
+      const invalidVenueSeat = seats.find(seat => seat.VenueID !== showtime.VenueID);
+      if (invalidVenueSeat) {
+        throw new HttpError(400, 'Selected seats must belong to the showtime venue');
+      }
+
+      const existingActiveBookings = await tx.bookingDetail.findMany({
+        where: {
+          ShowtimeID: Number(showtimeId),
+          SeatID: { in: normalizedSeatIds },
+          Booking: {
+            OR: [
+              { StatusID: completedStatus.StatusID },
+              {
+                StatusID: pendingStatus.StatusID,
+                ExpiresAt: { gt: new Date() }
+              }
+            ]
+          }
+        },
+        select: { SeatID: true }
+      });
+
+      if (existingActiveBookings.length > 0) {
+        throw new HttpError(400, 'Some seats are already booked');
+      }
+
+      const totalAmount = seats.reduce((sum, seat) => {
+        return sum + Number(showtime.BasePrice) * Number(seat.SeatType.PriceModifier);
+      }, 0);
+
+      const expiresAt = new Date();
+      expiresAt.setMinutes(expiresAt.getMinutes() + 15);
+
+      return tx.booking.create({
+        data: {
+          UserID: req.user.userId,
+          StatusID: pendingStatus.StatusID,
+          ExpiresAt: expiresAt,
+          TotalAmount: totalAmount,
+          BookingDetails: {
+            create: normalizedSeatIds.map(seatId => ({
+              ShowtimeID: Number(showtimeId),
+              SeatID: seatId
+            }))
+          }
+        },
+        include: {
+          BookingDetails: true
         }
-      },
-      include: {
-        BookingDetails: true
-      }
+      });
+    }, {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable
     });
 
     res.status(201).json({
@@ -70,9 +114,16 @@ exports.createBooking = async (req, res) => {
       booking
     });
   } catch (error) {
-    console.error('Create booking error:', error.message); // เพิ่ม .message
-    console.error('Full error:', JSON.stringify(error, null, 2)); // ดู detail
-    res.status(500).json({ error: 'Failed to create booking', detail: error.message }); // ส่ง detail กลับมาด้วย
+    if (error instanceof HttpError) {
+      return res.status(error.statusCode).json({ error: error.message });
+    }
+
+    if (error.code === 'P2034') {
+      return res.status(409).json({ error: 'Booking conflict detected. Please try again.' });
+    }
+
+    console.error('Create booking error:', error);
+    res.status(500).json({ error: 'Failed to create booking' });
   }
 };
 

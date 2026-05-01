@@ -6,6 +6,14 @@ const { JWT_SECRET } = require('../middleware/auth.middleware');
 exports.register = async (req, res) => {
   try {
     const { fullName, email, password } = req.body;
+
+    if (!fullName || !email || !password) {
+      return res.status(400).json({ error: 'Full name, email, and password are required' });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters long' });
+    }
     
     const existingUser = await prisma.user.findUnique({ where: { Email: email } });
     if (existingUser) {

@@ -8,9 +8,14 @@ async function main() {
 
   // Optional: Clear existing data if re-seeding
   console.log('Checking for existing data...');
-  const userCount = await prisma.user.count();
+  const [userCount, roleCount, bookingStatusCount, paymentStatusCount] = await Promise.all([
+    prisma.user.count(),
+    prisma.role.count(),
+    prisma.bookingStatus.count(),
+    prisma.paymentStatus.count(),
+  ]);
   
-  if (userCount > 0) {
+  if (userCount > 0 || roleCount > 0 || bookingStatusCount > 0 || paymentStatusCount > 0) {
     console.log('⚠️  Database already has data. Clearing and re-seeding...');
     await prisma.$transaction([
       prisma.ticket.deleteMany(),
@@ -35,22 +40,22 @@ async function main() {
   // Create Roles
   console.log('Creating roles...');
   const adminRole = await prisma.role.create({
-    data: { RoleName: 'Admin', Description: 'System Administrator' }
+    data: { RoleID: 1, RoleName: 'Admin', Description: 'System Administrator' }
   });
   const staffRole = await prisma.role.create({
-    data: { RoleName: 'Staff', Description: 'Event Staff' }
+    data: { RoleID: 2, RoleName: 'Staff', Description: 'Event Staff' }
   });
   const customerRole = await prisma.role.create({
-    data: { RoleName: 'Customer', Description: 'Regular Customer' }
+    data: { RoleID: 3, RoleName: 'Customer', Description: 'Regular Customer' }
   });
 
   // Create Booking Statuses
   console.log('Creating booking statuses...');
   await prisma.bookingStatus.createMany({
     data: [
-      { StatusName: 'Pending' },
-      { StatusName: 'Completed' },
-      { StatusName: 'Cancelled' }
+      { StatusID: 1, StatusName: 'Pending' },
+      { StatusID: 2, StatusName: 'Completed' },
+      { StatusID: 3, StatusName: 'Cancelled' }
     ]
   });
 
@@ -58,12 +63,16 @@ async function main() {
   console.log('Creating payment statuses...');
   await prisma.paymentStatus.createMany({
     data: [
-      { StatusName: 'Pending' },
-      { StatusName: 'Success' },
-      { StatusName: 'Failed' },
-      { StatusName: 'Refunded' }
+      { StatusID: 1, StatusName: 'Pending' },
+      { StatusID: 2, StatusName: 'Success' },
+      { StatusID: 3, StatusName: 'Failed' },
+      { StatusID: 4, StatusName: 'Refunded' }
     ]
   });
+
+  await prisma.$executeRaw`SELECT setval(pg_get_serial_sequence('"Roles"', 'RoleID'), (SELECT MAX("RoleID") FROM "Roles"))`;
+  await prisma.$executeRaw`SELECT setval(pg_get_serial_sequence('"BookingStatuses"', 'StatusID'), (SELECT MAX("StatusID") FROM "BookingStatuses"))`;
+  await prisma.$executeRaw`SELECT setval(pg_get_serial_sequence('"PaymentStatuses"', 'StatusID'), (SELECT MAX("StatusID") FROM "PaymentStatuses"))`;
 
   // Create Event Categories
   console.log('Creating event categories...');
@@ -174,7 +183,7 @@ async function main() {
   console.log('Creating sample events...');
   const categories = await prisma.eventCategory.findMany();
   
-const event1 = await prisma.event.create({
+  const event1 = await prisma.event.create({
     data: {
       Title: 'Avengers: Secret Wars',
       Description: 'The epic conclusion to the Multiverse Saga.\n\nCast: Robert Downey Jr., Chris Evans, Tom Holland, Benedict Cumberbatch',

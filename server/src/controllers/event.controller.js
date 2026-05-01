@@ -2,7 +2,22 @@ const prisma = require('../config/prisma');
 
 exports.getAllEvents = async (req, res) => {
   try {
+    const { categoryId, search } = req.query;
+    const where = {};
+
+    if (categoryId) {
+      where.CategoryID = parseInt(categoryId);
+    }
+
+    if (search) {
+      where.Title = {
+        contains: search,
+        mode: 'insensitive'
+      };
+    }
+
     const events = await prisma.event.findMany({
+      where,
       include: {
         Category: true,
         Showtimes: true

@@ -61,26 +61,13 @@ exports.getShowtimeById = async (req, res) => {
 
 exports.getBookedSeats = async (req, res) => {
   try {
-    const pendingStatus = await prisma.bookingStatus.findFirst({
-      where: { StatusName: 'Pending' }
-    });
-    const completedStatus = await prisma.bookingStatus.findFirst({
-      where: { StatusName: 'Completed' }
-    });
-
-    const bookedSeats = await prisma.bookingDetail.findMany({
-      where: {
-        ShowtimeID: parseInt(req.params.id),
-        Booking: {
-          StatusID: {
-            in: [pendingStatus?.StatusID, completedStatus?.StatusID].filter(Boolean)
-          }
-        }
-      },
-      select: {
-        SeatID: true
-      }
-    });
+    const showtimeId = parseInt(req.params.id);
+    const bookedSeats = await prisma.$queryRaw`
+      SELECT "SeatID"
+      FROM "ShowtimeAvailableSeats"
+      WHERE "ShowtimeID" = ${showtimeId}
+        AND "IsAvailable" = FALSE
+    `;
 
     res.json({ bookedSeatIds: bookedSeats.map(d => d.SeatID) });
   } catch (error) {
