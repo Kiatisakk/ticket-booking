@@ -1,0 +1,397 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Serif+Display&display=swap');
+
+.tx-root {
+  font-family: 'DM Sans', sans-serif;
+  color: #f1f5f9;
+}
+
+.tx-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 28px;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.tx-title {
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.tx-subtitle {
+  font-size: 13px;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+.tx-filters {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.tx-search {
+  flex: 1;
+  min-width: 220px;
+  background: #13161d;
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 10px;
+  padding: 10px 16px;
+  font-size: 14px;
+  color: #f1f5f9;
+  font-family: 'DM Sans', sans-serif;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.tx-search::placeholder { color: #64748b; }
+.tx-search:focus { border-color: #6366f1; }
+
+.tx-filter-select {
+  background: #13161d;
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 10px;
+  padding: 10px 16px;
+  font-size: 14px;
+  color: #f1f5f9;
+  font-family: 'DM Sans', sans-serif;
+  outline: none;
+  cursor: pointer;
+  min-width: 150px;
+}
+
+.tx-filter-select:focus { border-color: #6366f1; }
+
+.tx-table-wrap {
+  background: #13161d;
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 14px;
+  overflow: hidden;
+  margin-bottom: 28px;
+}
+
+.tx-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 700px;
+}
+
+.tx-table-scroll {
+  overflow-x: auto;
+}
+
+.tx-table thead th {
+  background: #1a1e27;
+  padding: 14px 18px;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+  color: #64748b;
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+  white-space: nowrap;
+}
+
+.tx-table tbody tr {
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  transition: background 0.15s;
+}
+
+.tx-table tbody tr:last-child { border-bottom: none; }
+.tx-table tbody tr:hover { background: rgba(255,255,255,0.02); }
+
+.tx-table tbody td {
+  padding: 14px 18px;
+  font-size: 13px;
+  color: #f1f5f9;
+  vertical-align: middle;
+}
+
+.tx-mono {
+  font-family: monospace;
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.tx-amount {
+  font-weight: 700;
+  color: #22c55e;
+}
+
+/* Status Badges */
+.tx-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.tx-badge::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.tx-badge-completed {
+  background: rgba(34,197,94,0.12);
+  color: #4ade80;
+  border: 1px solid rgba(34,197,94,0.25);
+}
+
+.tx-badge-failed {
+  background: rgba(239,68,68,0.12);
+  color: #f87171;
+  border: 1px solid rgba(239,68,68,0.25);
+}
+
+.tx-badge-refunded {
+  background: rgba(245,158,11,0.12);
+  color: #fbbf24;
+  border: 1px solid rgba(245,158,11,0.25);
+}
+
+.tx-badge-pending {
+  background: rgba(100,116,139,0.12);
+  color: #94a3b8;
+  border: 1px solid rgba(100,116,139,0.25);
+}
+
+/* Action Buttons */
+.tx-mark-paid-btn {
+  background: rgba(34,197,94,0.1);
+  border: 1px solid rgba(34,197,94,0.25);
+  color: #4ade80;
+  border-radius: 7px;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: 'DM Sans', sans-serif;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+
+.tx-mark-paid-btn:hover { background: rgba(34,197,94,0.18); }
+
+.tx-refund-btn {
+  background: rgba(245,158,11,0.1);
+  border: 1px solid rgba(245,158,11,0.25);
+  color: #fbbf24;
+  border-radius: 7px;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: 'DM Sans', sans-serif;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+
+.tx-refund-btn:hover { background: rgba(245,158,11,0.18); }
+
+.tx-dash { color: #475569; }
+
+/* Error Log */
+.tx-error-log {
+  background: #13161d;
+  border: 1px solid rgba(239,68,68,0.2);
+  border-radius: 14px;
+  padding: 24px;
+}
+
+.tx-error-log-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #f87171;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tx-error-item {
+  background: rgba(239,68,68,0.05);
+  border: 1px solid rgba(239,68,68,0.12);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 10px;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.tx-error-item:last-child { margin-bottom: 0; }
+
+.tx-error-id {
+  font-family: monospace;
+  font-size: 12px;
+  color: #64748b;
+  flex-shrink: 0;
+}
+
+.tx-error-msg {
+  font-size: 13px;
+  color: #f87171;
+  flex: 1;
+}
+
+.tx-error-amount {
+  font-size: 13px;
+  color: #94a3b8;
+  flex-shrink: 0;
+}
+
+.tx-empty {
+  text-align: center;
+  padding: 60px 20px;
+  color: #64748b;
+}
+
+.tx-loading {
+  text-align: center;
+  padding: 60px;
+  color: #64748b;
+}
+
+/* Modal */
+.tx-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  padding: 20px;
+}
+
+.tx-modal {
+  background: #13161d;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 16px;
+  padding: 32px;
+  max-width: 460px;
+  width: 100%;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.6);
+}
+
+.tx-modal-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.tx-modal-icon.refund { background: rgba(245,158,11,0.12); }
+.tx-modal-icon.paid { background: rgba(34,197,94,0.12); }
+
+.tx-modal-title {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.tx-modal-booking-info {
+  background: #1a1e27;
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  font-size: 13px;
+  color: #94a3b8;
+}
+
+.tx-modal-booking-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.tx-modal-booking-row:last-child { margin-bottom: 0; }
+.tx-modal-booking-row strong { color: #f1f5f9; }
+
+.tx-modal-warning {
+  background: rgba(245,158,11,0.08);
+  border: 1px solid rgba(245,158,11,0.2);
+  border-radius: 8px;
+  padding: 12px 14px;
+  font-size: 13px;
+  color: #fbbf24;
+  margin-bottom: 20px;
+}
+
+.tx-modal-steps {
+  font-size: 13px;
+  color: #64748b;
+  margin-bottom: 24px;
+  line-height: 1.7;
+}
+
+.tx-modal-steps li {
+  margin-left: 16px;
+}
+
+.tx-modal-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+.tx-modal-cancel {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: #94a3b8;
+  border-radius: 8px;
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 500;
+  font-family: 'DM Sans', sans-serif;
+  cursor: pointer;
+}
+
+.tx-modal-cancel:hover { background: rgba(255,255,255,0.1); }
+
+.tx-modal-confirm-refund {
+  background: #f59e0b;
+  border: none;
+  color: #000;
+  border-radius: 8px;
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 700;
+  font-family: 'DM Sans', sans-serif;
+  cursor: pointer;
+}
+
+.tx-modal-confirm-refund:hover { background: #fbbf24; }
+
+.tx-modal-confirm-paid {
+  background: #22c55e;
+  border: none;
+  color: #000;
+  border-radius: 8px;
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 700;
+  font-family: 'DM Sans', sans-serif;
+  cursor: pointer;
+}
+
+.tx-modal-confirm-paid:hover { background: #4ade80; }
+
+.tx-modal-confirm-refund:disabled,
+.tx-modal-confirm-paid:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

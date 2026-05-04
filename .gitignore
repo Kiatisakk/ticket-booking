@@ -16,6 +16,11 @@ dist/
 build/
 *.local
 
+# AI Tools (Claude, Cursor, Qwen)
+.claude/
+.qwen/
+.cursorrules
+
 # IDE
 .vscode/
 .idea/
@@ -39,3 +44,5 @@ Desktop.ini
 # Logs
 logs/
 *.log
+
+.vscode/
