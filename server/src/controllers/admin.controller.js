@@ -252,8 +252,30 @@ exports.deleteEvent = async (req, res) => {
   try {
     const eventId = parseInt(req.params.id);
 
-    await prisma.showtime.deleteMany({ where: { EventID: eventId } });
-    await prisma.event.delete({ where: { EventID: eventId } });
+    // Find all showtimes for this event
+    const showtimes = await prisma.showtime.findMany({
+      where: { EventID: eventId },
+      select: { ShowtimeID: true }
+    });
+    const showtimeIds = showtimes.map(s => s.ShowtimeID);
+
+    // Find all booking details for these showtimes
+    const bookingDetails = await prisma.bookingDetail.findMany({
+      where: { ShowtimeID: { in: showtimeIds } },
+      select: { DetailID: true, BookingID: true }
+    });
+    const detailIds  = bookingDetails.map(d => d.DetailID);
+    const bookingIds = [...new Set(bookingDetails.map(d => d.BookingID))];
+
+    // Cascade delete in proper order to respect FK constraints
+    await prisma.$transaction([
+      prisma.ticket.deleteMany({          where: { DetailID:   { in: detailIds   } } }),
+      prisma.bookingDetail.deleteMany({   where: { DetailID:   { in: detailIds   } } }),
+      prisma.payment.deleteMany({         where: { BookingID:  { in: bookingIds  } } }),
+      prisma.booking.deleteMany({         where: { BookingID:  { in: bookingIds  } } }),
+      prisma.showtime.deleteMany({        where: { EventID: eventId } }),
+      prisma.event.delete({               where: { EventID: eventId } })
+    ]);
 
     res.json({ message: 'Event deleted successfully' });
   } catch (error) {
@@ -451,33 +473,34 @@ exports.getAdminVenues = async (req, res) => {
 
 const MONTHS_LABEL = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const YEAR = 2024;
+const YEAR_START = new Date(`${YEAR}-01-01T00:00:00.000Z`);
+const YEAR_END   = new Date(`${YEAR + 1}-01-01T00:00:00.000Z`);
 
 // ─── Report KPI ───────────────────────────────────────────────────────────────
 
 exports.getReportKpi = async (req, res) => {
   try {
-    // Total revenue from successful payments in 2024
     const revenueResult = await prisma.$queryRaw`
-      SELECT COALESCE(SUM(p."Amount"), 0) as revenue
+      SELECT COALESCE(SUM(p."Amount"), 0)::float8 as revenue
       FROM "Payments" p
       WHERE p."StatusID" = 2
-        AND EXTRACT(YEAR FROM p."PaidAt") = ${YEAR}
+        AND p."PaidAt" >= ${YEAR_START}
+        AND p."PaidAt" <  ${YEAR_END}
     `;
     const totalRevenue = Number(revenueResult[0]?.revenue ?? 0);
 
-    // Total tickets sold (BookingDetails) for completed bookings in 2024
     const bookingsResult = await prisma.$queryRaw`
-      SELECT COUNT(bd."DetailID") as count
+      SELECT COUNT(bd."DetailID")::int as count
       FROM "BookingDetails" bd
       JOIN "Bookings" b ON bd."BookingID" = b."BookingID"
       WHERE b."StatusID" = 2
-        AND EXTRACT(YEAR FROM b."BookingTimestamp") = ${YEAR}
+        AND b."BookingTimestamp" >= ${YEAR_START}
+        AND b."BookingTimestamp" <  ${YEAR_END}
     `;
     const totalBookings = Number(bookingsResult[0]?.count ?? 0);
 
-    // Top category by revenue in 2024
     const topCatResult = await prisma.$queryRaw`
-      SELECT ec."CategoryName", SUM(p."Amount") as revenue
+      SELECT ec."CategoryName" as category, SUM(p."Amount")::float8 as revenue
       FROM "Payments" p
       JOIN "Bookings" b ON p."BookingID" = b."BookingID"
       JOIN "BookingDetails" bd ON bd."BookingID" = b."BookingID"
@@ -485,12 +508,13 @@ exports.getReportKpi = async (req, res) => {
       JOIN "Events" e ON s."EventID" = e."EventID"
       JOIN "EventCategories" ec ON e."CategoryID" = ec."CategoryID"
       WHERE p."StatusID" = 2
-        AND EXTRACT(YEAR FROM p."PaidAt") = ${YEAR}
+        AND p."PaidAt" >= ${YEAR_START}
+        AND p."PaidAt" <  ${YEAR_END}
       GROUP BY ec."CategoryName"
       ORDER BY revenue DESC
       LIMIT 1
     `;
-    const topCategory = topCatResult[0]?.categoryname || 'N/A';
+    const topCategory = topCatResult[0]?.category || 'N/A';
 
     res.json({ totalRevenue, totalBookings, topCategory });
   } catch (error) {
@@ -505,9 +529,9 @@ exports.getRevenueByCategory = async (req, res) => {
   try {
     const rows = await prisma.$queryRaw`
       SELECT
-        ec."CategoryName",
-        EXTRACT(MONTH FROM p."PaidAt") as month,
-        COALESCE(SUM(p."Amount"), 0) as revenue
+        ec."CategoryName" as category,
+        EXTRACT(MONTH FROM p."PaidAt")::int as month,
+        COALESCE(SUM(p."Amount"), 0)::float8 as revenue
       FROM "Payments" p
       JOIN "Bookings" b ON p."BookingID" = b."BookingID"
       JOIN "BookingDetails" bd ON bd."BookingID" = b."BookingID"
@@ -515,18 +539,18 @@ exports.getRevenueByCategory = async (req, res) => {
       JOIN "Events" e ON s."EventID" = e."EventID"
       JOIN "EventCategories" ec ON e."CategoryID" = ec."CategoryID"
       WHERE p."StatusID" = 2
-        AND EXTRACT(YEAR FROM p."PaidAt") = ${YEAR}
+        AND p."PaidAt" >= ${YEAR_START}
+        AND p."PaidAt" <  ${YEAR_END}
       GROUP BY ec."CategoryName", EXTRACT(MONTH FROM p."PaidAt")
       ORDER BY month
     `;
 
-    // Build month-by-month datasets
-    const months = MONTHS_LABEL.slice(0, 10); // Jan–Oct for 2024
+    const months = MONTHS_LABEL.slice(0, 10);
     const datasets = { Concert: [], Movie: [], Seminar: [] };
 
     for (let m = 1; m <= 10; m++) {
       for (const cat of Object.keys(datasets)) {
-        const found = rows.find(r => r.categoryname === cat && Number(r.month) === m);
+        const found = rows.find(r => r.category === cat && r.month === m);
         datasets[cat].push(Number(found?.revenue ?? 0));
       }
     }
@@ -543,9 +567,11 @@ exports.getRevenueByCategory = async (req, res) => {
 exports.getUserGrowth = async (req, res) => {
   try {
     const rows = await prisma.$queryRaw`
-      SELECT EXTRACT(MONTH FROM "CreatedAt") as month, COUNT(*) as count
+      SELECT EXTRACT(MONTH FROM "CreatedAt")::int as month,
+             COUNT(*)::int as count
       FROM "Users"
-      WHERE EXTRACT(YEAR FROM "CreatedAt") = ${YEAR}
+      WHERE "CreatedAt" >= ${YEAR_START}
+        AND "CreatedAt" <  ${YEAR_END}
       GROUP BY month
       ORDER BY month
     `;
@@ -553,7 +579,7 @@ exports.getUserGrowth = async (req, res) => {
     const months = MONTHS_LABEL.slice(0, 10);
     const data = [];
     for (let m = 1; m <= 10; m++) {
-      const found = rows.find(r => Number(r.month) === m);
+      const found = rows.find(r => r.month === m);
       data.push(Number(found?.count ?? 0));
     }
 
@@ -570,29 +596,29 @@ exports.getRevenueByVenue = async (req, res) => {
   try {
     const rows = await prisma.$queryRaw`
       SELECT
-        v."VenueName",
-        EXTRACT(MONTH FROM p."PaidAt") as month,
-        COALESCE(SUM(p."Amount"), 0) as revenue
+        v."VenueName" as venue,
+        EXTRACT(MONTH FROM p."PaidAt")::int as month,
+        COALESCE(SUM(p."Amount"), 0)::float8 as revenue
       FROM "Payments" p
       JOIN "Bookings" b ON p."BookingID" = b."BookingID"
       JOIN "BookingDetails" bd ON bd."BookingID" = b."BookingID"
       JOIN "Showtimes" s ON bd."ShowtimeID" = s."ShowtimeID"
       JOIN "Venues" v ON s."VenueID" = v."VenueID"
       WHERE p."StatusID" = 2
-        AND EXTRACT(YEAR FROM p."PaidAt") = ${YEAR}
+        AND p."PaidAt" >= ${YEAR_START}
+        AND p."PaidAt" <  ${YEAR_END}
       GROUP BY v."VenueName", EXTRACT(MONTH FROM p."PaidAt")
       ORDER BY month
     `;
 
-    // Collect all unique venue names from result
-    const venueNames = [...new Set(rows.map(r => r.venuename))].sort();
+    const venueNames = [...new Set(rows.map(r => r.venue))].sort();
     const months = MONTHS_LABEL.slice(0, 10);
 
     const datasets = {};
     for (const vn of venueNames) {
       datasets[vn] = [];
       for (let m = 1; m <= 10; m++) {
-        const found = rows.find(r => r.venuename === vn && Number(r.month) === m);
+        const found = rows.find(r => r.venue === vn && r.month === m);
         datasets[vn].push(Number(found?.revenue ?? 0));
       }
     }
@@ -609,10 +635,12 @@ exports.getRevenueByVenue = async (req, res) => {
 exports.getBookingsByHour = async (req, res) => {
   try {
     const rows = await prisma.$queryRaw`
-      SELECT EXTRACT(HOUR FROM p."PaidAt") as hour, COUNT(*) as count
+      SELECT EXTRACT(HOUR FROM p."PaidAt")::int as hour,
+             COUNT(*)::int as count
       FROM "Payments" p
       WHERE p."StatusID" = 2
-        AND EXTRACT(YEAR FROM p."PaidAt") = ${YEAR}
+        AND p."PaidAt" >= ${YEAR_START}
+        AND p."PaidAt" <  ${YEAR_END}
       GROUP BY hour
       ORDER BY hour
     `;
@@ -621,7 +649,7 @@ exports.getBookingsByHour = async (req, res) => {
     const data   = [];
     for (let h = 0; h < 24; h++) {
       labels.push(String(h).padStart(2, '0'));
-      const found = rows.find(r => Number(r.hour) === h);
+      const found = rows.find(r => r.hour === h);
       data.push(Number(found?.count ?? 0));
     }
 
@@ -653,7 +681,7 @@ exports.getBookingVsCapacity = async (req, res) => {
 
       // Count sold = BookingDetails with a successful payment
       const soldRows = await prisma.$queryRaw`
-        SELECT COUNT(bd."DetailID") as sold
+        SELECT COUNT(bd."DetailID")::int as sold
         FROM "BookingDetails" bd
         JOIN "Bookings" b ON bd."BookingID" = b."BookingID"
         JOIN "Payments" p ON p."BookingID" = b."BookingID"
@@ -685,7 +713,9 @@ exports.getBookingVsCapacity = async (req, res) => {
 exports.getVenueUtilization = async (req, res) => {
   try {
     const rows = await prisma.$queryRaw`
-      SELECT v."VenueName", ec."CategoryName", COUNT(s."ShowtimeID") as count
+      SELECT v."VenueName" as venue,
+             ec."CategoryName" as category,
+             COUNT(s."ShowtimeID")::int as count
       FROM "Showtimes" s
       JOIN "Venues" v ON s."VenueID" = v."VenueID"
       JOIN "Events" e ON s."EventID" = e."EventID"
@@ -694,13 +724,13 @@ exports.getVenueUtilization = async (req, res) => {
       GROUP BY v."VenueName", ec."CategoryName"
     `;
 
-    const venues     = [...new Set(rows.map(r => r.venuename))].sort();
+    const venues     = [...new Set(rows.map(r => r.venue))].sort();
     const categories = ['Concert', 'Movie', 'Seminar'];
 
     const datasets = {};
     for (const cat of categories) {
       datasets[cat] = venues.map(v => {
-        const found = rows.find(r => r.venuename === v && r.categoryname === cat);
+        const found = rows.find(r => r.venue === v && r.category === cat);
         return Number(found?.count ?? 0);
       });
     }
@@ -717,7 +747,8 @@ exports.getVenueUtilization = async (req, res) => {
 exports.getSeatTypeRevenue = async (req, res) => {
   try {
     const rows = await prisma.$queryRaw`
-      SELECT st."TypeName", COALESCE(SUM(t."FinalPrice"), 0) as revenue
+      SELECT st."TypeName" as typename,
+             COALESCE(SUM(t."FinalPrice"), 0)::float8 as revenue
       FROM "Tickets" t
       JOIN "BookingDetails" bd ON t."DetailID" = bd."DetailID"
       JOIN "Seats" seat ON bd."SeatID" = seat."SeatID"
@@ -745,7 +776,7 @@ exports.getCustomerRetention = async (req, res) => {
     const rows = await prisma.$queryRaw`
       SELECT
         CASE WHEN booking_count > 1 THEN 'Repeat' ELSE 'One-time' END as type,
-        COUNT(*) as users
+        COUNT(*)::int as users
       FROM (
         SELECT "UserID", COUNT(*) as booking_count
         FROM "Bookings"
@@ -780,16 +811,17 @@ exports.getCustomerRetention = async (req, res) => {
 exports.getInterestByCategory = async (req, res) => {
   try {
     const rows = await prisma.$queryRaw`
-      SELECT ec."CategoryName",
-             EXTRACT(MONTH FROM b."BookingTimestamp") as month,
-             COUNT(bd."DetailID") as count
+      SELECT ec."CategoryName" as category,
+             EXTRACT(MONTH FROM b."BookingTimestamp")::int as month,
+             COUNT(bd."DetailID")::int as count
       FROM "BookingDetails" bd
       JOIN "Bookings" b ON bd."BookingID" = b."BookingID"
       JOIN "Showtimes" s ON bd."ShowtimeID" = s."ShowtimeID"
       JOIN "Events" e ON s."EventID" = e."EventID"
       JOIN "EventCategories" ec ON e."CategoryID" = ec."CategoryID"
-      WHERE EXTRACT(YEAR FROM b."BookingTimestamp") = ${YEAR}
-      GROUP BY ec."CategoryName", month
+      WHERE b."BookingTimestamp" >= ${YEAR_START}
+        AND b."BookingTimestamp" <  ${YEAR_END}
+      GROUP BY ec."CategoryName", EXTRACT(MONTH FROM b."BookingTimestamp")
       ORDER BY month
     `;
 
@@ -798,7 +830,7 @@ exports.getInterestByCategory = async (req, res) => {
 
     for (let m = 1; m <= 10; m++) {
       for (const cat of Object.keys(datasets)) {
-        const found = rows.find(r => r.categoryname === cat && Number(r.month) === m);
+        const found = rows.find(r => r.category === cat && r.month === m);
         datasets[cat].push(Number(found?.count ?? 0));
       }
     }
@@ -815,26 +847,26 @@ exports.getInterestByCategory = async (req, res) => {
 exports.getPeakShowtimeHours = async (req, res) => {
   try {
     const rows = await prisma.$queryRaw`
-      SELECT ec."CategoryName",
-             EXTRACT(HOUR FROM s."StartDateTime") as hour,
-             COUNT(t."TicketID") as tickets
+      SELECT ec."CategoryName" as category,
+             EXTRACT(HOUR FROM s."StartDateTime")::int as hour,
+             COUNT(t."TicketID")::int as tickets
       FROM "Tickets" t
       JOIN "BookingDetails" bd ON t."DetailID" = bd."DetailID"
       JOIN "Showtimes" s ON bd."ShowtimeID" = s."ShowtimeID"
       JOIN "Events" e ON s."EventID" = e."EventID"
       JOIN "EventCategories" ec ON e."CategoryID" = ec."CategoryID"
-      GROUP BY ec."CategoryName", hour
+      GROUP BY ec."CategoryName", EXTRACT(HOUR FROM s."StartDateTime")
       ORDER BY hour
     `;
 
-    // Collect all hours present
-    const allHours = [...new Set(rows.map(r => Number(r.hour)))].sort((a, b) => a - b);
-    const labels   = allHours.map(h => String(h).padStart(2, '0'));
+    const fixedHours = [];
+    for (let h = 8; h <= 22; h++) fixedHours.push(h);
+    const labels   = fixedHours.map(h => String(h).padStart(2, '0') + ':00');
     const datasets = { Concert: [], Movie: [], Seminar: [] };
 
-    for (const h of allHours) {
+    for (const h of fixedHours) {
       for (const cat of Object.keys(datasets)) {
-        const found = rows.find(r => r.categoryname === cat && Number(r.hour) === h);
+        const found = rows.find(r => r.category === cat && r.hour === h);
         datasets[cat].push(Number(found?.tickets ?? 0));
       }
     }
@@ -851,7 +883,9 @@ exports.getPeakShowtimeHours = async (req, res) => {
 exports.getSeatHeatmap = async (req, res) => {
   try {
     const rows = await prisma.$queryRaw`
-      SELECT seat."RowLabel", seat."SeatNumber", COUNT(bd."DetailID") as bookings
+      SELECT seat."RowLabel" as rowlabel,
+             seat."SeatNumber" as seatnumber,
+             COUNT(bd."DetailID")::int as bookings
       FROM "BookingDetails" bd
       JOIN "Seats" seat ON bd."SeatID" = seat."SeatID"
       JOIN "Venues" v ON seat."VenueID" = v."VenueID"
@@ -877,17 +911,28 @@ exports.getSeatHeatmap = async (req, res) => {
   }
 };
 
-// ─── Report 12: Cancellation Heatmap ─────────────────────────────────────────
+// ─── Report 12: Failed Payment Rate Heatmap ──────────────────────────────────
+// % of booking attempts (per seat type × event) where payment Failed.
+// Note: rows include both successful bookings (those that went through) AND
+// failed attempts on the same seat. The rate = failed / (failed + success).
 
 exports.getCancellationHeatmap = async (req, res) => {
   try {
+    // Look up Failed StatusID dynamically (auto-increment safety)
+    const failedStatus = await prisma.paymentStatus.findFirst({
+      where: { StatusName: 'Failed' }
+    });
+    const failedStatusId = failedStatus?.StatusID ?? 3;
+
     const rows = await prisma.$queryRaw`
       SELECT
         st."TypeName" as seattype,
         e."Title" as eventtitle,
-        COUNT(CASE WHEN b."StatusID" = 3 THEN 1 END) * 100.0 / NULLIF(COUNT(*), 0) as rate
+        (COUNT(CASE WHEN p."StatusID" = ${failedStatusId} THEN 1 END) * 100.0 /
+          NULLIF(COUNT(*), 0))::float8 as rate
       FROM "BookingDetails" bd
       JOIN "Bookings" b ON bd."BookingID" = b."BookingID"
+      JOIN "Payments" p ON p."BookingID" = b."BookingID"
       JOIN "Seats" seat ON bd."SeatID" = seat."SeatID"
       JOIN "SeatTypes" st ON seat."SeatTypeID" = st."SeatTypeID"
       JOIN "Showtimes" s ON bd."ShowtimeID" = s."ShowtimeID"
@@ -908,7 +953,7 @@ exports.getCancellationHeatmap = async (req, res) => {
 
     res.json({ seatTypes, events: eventTitles, data });
   } catch (error) {
-    console.error('getCancellationHeatmap error:', error);
-    res.status(500).json({ error: 'Failed to fetch cancellation heatmap' });
+    console.error('getFailedPaymentHeatmap error:', error);
+    res.status(500).json({ error: 'Failed to fetch failed payment heatmap' });
   }
 };

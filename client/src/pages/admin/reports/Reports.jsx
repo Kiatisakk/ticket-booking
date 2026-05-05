@@ -208,7 +208,7 @@ function CancellationHeatmap({ heatmapData }) {
           className="rp-heatmap-gradient"
           style={{ background: 'linear-gradient(to right, rgba(239,68,68,0.1), rgba(239,68,68,0.9))' }}
         />
-        <span>High Cancellation Rate</span>
+        <span>High Failure Rate</span>
       </div>
     </div>
   );
@@ -575,10 +575,10 @@ function Reports() {
           {loading ? <Spinner /> : <SeatHeatmap heatmapData={reportData?.r2} />}
         </div>
 
-        {/* Report 12 — Cancellation Rate Heatmap (full width) */}
+        {/* Report 12 — Failed Payment Rate Heatmap (full width) */}
         <div className="rp-chart-card full-width">
-          <div className="rp-chart-title">Report 12 — Cancellation Rate Heatmap</div>
-          <div className="rp-chart-subtitle">Cancellation % by seat type &times; event · {periodLabel}</div>
+          <div className="rp-chart-title">Report 12 — Failed Payment Rate Heatmap</div>
+          <div className="rp-chart-subtitle">% of booking attempts that failed · seat type &times; event · {periodLabel}</div>
           {loading ? <Spinner /> : <CancellationHeatmap heatmapData={reportData?.r12} />}
         </div>
 

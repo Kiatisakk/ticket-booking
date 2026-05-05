@@ -40,10 +40,37 @@ function subtractDays(date, days) {
 async function main() {
   console.log('=== Historical Seed Starting ===\n');
 
+  const seatTypeNames = [
+    { name: 'VIP', modifier: 2.0 },
+    { name: 'Standard', modifier: 1.0 },
+    { name: 'Sofa Bed', modifier: 1.5 }
+  ];
+
+  for (const item of seatTypeNames) {
+    let record = await prisma.seatType.findFirst({ where: { TypeName: item.name } });
+    if (!record) {
+      await prisma.seatType.create({
+        data: { TypeName: item.name, PriceModifier: item.modifier }
+      });
+    }
+  }
+
+  // จัดการ EventCategory แบบปลอดภัย
+  const categoryNames = ['Concert', 'Movie', 'Seminar'];
+  for (const name of categoryNames) {
+    let record = await prisma.eventCategory.findFirst({ where: { CategoryName: name } });
+    if (!record) {
+      await prisma.eventCategory.create({
+        data: { CategoryName: name }
+      });
+    }
+  }
+
   // ── 1. Look up reference data ──────────────────────────────────────────────
   const seatTypes = await prisma.seatType.findMany();
   const stMap = {};
   for (const st of seatTypes) stMap[st.TypeName] = st;
+  
   const VIP      = stMap['VIP'];
   const STANDARD = stMap['Standard'];
   const SOFA_BED = stMap['Sofa Bed'];
@@ -52,8 +79,8 @@ async function main() {
   const catMap = {};
   for (const c of categories) catMap[c.CategoryName] = c;
 
-  console.log('Seat types found:', Object.keys(stMap).join(', '));
-  console.log('Categories found:', Object.keys(catMap).join(', '));
+  console.log('Seat types ready:', Object.keys(stMap).join(', '));
+  console.log('Categories ready:', Object.keys(catMap).join(', '));
 
   // ── 2. Create historical venues ───────────────────────────────────────────
 
@@ -334,13 +361,44 @@ async function main() {
         CreatedAt: spec.createdAt,
         UpdatedAt: spec.createdAt
       },
-      update: {} // don't overwrite existing users
+      update: {}
     });
     userIds[spec.email] = user.UserID;
   }
-  console.log(`\nUpserted ${userSpecs.length} historical users`);
+  console.log(`\nUpserted ${userSpecs.length} repeat-customer users`);
 
   const histUserIDs = Object.values(userIds);
+
+  // ── 6b. Create 10 "one-time" users (each gets exactly 1 booking) ──────────
+  // Keeps Report 9 realistic: ~33% one-time vs 67% repeat customers
+  const oneTimeNames = [
+    'Anong','Boonsri','Chanchai','Duangjai','Ekachai',
+    'Fonthip','Gaysorn','Hathai','Itthiporn','Jiraporn'
+  ];
+  const oneTimeUserIDs = [];
+  for (let i = 0; i < oneTimeNames.length; i++) {
+    const name  = oneTimeNames[i];
+    const email = `${name.toLowerCase()}.ot@example.com`;
+    // Spread CreatedAt across Jan-Oct 2024
+    const month = (i % 10) + 1;
+    const day   = (i * 3) % 27 + 1;
+    const createdAt = new Date(2024, month - 1, day, 10, 0, 0);
+
+    const u = await prisma.user.upsert({
+      where: { Email: email },
+      create: {
+        Email:     email,
+        FullName:  name,
+        Password:  passwordHash,
+        RoleID:    3,
+        CreatedAt: createdAt,
+        UpdatedAt: createdAt
+      },
+      update: {}
+    });
+    oneTimeUserIDs.push(u.UserID);
+  }
+  console.log(`Upserted ${oneTimeUserIDs.length} one-time users`);
 
   // ── 7. Helper to build a prioritised seat list for a venue ────────────────
   // Popular: rows C-E (for Impact Arena 7-row) / rows B-D (for SF Cinema 5-row), seats 4-9
@@ -500,161 +558,203 @@ async function main() {
     return booking.BookingID;
   }
 
-  // ── 10. Distribution plan for each showtime ───────────────────────────────
-  // Each entry: [eventTitle, showtimeIndex, userCount, bookingStatusDist, paymentMethodRotation]
-  // bookingStatusDist: array of [bookingStatusID, paymentStatusID] pairs
-  // We index into showtimeIndex[title][idx]
+  // ── 10. Look up real IDs from DB ─────────────────────────────────────────────
 
-  const ALL_USERS    = histUserIDs;
-  const FIRST_10     = histUserIDs.slice(0, 10);
-  const LAST_10      = histUserIDs.slice(10);
+  const allMethods = await prisma.paymentMethod.findMany({ orderBy: { MethodID: 'asc' } });
+  const methodByName = {};
+  for (const m of allMethods) methodByName[m.MethodName] = m.MethodID;
 
-  const plans = [
-    // Post Malone Jan — 6 users, mostly success
-    {
-      title: 'Post Malone: Eleven Tour', idx: 0, users: shuffle(ALL_USERS).slice(0, 6),
-      pairs: [
-        [2, 2], [2, 2], [2, 2], [2, 2], [2, 2], [2, 3]
-      ]
-    },
-    // Spider-Man show 1 — 5 users
-    {
-      title: 'Spider-Man: Beyond the Spider-Verse', idx: 0, users: shuffle(FIRST_10).slice(0, 5),
-      pairs: [
-        [2, 2], [2, 2], [2, 2], [2, 2], [3, 4]
-      ]
-    },
-    // Spider-Man show 2 — 4 users
-    {
-      title: 'Spider-Man: Beyond the Spider-Verse', idx: 1, users: shuffle(LAST_10).slice(0, 4),
-      pairs: [
-        [2, 2], [2, 2], [2, 2], [2, 2]
-      ]
-    },
-    // AI Seminar — 4 users, some cancelled
-    {
-      title: 'AI & Future of Work Seminar', idx: 0, users: shuffle(ALL_USERS).slice(0, 4),
-      pairs: [
-        [2, 2], [2, 2], [3, 4], [3, 3]
-      ]
-    },
-    // BTS — 8 users, mostly success, 1 refunded
-    {
-      title: 'BTS: Permission to Dance on Stage', idx: 0, users: shuffle(ALL_USERS).slice(0, 8),
-      pairs: [
-        [2, 2], [2, 2], [2, 2], [2, 2], [2, 2], [2, 2], [3, 4], [2, 2]
-      ]
-    },
-    // Avengers show 1 — 5 users
-    {
-      title: 'Avengers: Doomsday', idx: 0, users: shuffle(FIRST_10).slice(0, 5),
-      pairs: [
-        [2, 2], [2, 2], [2, 2], [2, 2], [3, 3]
-      ]
-    },
-    // Avengers show 2 — 4 users
-    {
-      title: 'Avengers: Doomsday', idx: 1, users: shuffle(LAST_10).slice(0, 4),
-      pairs: [
-        [2, 2], [2, 2], [2, 2], [2, 2]
-      ]
-    },
-    // BLACKPINK — 7 users, 1 failed
-    {
-      title: 'BLACKPINK BORN PINK World Tour', idx: 0, users: shuffle(ALL_USERS).slice(0, 7),
-      pairs: [
-        [2, 2], [2, 2], [2, 2], [2, 2], [2, 2], [2, 2], [3, 3]
-      ]
-    },
-    // Digital Summit — 3 users
-    {
-      title: 'Digital Transformation Summit 2024', idx: 0, users: shuffle(ALL_USERS).slice(0, 3),
-      pairs: [
-        [2, 2], [2, 2], [3, 4]
-      ]
-    },
-    // Captain America show 1 — 5 users
-    {
-      title: 'Captain America: Brave New World', idx: 0, users: shuffle(FIRST_10).slice(0, 5),
-      pairs: [
-        [2, 2], [2, 2], [2, 2], [2, 2], [2, 2]
-      ]
-    },
-    // Captain America show 2 — 4 users
-    {
-      title: 'Captain America: Brave New World', idx: 1, users: shuffle(LAST_10).slice(0, 4),
-      pairs: [
-        [2, 2], [2, 2], [2, 2], [3, 3]
-      ]
-    },
-    // Ed Sheeran — 6 users
-    {
-      title: 'Ed Sheeran: Mathematics Tour', idx: 0, users: shuffle(ALL_USERS).slice(0, 6),
-      pairs: [
-        [2, 2], [2, 2], [2, 2], [2, 2], [2, 2], [2, 3]
-      ]
-    },
-    // Taylor Swift — 8 users, 1 refunded
-    {
-      title: 'Taylor Swift: The Eras Tour Bangkok', idx: 0, users: shuffle(ALL_USERS).slice(0, 8),
-      pairs: [
-        [2, 2], [2, 2], [2, 2], [2, 2], [2, 2], [2, 2], [3, 4], [2, 2]
-      ]
-    },
-  ];
+  const methodRotation = [
+    methodByName['PromptPay'],
+    methodByName['Credit Card'],
+    methodByName['TrueMoney'],
+    methodByName['ShopeePay']
+  ].filter(Boolean);
 
-  const methodRotation = [1, 2, 3, 4]; // PromptPay, Credit Card, TrueMoney, ShopeePay
-  let methodIdx = 0;
+  if (methodRotation.length === 0) {
+    console.error('ERROR: No PaymentMethods found in DB. Run "npm run db:seed" first.');
+    return;
+  }
+  console.log(`\nUsing PaymentMethod IDs: ${methodRotation.join(', ')}`);
 
-  console.log('\n=== Creating Historical Bookings ===');
+  const allBookingStatuses = await prisma.bookingStatus.findMany();
+  const bookingStatusByName = {};
+  for (const s of allBookingStatuses) bookingStatusByName[s.StatusName] = s.StatusID;
 
-  for (const plan of plans) {
-    const stList = showtimeIndex[plan.title];
-    if (!stList || !stList[plan.idx]) {
-      console.warn(`  No showtime found for "${plan.title}" idx=${plan.idx}`);
-      continue;
-    }
+  const allPaymentStatuses = await prisma.paymentStatus.findMany();
+  const paymentStatusByName = {};
+  for (const s of allPaymentStatuses) paymentStatusByName[s.StatusName] = s.StatusID;
 
-    const { showtimeID, venueKey, basePrice, startDT } = stList[plan.idx];
-    console.log(`\nProcessing: ${plan.title} (ShowtimeID=${showtimeID})`);
+  const BS_COMPLETED = bookingStatusByName['Completed'];
+  const BS_PENDING   = bookingStatusByName['Pending'];
+  const PS_SUCCESS   = paymentStatusByName['Success'];
+  const PS_FAILED    = paymentStatusByName['Failed'];
+  const PS_PENDING   = paymentStatusByName['Pending'];
 
-    for (let i = 0; i < plan.users.length; i++) {
-      const userID             = plan.users[i];
-      const [bookingSt, paySt] = plan.pairs[i] || [2, 2];
-      const method             = methodRotation[methodIdx % 4];
-      methodIdx++;
+  console.log(`Status IDs — BS_Completed=${BS_COMPLETED} BS_Pending=${BS_PENDING} PS_Success=${PS_SUCCESS} PS_Failed=${PS_FAILED} PS_Pending=${PS_PENDING}\n`);
 
-      // Seat count: 1-3 per booking, popular rows first
-      const seatCount    = 1 + (i % 3); // rotates 1,2,3,1,2,3...
-      const chosenSeats  = getUnusedSeats(showtimeID, venueKey, seatCount);
+  // ── 11. Helper to create ghost booking (no seats — Pending or Failed only) ──
+  async function createGhostBooking({ userID, bookingTimestamp, totalAmount, bookingStatusID, paymentMethodID, paymentStatusID }) {
+    txnCounter++;
+    const transactionID = `TXN-HIST-${txnCounter}-${Math.floor(1000 + Math.random() * 9000)}`;
+    const expiresAt = addMinutes(bookingTimestamp, 15);
 
-      if (chosenSeats.length === 0) {
-        console.warn(`  No seats left for showtime ${showtimeID}`);
-        continue;
-      }
-
-      // Booking happens 7-30 days before event
-      const daysBefore      = 7 + (i * 3) % 23; // varies 7-29
-      const bookingTimestamp = subtractDays(startDT, daysBefore);
-
-      const bookingID = await createHistoricalBooking({
-        userID,
-        showtimeID,
-        seats:            chosenSeats,
-        basePrice,
-        bookingTimestamp,
-        bookingStatusID:  bookingSt,
-        paymentMethodID:  method,
-        paymentStatusID:  paySt
+    try {
+      const booking = await prisma.booking.create({
+        data: {
+          UserID:           userID,
+          StatusID:         bookingStatusID,
+          BookingTimestamp: bookingTimestamp,
+          ExpiresAt:        expiresAt,
+          TotalAmount:      totalAmount,
+          CreatedAt:        bookingTimestamp,
+          UpdatedAt:        bookingTimestamp
+        }
       });
-
-      if (bookingID) {
-        console.log(`  Booking #${bookingID} user=${userID} seats=${chosenSeats.length} bookingSt=${bookingSt} paySt=${paySt}`);
-      }
+      await prisma.payment.create({
+        data: {
+          BookingID:     booking.BookingID,
+          MethodID:      paymentMethodID,
+          StatusID:      paymentStatusID,
+          TransactionID: transactionID,
+          Amount:        totalAmount,
+          PaidAt:        null,
+          CreatedAt:     bookingTimestamp,
+          UpdatedAt:     bookingTimestamp
+        }
+      });
+      return booking.BookingID;
+    } catch (err) {
+      console.error('  Ghost booking failed:', err.message);
     }
   }
 
-  console.log('\n=== Historical Seed Complete ===');
+  // ── 12. Fill capacity for every showtime (sold-out) ─────────────────────────
+
+  console.log('=== Filling Capacity (Sold-Out Mode) ===');
+
+  let methodIdx        = 0;
+  let totalBookings    = 0;
+  let totalFailedAttempts = 0;
+
+  for (const eventTitle of Object.keys(showtimeIndex)) {
+    const stList = showtimeIndex[eventTitle];
+
+    for (const stInfo of stList) {
+      const { showtimeID, venueKey, basePrice, startDT } = stInfo;
+      const venueSeats = allSeats[venueKey];
+
+      console.log(`\n[${eventTitle}] Showtime=${showtimeID} (${venueSeats.length} seats)`);
+
+      // ── (a) ~10% of seats also have a Failed payment attempt (different user)
+      // Models real life: customer tries to buy a seat, payment fails, then the
+      // seat eventually sells to a different customer (Success). We allow same
+      // SeatID + ShowtimeID across multiple BookingDetails (no DB constraint).
+      const failedCount = Math.max(2, Math.floor(venueSeats.length * 0.10));
+      const seatsForFailed = shuffle([...venueSeats]).slice(0, failedCount);
+
+      let bIdx = 0;
+      for (const seat of seatsForFailed) {
+        const userID = histUserIDs[(bIdx * 7 + 3) % histUserIDs.length];
+        const method = methodRotation[methodIdx % methodRotation.length];
+        methodIdx++;
+
+        const daysBefore = 14 + (bIdx % 14);
+        const bookingTs  = subtractDays(startDT, daysBefore);
+
+        await createHistoricalBooking({
+          userID, showtimeID,
+          seats:            [seat],
+          basePrice,
+          bookingTimestamp: bookingTs,
+          bookingStatusID:  BS_COMPLETED,  // booking record exists; payment failed
+          paymentMethodID:  method,
+          paymentStatusID:  PS_FAILED
+        });
+        bIdx++;
+        totalFailedAttempts++;
+      }
+
+      // ── (b) Successful bookings for EVERY seat (sold out)
+      const shuffledForSuccess = shuffle([...venueSeats]);
+      let seatIdx = 0;
+
+      // First seats go to "one-time" users (1 user, 1 seat, 1 booking each)
+      // Distribute across events: only 1 one-time user per showtime so the
+      // pool of 10 stretches across all 13 showtimes (some get 0, some get 1)
+      const oneTimeSeatsPerEvent = Math.min(1, oneTimeUserIDs.length);
+      let oneTimeSeatsAllocated  = 0;
+
+      while (seatIdx < shuffledForSuccess.length) {
+        let userID, groupSize;
+        if (oneTimeSeatsAllocated < oneTimeSeatsPerEvent && oneTimeUserIDs.length > 0) {
+          // Pick a one-time user (only 1 booking ever per user)
+          userID    = oneTimeUserIDs.shift(); // remove from pool — won't be used again
+          groupSize = 1;                       // exactly 1 seat
+          oneTimeSeatsAllocated++;
+        } else {
+          userID    = histUserIDs[bIdx % histUserIDs.length];
+          groupSize = Math.min(1 + (bIdx % 3), shuffledForSuccess.length - seatIdx);
+        }
+
+        const seatGroup = shuffledForSuccess.slice(seatIdx, seatIdx + groupSize);
+        seatIdx += groupSize;
+        if (seatGroup.length === 0) break;
+
+        const method = methodRotation[methodIdx % methodRotation.length];
+        methodIdx++;
+
+        const daysBefore = 1 + (bIdx * 3) % 28;
+        const bookingTs  = subtractDays(startDT, daysBefore);
+
+        const bid = await createHistoricalBooking({
+          userID, showtimeID,
+          seats:            seatGroup,
+          basePrice,
+          bookingTimestamp: bookingTs,
+          bookingStatusID:  BS_COMPLETED,
+          paymentMethodID:  method,
+          paymentStatusID:  PS_SUCCESS
+        });
+        if (bid) totalBookings++;
+        bIdx++;
+      }
+
+      console.log(`  Filled ${venueSeats.length} seats · ${failedCount} failed attempts`);
+    }
+  }
+
+  // ── (c) Add ghost Pending bookings for transaction variety ──────────────────
+  console.log('\n=== Adding Pending Ghost Bookings ===');
+
+  let pendingCount = 0;
+  for (const eventTitle of Object.keys(showtimeIndex)) {
+    const stInfo = showtimeIndex[eventTitle][0];
+    const { basePrice, startDT } = stInfo;
+
+    // 2 pending bookings per event (still in checkout)
+    for (let i = 0; i < 2; i++) {
+      const userID = histUserIDs[(pendingCount * 11 + 4) % histUserIDs.length];
+      const method = methodRotation[methodIdx % methodRotation.length];
+      methodIdx++;
+
+      const bookingTs = subtractDays(startDT, 1);
+      await createGhostBooking({
+        userID,
+        bookingTimestamp: bookingTs,
+        totalAmount:      basePrice,
+        bookingStatusID:  BS_PENDING,
+        paymentMethodID:  method,
+        paymentStatusID:  PS_PENDING
+      });
+      pendingCount++;
+    }
+  }
+
+  console.log(`\n=== Historical Seed Complete ===`);
+  console.log(`  Successful bookings: ${totalBookings}`);
+  console.log(`  Failed attempts:     ${totalFailedAttempts}`);
+  console.log(`  Pending ghosts:      ${pendingCount}`);
 }
 
 main()

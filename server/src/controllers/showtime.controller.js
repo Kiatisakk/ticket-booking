@@ -62,14 +62,21 @@ exports.getShowtimeById = async (req, res) => {
 exports.getBookedSeats = async (req, res) => {
   try {
     const showtimeId = parseInt(req.params.id);
-    const bookedSeats = await prisma.$queryRaw`
-      SELECT "SeatID"
-      FROM "ShowtimeAvailableSeats"
-      WHERE "ShowtimeID" = ${showtimeId}
-        AND "IsAvailable" = FALSE
-    `;
 
-    res.json({ bookedSeatIds: bookedSeats.map(d => d.SeatID) });
+    // A seat is "booked" if a BookingDetail exists for that showtime with a
+    // non-cancelled booking. We exclude cancelled bookings so seats freed up
+    // via refund/cancel become available again.
+    const bookedDetails = await prisma.bookingDetail.findMany({
+      where: {
+        ShowtimeID: showtimeId,
+        Booking: {
+          Status: { StatusName: { not: 'Cancelled' } }
+        }
+      },
+      select: { SeatID: true }
+    });
+
+    res.json({ bookedSeatIds: bookedDetails.map(d => d.SeatID) });
   } catch (error) {
     console.error('Get booked seats error:', error);
     res.status(500).json({ error: 'Failed to fetch booked seats' });

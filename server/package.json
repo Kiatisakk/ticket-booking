@@ -10,6 +10,7 @@
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:seed": "node prisma/seed.js",
+    "db:seed-historical": "node src/seed-historical.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
