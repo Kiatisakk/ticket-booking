@@ -93,6 +93,68 @@
   border-color: #6366f1;
 }
 
+/* Tabs */
+.em-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 20px;
+  background: rgba(255,255,255,0.03);
+  border-radius: 10px;
+  padding: 4px;
+  width: fit-content;
+}
+
+.em-tab {
+  background: transparent;
+  border: none;
+  color: #64748b;
+  border-radius: 8px;
+  padding: 8px 20px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: 'DM Sans', sans-serif;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.em-tab:hover {
+  color: #94a3b8;
+}
+
+.em-tab-active {
+  background: #6366f1;
+  color: #fff;
+}
+
+.em-tab-active:hover {
+  color: #fff;
+}
+
+/* Status badges */
+.em-status-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.em-status-upcoming {
+  background: rgba(34,197,94,0.12);
+  color: #4ade80;
+  border: 1px solid rgba(34,197,94,0.25);
+}
+
+.em-status-past {
+  background: rgba(100,116,139,0.12);
+  color: #94a3b8;
+  border: 1px solid rgba(100,116,139,0.2);
+}
+
+.em-row-past td {
+  opacity: 0.7;
+}
+
 .em-table-wrap {
   background: #13161d;
   border: 1px solid rgba(255,255,255,0.07);

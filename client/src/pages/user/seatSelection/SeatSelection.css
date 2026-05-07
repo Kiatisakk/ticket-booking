@@ -223,6 +223,34 @@
 
 .loading, .error { text-align: center; padding: 100px 20px; font-size: 18px; color: var(--muted2); }
 
+/* --- PAST SHOWTIME STYLES --- */
+.seat-selection-past .map-area {
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+.seat-selection-past .top-bar-sub {
+  color: #94a3b8;
+}
+
+.showtime-tab-past {
+  opacity: 0.45;
+  cursor: not-allowed !important;
+}
+
+.showtime-tab-past:hover {
+  border-color: var(--border2) !important;
+  color: var(--muted2) !important;
+  background: var(--surface2) !important;
+}
+
+.btn-checkout-past {
+  background: var(--surface2) !important;
+  color: var(--muted) !important;
+  cursor: not-allowed !important;
+  box-shadow: none !important;
+}
+
 @media (max-width: 900px) {
   .seat-layout { grid-template-columns: 1fr; }
   .booking-panel { order: -1; border-bottom: 1px solid var(--border); border-left: none; }

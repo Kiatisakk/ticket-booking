@@ -113,19 +113,26 @@ function EventDetails() {
     return <div className="event-details-container"><div className="error-state">Event not found</div></div>;
   }
 
+  // Check if all showtimes are in the past
+  const now = new Date();
+  const isPastEvent = event.Showtimes && event.Showtimes.length > 0
+    ? event.Showtimes.every(s => new Date(s.StartDateTime) < now)
+    : false;
+
   const categoryUI = getCategoryIcon(event.Category?.CategoryName);
 
   return (
     <div className="event-details-container">
       {/* EVENT HERO */}
-      <div className="event-hero">
+      <div className={`event-hero${isPastEvent ? ' event-hero-past' : ''}`}>
         <div className="hero-glow"></div>
         <div className="event-hero-inner">
-          <div className="event-poster" style={{ background: categoryUI.bg }}>
+          <div className="event-poster" style={{ background: isPastEvent ? 'linear-gradient(135deg, #1e293b, #334155)' : categoryUI.bg }}>
             {categoryUI.icon}
           </div>
           <div className="event-hero-info">
             <div className="hero-cat-badge">{categoryUI.icon} {event.Category?.CategoryName || 'Event'}</div>
+            {isPastEvent && <div className="past-event-badge">Event Ended</div>}
             <h1 className="hero-title">{event.Title}</h1>
             <div className="hero-meta">
               <span className="meta-item">📅 {event.Showtimes?.length > 0 ? formatDate(event.Showtimes[0].StartDateTime) : 'TBA'}</span>
@@ -154,28 +161,32 @@ function EventDetails() {
             </div>
 
             {/* Available Showtimes*/}
-            <div className="section-card">
+            <div className={`section-card${isPastEvent ? ' section-card-past' : ''}`}>
               <div className="sc-title">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <circle cx="12" cy="12" r="10" />
                   <polyline points="12 6 12 12 16 14" />
                 </svg>
-                Available Showtimes
+                {isPastEvent ? 'Showtimes (Ended)' : 'Available Showtimes'}
               </div>
-              
+
               {event.Showtimes && event.Showtimes.length > 0 ? (
                 <div className="showtime-list">
                   {event.Showtimes.map(showtime => (
-                    <div key={showtime.ShowtimeID} className="showtime-row readonly">
+                    <div key={showtime.ShowtimeID} className={`showtime-row readonly${isPastEvent ? ' showtime-row-past' : ''}`}>
                       <div className="st-info">
                         <div className="st-date">{formatDate(showtime.StartDateTime)}</div>
                         <div className="st-time">Show {formatTime(showtime.StartDateTime)}</div>
-                        <div className="st-enddate">
-                            🗓️ Booking ends: {formatDate(showtime.StartDateTime)} at {formatTime(showtime.StartDateTime)}
-                        </div>
+                        {!isPastEvent && (
+                          <div className="st-enddate">
+                              🗓️ Booking ends: {formatDate(showtime.StartDateTime)} at {formatTime(showtime.StartDateTime)}
+                          </div>
+                        )}
                       </div>
                       <div className="st-status">
-                         <span className="status-badge available">📍 {showtime.Venue?.VenueName}</span>
+                         <span className={`status-badge ${isPastEvent ? 'ended' : 'available'}`}>
+                           {isPastEvent ? '⏹ Ended' : `📍 ${showtime.Venue?.VenueName}`}
+                         </span>
                       </div>
                     </div>
                   ))}
@@ -221,23 +232,33 @@ function EventDetails() {
           </div>
 
           <div className="sidebar-column">
-            <div className="booking-panel">
-              <h3 className="bp-title">Book Tickets</h3>
+            <div className={`booking-panel${isPastEvent ? ' booking-panel-past' : ''}`}>
+              <h3 className="bp-title">{isPastEvent ? 'Event Ended' : 'Book Tickets'}</h3>
               <p className="bp-event-title">{event.Title}</p>
-              
+
               <div className="bp-divider"></div>
-              {event.Showtimes?.length > 0 && (
-                <div className="bp-enddate-notice">
-                  ⏰ Booking closes:
-                  {event.Showtimes.map((showtime, index) => (
-                    <div key={showtime.ShowtimeID} style={{ marginTop: index === 0 ? '6px' : '4px' }}>
-                      <strong>
-                        {formatDate(showtime.StartDateTime)} · {formatTime(showtime.StartDateTime)}
-                      </strong>
-                    </div>
-                  ))}
+
+              {isPastEvent ? (
+                <div className="bp-past-notice">
+                  This event has already ended. Ticket booking is no longer available.
                 </div>
+              ) : (
+                <>
+                  {event.Showtimes?.length > 0 && (
+                    <div className="bp-enddate-notice">
+                      ⏰ Booking closes:
+                      {event.Showtimes.map((showtime, index) => (
+                        <div key={showtime.ShowtimeID} style={{ marginTop: index === 0 ? '6px' : '4px' }}>
+                          <strong>
+                            {formatDate(showtime.StartDateTime)} · {formatTime(showtime.StartDateTime)}
+                          </strong>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
               )}
+
               <div className="bp-summary-list">
                 {loadingPrices ? (
                    <span style={{ color: 'var(--muted2)', fontSize: '13px' }}>Loading prices...</span>
@@ -251,14 +272,16 @@ function EventDetails() {
                 )}
               </div>
 
-              <button 
-                className="bp-checkout-btn" 
+              <button
+                className={`bp-checkout-btn${isPastEvent ? ' bp-checkout-btn-past' : ''}`}
                 onClick={handleProceedToSeats}
-                disabled={!event.Showtimes || event.Showtimes.length === 0}
+                disabled={isPastEvent || !event.Showtimes || event.Showtimes.length === 0}
               >
-                Select Showtime & Seats →
+                {isPastEvent ? 'Booking Closed' : 'Select Showtime & Seats →'}
               </button>
-              <p className="bp-note">🔒 You can choose your preferred showtime and seats on the next page.</p>
+              <p className="bp-note">
+                {isPastEvent ? 'This event is no longer available for booking.' : '🔒 You can choose your preferred showtime and seats on the next page.'}
+              </p>
             </div>
           </div>
 

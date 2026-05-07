@@ -17,6 +17,7 @@ import AdminLayout from './pages/admin/layout/AdminLayout';
 import EventManagement from './pages/admin/events/EventManagement';
 import AddEvent from './pages/admin/events/AddEvent';
 import EditEvent from './pages/admin/events/EditEvent';
+import UserManagement from './pages/admin/users/UserManagement';
 import Transactions from './pages/admin/transactions/Transactions';
 import Reports from './pages/admin/reports/Reports';
 
@@ -152,6 +153,7 @@ function App() {
           <Route path="events" element={<EventManagement />} />
           <Route path="events/add" element={<AddEvent />} />
           <Route path="events/:id/edit" element={<EditEvent />} />
+          <Route path="users" element={<UserManagement />} />
           <Route path="transactions" element={<Transactions />} />
           <Route path="reports" element={<Reports />} />
         </Route>

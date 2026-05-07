@@ -25,20 +25,42 @@
   margin-top: 2px;
 }
 
-.rp-period-select {
+.rp-date-range {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.rp-date-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.rp-date-input {
   background: #13161d;
   border: 1px solid rgba(255,255,255,0.07);
   border-radius: 10px;
-  padding: 10px 16px;
+  padding: 10px 14px;
   font-size: 14px;
   color: #f1f5f9;
   font-family: 'DM Sans', sans-serif;
   outline: none;
   cursor: pointer;
-  min-width: 180px;
+  transition: border-color 0.2s;
 }
 
-.rp-period-select:focus { border-color: #6366f1; }
+.rp-date-input:focus { border-color: #6366f1; }
+
+.rp-date-input::-webkit-calendar-picker-indicator {
+  filter: invert(0.7);
+  cursor: pointer;
+}
 
 /* KPI Cards */
 .rp-kpi-row {
@@ -248,6 +270,58 @@
 .rp-cancel-pct {
   font-size: 11px;
   font-weight: 700;
+}
+
+/* Category Analysis KPI Card */
+.rp-kpi-category .rp-kpi-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.rp-cat-select {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 11px;
+  color: #f1f5f9;
+  font-family: 'DM Sans', sans-serif;
+  outline: none;
+  cursor: pointer;
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 500;
+}
+
+.rp-cat-select:focus {
+  border-color: #6366f1;
+}
+
+.rp-cat-stats {
+  display: flex;
+  gap: 16px;
+  margin: 8px 0 4px;
+}
+
+.rp-cat-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+
+.rp-cat-stat-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: #f1f5f9;
+}
+
+.rp-cat-stat-label {
+  font-size: 11px;
+  color: #64748b;
+  font-weight: 500;
 }
 
 @media (max-width: 900px) {

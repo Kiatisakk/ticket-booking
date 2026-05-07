@@ -51,6 +51,25 @@
 .field input:focus { border-color: var(--indigo); box-shadow: 0 0 0 3px rgba(99,102,241,0.14); }
 .field input:disabled { opacity: 0.5; cursor: not-allowed; }
 
+/* Password toggle */
+.password-wrapper { position: relative; }
+.password-wrapper input { padding-right: 44px; }
+.toggle-password {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 4px;
+  line-height: 1;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+.toggle-password:hover { opacity: 1; }
+
 /* Button */
 .btn { width: 100%; background: var(--indigo); color: #fff; font-family: inherit; font-size: 14.5px; font-weight: 700; border: none; border-radius: 10px; padding: 13px; cursor: pointer; transition: background 0.2s, transform 0.15s, box-shadow 0.2s; box-shadow: 0 4px 20px rgba(99,102,241,0.35); margin-top: 4px; }
 .btn:hover:not(:disabled) { background: #4f52e0; transform: translateY(-1px); box-shadow: 0 8px 28px rgba(99,102,241,0.4); }

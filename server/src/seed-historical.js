@@ -4,7 +4,7 @@
  *
  * - Does NOT delete existing data (additive only)
  * - Uses upsert / createMany with skipDuplicates
- * - All dates are historical: Jan 2024 – Oct 2024
+ * - All dates are historical: May 2025 – May 2026
  */
 
 const { PrismaClient } = require('@prisma/client');
@@ -205,70 +205,70 @@ async function main() {
       title:     'Post Malone: Eleven Tour',
       category:  'Concert',
       venue:     'Impact Arena',
-      showtimes: [{ dt: new Date('2024-01-15T19:00:00Z'), price: 2500 }]
+      showtimes: [{ dt: new Date('2025-05-17T19:00:00Z'), price: 2500 }]
     },
     {
       title:     'Spider-Man: Beyond the Spider-Verse',
       category:  'Movie',
       venue:     'SF Cinema Paragon',
       showtimes: [
-        { dt: new Date('2024-02-10T14:00:00Z'), price: 280 },
-        { dt: new Date('2024-02-10T18:00:00Z'), price: 280 }
+        { dt: new Date('2025-06-21T14:00:00Z'), price: 280 },
+        { dt: new Date('2025-06-21T18:00:00Z'), price: 280 }
       ]
     },
     {
       title:     'AI & Future of Work Seminar',
       category:  'Seminar',
       venue:     'BITEC Bangkok',
-      showtimes: [{ dt: new Date('2024-03-05T09:00:00Z'), price: 1200 }]
+      showtimes: [{ dt: new Date('2025-07-12T09:00:00Z'), price: 1200 }]
     },
     {
       title:     'BTS: Permission to Dance on Stage',
       category:  'Concert',
       venue:     'Impact Arena',
-      showtimes: [{ dt: new Date('2024-04-20T18:00:00Z'), price: 3500 }]
+      showtimes: [{ dt: new Date('2025-08-23T18:00:00Z'), price: 3500 }]
     },
     {
       title:     'Avengers: Doomsday',
       category:  'Movie',
       venue:     'SF Cinema Paragon',
       showtimes: [
-        { dt: new Date('2024-05-01T15:00:00Z'), price: 320 },
-        { dt: new Date('2024-05-01T20:00:00Z'), price: 320 }
+        { dt: new Date('2025-10-04T15:00:00Z'), price: 320 },
+        { dt: new Date('2025-10-04T20:00:00Z'), price: 320 }
       ]
     },
     {
       title:     'BLACKPINK BORN PINK World Tour',
       category:  'Concert',
       venue:     'Impact Arena',
-      showtimes: [{ dt: new Date('2024-06-08T19:00:00Z'), price: 3000 }]
+      showtimes: [{ dt: new Date('2025-11-15T19:00:00Z'), price: 3000 }]
     },
     {
-      title:     'Digital Transformation Summit 2024',
+      title:     'Digital Transformation Summit 2025',
       category:  'Seminar',
       venue:     'BITEC Bangkok',
-      showtimes: [{ dt: new Date('2024-07-15T08:30:00Z'), price: 1500 }]
+      showtimes: [{ dt: new Date('2025-12-06T08:30:00Z'), price: 1500 }]
     },
     {
       title:     'Captain America: Brave New World',
       category:  'Movie',
       venue:     'SF Cinema Paragon',
       showtimes: [
-        { dt: new Date('2024-08-09T13:00:00Z'), price: 300 },
-        { dt: new Date('2024-08-09T17:30:00Z'), price: 300 }
+        { dt: new Date('2026-01-24T13:00:00Z'), price: 300 },
+        { dt: new Date('2026-01-24T17:30:00Z'), price: 300 }
       ]
     },
     {
       title:     'Ed Sheeran: Mathematics Tour',
       category:  'Concert',
       venue:     'Impact Arena',
-      showtimes: [{ dt: new Date('2024-09-14T19:30:00Z'), price: 2800 }]
+      showtimes: [{ dt: new Date('2026-03-14T19:30:00Z'), price: 2800 }]
     },
     {
       title:     'Taylor Swift: The Eras Tour Bangkok',
       category:  'Concert',
       venue:     'Impact Arena',
-      showtimes: [{ dt: new Date('2024-10-05T18:00:00Z'), price: 4000 }]
+      showtimes: [{ dt: new Date('2026-05-17T18:00:00Z'), price: 4000 }]
     },
   ];
 
@@ -325,26 +325,26 @@ async function main() {
   // ── 6. Create historical users ────────────────────────────────────────────
 
   const userSpecs = [
-    { email: 'somchai@gmail.com',     name: 'Somchai',   createdAt: new Date('2024-01-10') },
-    { email: 'nattaporn@gmail.com',   name: 'Nattaporn', createdAt: new Date('2024-01-22') },
-    { email: 'wichaya@hotmail.com',   name: 'Wichaya',   createdAt: new Date('2024-02-05') },
-    { email: 'panida@gmail.com',      name: 'Panida',    createdAt: new Date('2024-02-18') },
-    { email: 'kittipong@gmail.com',   name: 'Kittipong', createdAt: new Date('2024-02-28') },
-    { email: 'sirirat@yahoo.com',     name: 'Sirirat',   createdAt: new Date('2024-03-12') },
-    { email: 'arthit@gmail.com',      name: 'Arthit',    createdAt: new Date('2024-03-25') },
-    { email: 'monrada@gmail.com',     name: 'Monrada',   createdAt: new Date('2024-04-08') },
-    { email: 'chaiwat@hotmail.com',   name: 'Chaiwat',   createdAt: new Date('2024-04-20') },
-    { email: 'preeya@gmail.com',      name: 'Preeya',    createdAt: new Date('2024-05-03') },
-    { email: 'sarawut@gmail.com',     name: 'Sarawut',   createdAt: new Date('2024-05-17') },
-    { email: 'kannika@gmail.com',     name: 'Kannika',   createdAt: new Date('2024-06-01') },
-    { email: 'teerawat@gmail.com',    name: 'Teerawat',  createdAt: new Date('2024-06-14') },
-    { email: 'mayuree@hotmail.com',   name: 'Mayuree',   createdAt: new Date('2024-07-02') },
-    { email: 'suphot@gmail.com',      name: 'Suphot',    createdAt: new Date('2024-07-20') },
-    { email: 'wassana@gmail.com',     name: 'Wassana',   createdAt: new Date('2024-08-05') },
-    { email: 'jirawat@gmail.com',     name: 'Jirawat',   createdAt: new Date('2024-08-18') },
-    { email: 'nareerat@gmail.com',    name: 'Nareerat',  createdAt: new Date('2024-09-03') },
-    { email: 'phakorn@gmail.com',     name: 'Phakorn',   createdAt: new Date('2024-09-22') },
-    { email: 'ladawan@gmail.com',     name: 'Ladawan',   createdAt: new Date('2024-10-10') },
+    { email: 'somchai@gmail.com',     name: 'Somchai',   createdAt: new Date('2025-05-05') },
+    { email: 'nattaporn@gmail.com',   name: 'Nattaporn', createdAt: new Date('2025-05-20') },
+    { email: 'wichaya@hotmail.com',   name: 'Wichaya',   createdAt: new Date('2025-06-08') },
+    { email: 'panida@gmail.com',      name: 'Panida',    createdAt: new Date('2025-06-25') },
+    { email: 'kittipong@gmail.com',   name: 'Kittipong', createdAt: new Date('2025-07-10') },
+    { email: 'sirirat@yahoo.com',     name: 'Sirirat',   createdAt: new Date('2025-07-28') },
+    { email: 'arthit@gmail.com',      name: 'Arthit',    createdAt: new Date('2025-08-14') },
+    { email: 'monrada@gmail.com',     name: 'Monrada',   createdAt: new Date('2025-09-03') },
+    { email: 'chaiwat@hotmail.com',   name: 'Chaiwat',   createdAt: new Date('2025-09-22') },
+    { email: 'preeya@gmail.com',      name: 'Preeya',    createdAt: new Date('2025-10-10') },
+    { email: 'sarawut@gmail.com',     name: 'Sarawut',   createdAt: new Date('2025-11-01') },
+    { email: 'kannika@gmail.com',     name: 'Kannika',   createdAt: new Date('2025-11-20') },
+    { email: 'teerawat@gmail.com',    name: 'Teerawat',  createdAt: new Date('2025-12-08') },
+    { email: 'mayuree@hotmail.com',   name: 'Mayuree',   createdAt: new Date('2026-01-15') },
+    { email: 'suphot@gmail.com',      name: 'Suphot',    createdAt: new Date('2026-02-05') },
+    { email: 'wassana@gmail.com',     name: 'Wassana',   createdAt: new Date('2026-02-22') },
+    { email: 'jirawat@gmail.com',     name: 'Jirawat',   createdAt: new Date('2026-03-12') },
+    { email: 'nareerat@gmail.com',    name: 'Nareerat',  createdAt: new Date('2026-04-02') },
+    { email: 'phakorn@gmail.com',     name: 'Phakorn',   createdAt: new Date('2026-04-20') },
+    { email: 'ladawan@gmail.com',     name: 'Ladawan',   createdAt: new Date('2026-05-06') },
   ];
 
   const passwordHash = await bcrypt.hash('pass1234', 10);
@@ -379,10 +379,10 @@ async function main() {
   for (let i = 0; i < oneTimeNames.length; i++) {
     const name  = oneTimeNames[i];
     const email = `${name.toLowerCase()}.ot@example.com`;
-    // Spread CreatedAt across Jan-Oct 2024
-    const month = (i % 10) + 1;
-    const day   = (i * 3) % 27 + 1;
-    const createdAt = new Date(2024, month - 1, day, 10, 0, 0);
+    // Spread CreatedAt across May 2025 – May 2026 (13 months)
+    const monthOffset = i % 13;  // 0..12
+    const baseDate = new Date(2025, 4 + monthOffset, (i * 3) % 27 + 1, 10, 0, 0); // month 4 = May
+    const createdAt = baseDate;
 
     const u = await prisma.user.upsert({
       where: { Email: email },

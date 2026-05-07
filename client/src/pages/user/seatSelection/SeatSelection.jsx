@@ -190,22 +190,29 @@ function SeatSelection() {
   const serviceFee = selectedSeats.length * 50;
   const total = subtotal + serviceFee;
 
+  const isShowtimePast = new Date(showtime.StartDateTime) < new Date();
+
   return (
-    <div className="seat-selection-container">
+    <div className={`seat-selection-container${isShowtimePast ? ' seat-selection-past' : ''}`}>
       <div className="top-bar">
         <div className="top-bar-title">
           {event?.Title} — {new Date(showtime.StartDateTime).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}
         </div>
-        <div className="top-bar-sub">📍 {showtime.Venue?.VenueName} · Select your seats</div>
+        <div className="top-bar-sub">
+          {isShowtimePast
+            ? '⏹ This showtime has ended — booking is closed'
+            : `📍 ${showtime.Venue?.VenueName} · Select your seats`
+          }
+        </div>
       </div>
 
       <div className="seat-layout">
-        <SeatLayoutGenerator 
+        <SeatLayoutGenerator
           seats={seats}
           categoryName={event?.Category?.CategoryName}
           isSeatBooked={isSeatBooked}
           isSeatSelected={isSeatSelected}
-          handleSeatClick={handleSeatClick}
+          handleSeatClick={isShowtimePast ? () => {} : handleSeatClick}
           showtimeBasePrice={showtime.BasePrice}
         />
 
@@ -220,17 +227,21 @@ function SeatSelection() {
           <div className="ss-label" style={{ marginTop: '8px' }}>Available Dates</div>
           
           <div className="showtime-tabs">
-            {allShowtimes.map(st => (
-              <button
-                key={st.ShowtimeID}
-                className={`showtime-tab ${String(st.ShowtimeID) === String(activeShowtimeId) ? 'active' : ''}`}
-                onClick={() => handleShowtimeTabClick(st.ShowtimeID)}
-              >
-                <span className="tab-date">{formatTabDate(st.StartDateTime)}</span>
-                <span className="tab-venue">{st.Venue?.VenueName}</span>
-              </button>
-            ))}
-          </div> 
+            {allShowtimes.map(st => {
+              const stPast = new Date(st.StartDateTime) < new Date();
+              return (
+                <button
+                  key={st.ShowtimeID}
+                  className={`showtime-tab ${String(st.ShowtimeID) === String(activeShowtimeId) ? 'active' : ''}${stPast ? ' showtime-tab-past' : ''}`}
+                  onClick={() => handleShowtimeTabClick(st.ShowtimeID)}
+                  disabled={stPast}
+                >
+                  <span className="tab-date">{formatTabDate(st.StartDateTime)}{stPast ? ' (Ended)' : ''}</span>
+                  <span className="tab-venue">{st.Venue?.VenueName}</span>
+                </button>
+              );
+            })}
+          </div>
 
           <div className="selected-seats-box">
             <div className="ss-label">Selected Seats ({selectedSeats.length})</div>
@@ -256,14 +267,16 @@ function SeatSelection() {
             <div className="pb-total"><span>Total</span><span>฿ {total.toLocaleString()}</span></div>
           </div>
 
-          <button 
-            className="btn-checkout" 
+          <button
+            className={`btn-checkout${isShowtimePast ? ' btn-checkout-past' : ''}`}
             onClick={handleProceedToCheckout}
-            disabled={selectedSeats.length === 0}
+            disabled={isShowtimePast || selectedSeats.length === 0}
           >
-            Proceed to Checkout →
+            {isShowtimePast ? 'Showtime Ended' : 'Proceed to Checkout →'}
           </button>
-          <p className="bp-note">🔒 Seats reserved for 15 min at checkout.</p>
+          <p className="bp-note">
+            {isShowtimePast ? 'This showtime has ended. Booking is no longer available.' : '🔒 Seats reserved for 15 min at checkout.'}
+          </p>
         </div>
       </div>
     </div>

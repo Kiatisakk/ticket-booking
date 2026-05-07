@@ -5,16 +5,19 @@ A full-stack web application for booking event tickets with seat selection, paym
 ## 🛠️ Tech Stack
 
 ### Backend
+
 - **Node.js** + **Express.js** - REST API server
 - **Prisma ORM** - Database client
 - **PostgreSQL 17** - Relational database
 - **JWT** + **bcrypt** - Authentication
 
 ### Frontend
+
 - **React 19** - UI framework
 - **Vite** - Build tool
 
 ### Infrastructure
+
 - **Docker Compose** - Database containerization
 
 ---
@@ -96,6 +99,9 @@ npx prisma db push
 
 # Seed sample data
 npm run db:seed
+
+# Seed historical data
+npm run db:seed-historical
 ```
 
 ### Step 5: Start the API Server
@@ -123,12 +129,12 @@ npm run dev
 
 ## 📊 Available Services
 
-| Service | Command | URL | Status |
-|---------|---------|-----|--------|
-| **Database** | `docker-compose up -d database` | localhost:5433 | ✅ Required |
-| **API Server** | `cd server && npm run dev` | http://localhost:4000 | ✅ Required |
-| **Frontend** | `cd client && npm run dev` | http://localhost:3000 | 🔲 Optional |
-| **Adminer** | `docker-compose up -d adminer` | http://localhost:8080 | 🔲 Optional |
+| Service        | Command                         | URL                   | Status      |
+| -------------- | ------------------------------- | --------------------- | ----------- |
+| **Database**   | `docker-compose up -d database` | localhost:5433        | ✅ Required |
+| **API Server** | `cd server && npm run dev`      | http://localhost:4000 | ✅ Required |
+| **Frontend**   | `cd client && npm run dev`      | http://localhost:3000 | 🔲 Optional |
+| **Adminer**    | `docker-compose up -d adminer`  | http://localhost:8080 | 🔲 Optional |
 
 ---
 
@@ -136,10 +142,10 @@ npm run dev
 
 After running `npm run db:seed`:
 
-| Role | Email | Password |
-|------|-------|----------|
-| **Admin** | admin@example.com | password123 |
-| **Customer** | john@example.com | password123 |
+| Role         | Email             | Password    |
+| ------------ | ----------------- | ----------- |
+| **Admin**    | admin@example.com | password123 |
+| **Customer** | john@example.com  | password123 |
 
 ---
 
@@ -150,11 +156,13 @@ Complete API documentation is available at: [server/API.md](server/API.md)
 ### Quick Examples
 
 **Get all events:**
+
 ```bash
 curl http://localhost:4000/api/events
 ```
 
 **Login:**
+
 ```bash
 curl -X POST http://localhost:4000/api/auth/login \
   -H "Content-Type: application/json" \
@@ -162,6 +170,7 @@ curl -X POST http://localhost:4000/api/auth/login \
 ```
 
 **Create booking (requires auth token):**
+
 ```bash
 curl -X POST http://localhost:4000/api/bookings \
   -H "Content-Type: application/json" \
@@ -179,6 +188,7 @@ node test-api.js
 ```
 
 Expected output:
+
 ```
 ✅ GET /api/events          - 3 events found
 ✅ GET /api/venues          - 1 venue found
@@ -233,21 +243,21 @@ The system includes these main tables:
 
 ### Server Scripts (`cd server`)
 
-| Command | Description |
-|---------|-------------|
-| `npm run dev` | Start development server (requires nodemon) |
-| `npm start` | Start production server |
-| `npm run db:migrate` | Run database migrations |
-| `npm run db:generate` | Generate Prisma client |
-| `npm run db:push` | Push schema to database |
-| `npm run db:seed` | Seed database with sample data |
+| Command               | Description                                 |
+| --------------------- | ------------------------------------------- |
+| `npm run dev`         | Start development server (requires nodemon) |
+| `npm start`           | Start production server                     |
+| `npm run db:migrate`  | Run database migrations                     |
+| `npm run db:generate` | Generate Prisma client                      |
+| `npm run db:push`     | Push schema to database                     |
+| `npm run db:seed`     | Seed database with sample data              |
 
 ### Client Scripts (`cd client`)
 
-| Command | Description |
-|---------|-------------|
-| `npm run dev` | Start development server |
-| `npm run build` | Build for production |
+| Command           | Description              |
+| ----------------- | ------------------------ |
+| `npm run dev`     | Start development server |
+| `npm run build`   | Build for production     |
 | `npm run preview` | Preview production build |
 
 ---
@@ -278,21 +288,25 @@ PORT_CLIENT=3000
 ## 🐳 Docker Setup
 
 ### Start Database Only (Recommended)
+
 ```bash
 docker-compose up -d database
 ```
 
 ### Start All Services
+
 ```bash
 docker-compose up -d
 ```
 
 ### Stop All Services
+
 ```bash
 docker-compose down
 ```
 
 ### Reset Database
+
 ```bash
 docker-compose down -v
 docker-compose up -d database

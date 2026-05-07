@@ -74,11 +74,14 @@ const DOUGHNUT_OPTIONS = {
   }
 };
 
-const PERIOD_LABELS = {
-  'this-month': 'This Month',
-  'last-month': 'Last Month',
-  'this-year':  'This Year'
-};
+function getDefaultStartDate() {
+  return '2025-05-01';
+}
+
+function getDefaultEndDate() {
+  const now = new Date();
+  return now.toISOString().slice(0, 10);
+}
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -217,30 +220,34 @@ function CancellationHeatmap({ heatmapData }) {
 // ─── Reports page ─────────────────────────────────────────────────────────────
 
 function Reports() {
-  const [period, setPeriod] = useState('this-year');
+  const [startDate, setStartDate] = useState(getDefaultStartDate);
+  const [endDate, setEndDate]     = useState(getDefaultEndDate);
   const [reportData, setReportData] = useState(null);
   const [loading, setLoading]       = useState(true);
+  const [selectedCategory, setSelectedCategory] = useState('all');
 
-  const periodLabel = PERIOD_LABELS[period];
+  const dateRangeLabel = `${startDate} → ${endDate}`;
 
   useEffect(() => {
+    setLoading(true);
     const token   = localStorage.getItem('adminToken');
     const headers = { Authorization: `Bearer ${token}` };
+    const params  = { startDate, endDate, category: selectedCategory };
 
     Promise.all([
-      axios.get(`${API_URL}/admin/reports/kpi`,                  { headers }),  // [0]  kpi
-      axios.get(`${API_URL}/admin/reports/revenue-by-category`,  { headers }),  // [1]  r1
-      axios.get(`${API_URL}/admin/reports/seat-heatmap`,         { headers }),  // [2]  r2 (heatmap)
-      axios.get(`${API_URL}/admin/reports/user-growth`,          { headers }),  // [3]  r3
-      axios.get(`${API_URL}/admin/reports/revenue-by-venue`,     { headers }),  // [4]  r4
-      axios.get(`${API_URL}/admin/reports/bookings-by-hour`,     { headers }),  // [5]  r5
-      axios.get(`${API_URL}/admin/reports/booking-vs-capacity`,  { headers }),  // [6]  r6
-      axios.get(`${API_URL}/admin/reports/venue-utilization`,    { headers }),  // [7]  r7
-      axios.get(`${API_URL}/admin/reports/seat-type-revenue`,    { headers }),  // [8]  r8
-      axios.get(`${API_URL}/admin/reports/customer-retention`,   { headers }),  // [9]  r9
-      axios.get(`${API_URL}/admin/reports/interest-by-category`, { headers }),  // [10] r10
-      axios.get(`${API_URL}/admin/reports/peak-showtime-hours`,  { headers }),  // [11] r11
-      axios.get(`${API_URL}/admin/reports/cancellation-heatmap`, { headers }),  // [12] r12
+      axios.get(`${API_URL}/admin/reports/kpi`,                  { headers, params }),  // [0]  kpi
+      axios.get(`${API_URL}/admin/reports/revenue-by-category`,  { headers, params }),  // [1]  r1
+      axios.get(`${API_URL}/admin/reports/seat-heatmap`,         { headers, params }),  // [2]  r2 (heatmap)
+      axios.get(`${API_URL}/admin/reports/user-growth`,          { headers, params }),  // [3]  r3
+      axios.get(`${API_URL}/admin/reports/revenue-by-venue`,     { headers, params }),  // [4]  r4
+      axios.get(`${API_URL}/admin/reports/bookings-by-hour`,     { headers, params }),  // [5]  r5
+      axios.get(`${API_URL}/admin/reports/booking-vs-capacity`,  { headers, params }),  // [6]  r6
+      axios.get(`${API_URL}/admin/reports/venue-utilization`,    { headers, params }),  // [7]  r7
+      axios.get(`${API_URL}/admin/reports/seat-type-revenue`,    { headers, params }),  // [8]  r8
+      axios.get(`${API_URL}/admin/reports/customer-retention`,   { headers, params }),  // [9]  r9
+      axios.get(`${API_URL}/admin/reports/interest-by-category`, { headers, params }),  // [10] r10
+      axios.get(`${API_URL}/admin/reports/peak-showtime-hours`,  { headers, params }),  // [11] r11
+      axios.get(`${API_URL}/admin/reports/cancellation-heatmap`, { headers, params }),  // [12] r12
     ])
     .then(([kpiRes, r1Res, r2Res, r3Res, r4Res, r5Res, r6Res, r7Res, r8Res, r9Res, r10Res, r11Res, r12Res]) => {
       setReportData({
@@ -265,7 +272,7 @@ function Reports() {
     .finally(() => {
       setLoading(false);
     });
-  }, []);
+  }, [startDate, endDate, selectedCategory]);
 
   // ── Build chart data objects from API response ────────────────────────────
 
@@ -424,24 +431,48 @@ function Reports() {
   const totalBookingsDisplay = kpi
     ? kpi.totalBookings.toLocaleString()
     : '—';
-  const topCategoryDisplay = kpi ? kpi.topCategory : '—';
+
+  // Category analysis from KPI — categories always contains all categories
+  const categories = kpi?.categories || [];
+  const selectedCatData = selectedCategory === 'all'
+    ? {
+        revenue:  categories.reduce((sum, c) => sum + c.revenue, 0),
+        bookings: categories.reduce((sum, c) => sum + c.bookings, 0),
+        tickets:  categories.reduce((sum, c) => sum + c.tickets, 0)
+      }
+    : categories.find(c => c.name === selectedCategory) || { revenue: 0, bookings: 0, tickets: 0 };
+
+  const catRevenueDisplay = selectedCatData.revenue >= 1_000_000
+    ? `฿${(selectedCatData.revenue / 1_000_000).toFixed(2)}M`
+    : `฿${selectedCatData.revenue.toLocaleString()}`;
 
   return (
     <div className="rp-root">
       <div className="rp-header">
         <div>
           <div className="rp-title">Reports &amp; Analytics</div>
-          <div className="rp-subtitle">12 reports · {periodLabel}</div>
+          <div className="rp-subtitle">12 reports · {dateRangeLabel}{selectedCategory !== 'all' ? ` · ${selectedCategory}` : ''}</div>
         </div>
-        <select
-          className="rp-period-select"
-          value={period}
-          onChange={e => setPeriod(e.target.value)}
-        >
-          <option value="this-month">This Month</option>
-          <option value="last-month">Last Month</option>
-          <option value="this-year">This Year</option>
-        </select>
+        <div className="rp-date-range">
+          <label className="rp-date-label">
+            From
+            <input
+              type="date"
+              className="rp-date-input"
+              value={startDate}
+              onChange={e => setStartDate(e.target.value)}
+            />
+          </label>
+          <label className="rp-date-label">
+            To
+            <input
+              type="date"
+              className="rp-date-input"
+              value={endDate}
+              onChange={e => setEndDate(e.target.value)}
+            />
+          </label>
+        </div>
       </div>
 
       {/* KPI Cards */}
@@ -451,21 +482,48 @@ function Reports() {
           <div className="rp-kpi-value">
             {loading ? '...' : totalRevenueDisplay}
           </div>
-          <div className="rp-kpi-sub">{periodLabel} · Historical 2024</div>
+          <div className="rp-kpi-sub">{dateRangeLabel}</div>
         </div>
         <div className="rp-kpi">
           <div className="rp-kpi-label">Total Bookings</div>
           <div className="rp-kpi-value">
             {loading ? '...' : totalBookingsDisplay}
           </div>
-          <div className="rp-kpi-sub">{periodLabel} · Tickets sold</div>
+          <div className="rp-kpi-sub">{dateRangeLabel} · Tickets</div>
         </div>
-        <div className="rp-kpi">
-          <div className="rp-kpi-label">Top Category</div>
-          <div className="rp-kpi-value" style={{ fontSize: 22 }}>
-            {loading ? '...' : topCategoryDisplay}
+        <div className="rp-kpi rp-kpi-category">
+          <div className="rp-kpi-label">
+            Category Analysis
+            <select
+              className="rp-cat-select"
+              value={selectedCategory}
+              onChange={e => setSelectedCategory(e.target.value)}
+            >
+              <option value="all">All Categories</option>
+              <option value="Concert">Concert</option>
+              <option value="Movie">Movie</option>
+              <option value="Seminar">Seminar</option>
+            </select>
           </div>
-          <div className="rp-kpi-sub">Highest revenue in 2024</div>
+          {loading ? (
+            <div className="rp-kpi-value">...</div>
+          ) : (
+            <div className="rp-cat-stats">
+              <div className="rp-cat-stat">
+                <span className="rp-cat-stat-value">{catRevenueDisplay}</span>
+                <span className="rp-cat-stat-label">Revenue</span>
+              </div>
+              <div className="rp-cat-stat">
+                <span className="rp-cat-stat-value">{selectedCatData.bookings.toLocaleString()}</span>
+                <span className="rp-cat-stat-label">Bookings</span>
+              </div>
+              <div className="rp-cat-stat">
+                <span className="rp-cat-stat-value">{selectedCatData.tickets.toLocaleString()}</span>
+                <span className="rp-cat-stat-label">Tickets</span>
+              </div>
+            </div>
+          )}
+          <div className="rp-kpi-sub">{dateRangeLabel} · {selectedCategory === 'all' ? 'All categories' : selectedCategory}</div>
         </div>
       </div>
 
@@ -475,7 +533,7 @@ function Reports() {
         {/* Report 1 — Revenue by Category */}
         <div className="rp-chart-card">
           <div className="rp-chart-title">Report 1 — Revenue by Category</div>
-          <div className="rp-chart-subtitle">Monthly revenue (THB) · {periodLabel}</div>
+          <div className="rp-chart-subtitle">Monthly revenue (THB) · {dateRangeLabel}</div>
           <div className="rp-chart-inner">
             {loading ? <Spinner /> : r1ChartData ? <Bar data={r1ChartData} options={CHART_DEFAULTS} /> : <NoData />}
           </div>
@@ -484,7 +542,7 @@ function Reports() {
         {/* Report 3 — Platform User Growth */}
         <div className="rp-chart-card">
           <div className="rp-chart-title">Report 3 — Platform User Growth</div>
-          <div className="rp-chart-subtitle">Monthly new registrations · {periodLabel}</div>
+          <div className="rp-chart-subtitle">Monthly new registrations · {dateRangeLabel}</div>
           <div className="rp-chart-inner">
             {loading ? <Spinner /> : r3ChartData ? <Line data={r3ChartData} options={CHART_DEFAULTS} /> : <NoData />}
           </div>
@@ -493,7 +551,7 @@ function Reports() {
         {/* Report 4 — Revenue by Venue */}
         <div className="rp-chart-card">
           <div className="rp-chart-title">Report 4 — Revenue by Venue</div>
-          <div className="rp-chart-subtitle">Monthly venue revenue (THB) · {periodLabel}</div>
+          <div className="rp-chart-subtitle">Monthly venue revenue (THB) · {dateRangeLabel}</div>
           <div className="rp-chart-inner">
             {loading ? <Spinner /> : r4ChartData ? <Line data={r4ChartData} options={CHART_DEFAULTS} /> : <NoData />}
           </div>
@@ -502,7 +560,7 @@ function Reports() {
         {/* Report 5 — Bookings by Hour */}
         <div className="rp-chart-card">
           <div className="rp-chart-title">Report 5 — Bookings by Hour</div>
-          <div className="rp-chart-subtitle">Total payments per hour of day · {periodLabel}</div>
+          <div className="rp-chart-subtitle">Total payments per hour of day · {dateRangeLabel}</div>
           <div className="rp-chart-inner">
             {loading ? <Spinner /> : r5ChartData ? (
               <Bar data={r5ChartData} options={{ ...CHART_DEFAULTS, plugins: { ...CHART_DEFAULTS.plugins, legend: { display: false } } }} />
@@ -513,7 +571,7 @@ function Reports() {
         {/* Report 6 — Booking vs Capacity */}
         <div className="rp-chart-card">
           <div className="rp-chart-title">Report 6 — Booking vs Capacity</div>
-          <div className="rp-chart-subtitle">Capacity vs sold tickets per showtime · {periodLabel}</div>
+          <div className="rp-chart-subtitle">Capacity vs sold tickets per showtime · {dateRangeLabel}</div>
           <div className="rp-chart-inner">
             {loading ? <Spinner /> : r6ChartData ? <Bar data={r6ChartData} options={r6Options} /> : <NoData />}
           </div>
@@ -522,7 +580,7 @@ function Reports() {
         {/* Report 7 — Venue Utilization by Category */}
         <div className="rp-chart-card">
           <div className="rp-chart-title">Report 7 — Venue Utilization by Category</div>
-          <div className="rp-chart-subtitle">Number of showtimes per venue × category · {periodLabel}</div>
+          <div className="rp-chart-subtitle">Number of showtimes per venue × category · {dateRangeLabel}</div>
           <div className="rp-chart-inner">
             {loading ? <Spinner /> : r7ChartData ? <Bar data={r7ChartData} options={CHART_DEFAULTS} /> : <NoData />}
           </div>
@@ -531,7 +589,7 @@ function Reports() {
         {/* Report 8 — Seat Type Revenue */}
         <div className="rp-chart-card">
           <div className="rp-chart-title">Report 8 — Seat Type Revenue</div>
-          <div className="rp-chart-subtitle">Revenue share by seat type · {periodLabel}</div>
+          <div className="rp-chart-subtitle">Revenue share by seat type · {dateRangeLabel}</div>
           <div className="rp-chart-inner" style={{ minHeight: 180 }}>
             {loading ? <Spinner /> : r8ChartData ? (
               <DoughnutWithLegend data={r8ChartData} options={DOUGHNUT_OPTIONS} legend={r8Legend} />
@@ -542,7 +600,7 @@ function Reports() {
         {/* Report 9 — Customer Retention */}
         <div className="rp-chart-card">
           <div className="rp-chart-title">Report 9 — Customer Retention</div>
-          <div className="rp-chart-subtitle">Repeat vs one-time customers · {periodLabel}</div>
+          <div className="rp-chart-subtitle">Repeat vs one-time customers · {dateRangeLabel}</div>
           <div className="rp-chart-inner" style={{ minHeight: 180 }}>
             {loading ? <Spinner /> : r9ChartData ? (
               <DoughnutWithLegend data={r9ChartData} options={DOUGHNUT_OPTIONS} legend={r9Legend} />
@@ -553,7 +611,7 @@ function Reports() {
         {/* Report 10 — Customer Interest by Category */}
         <div className="rp-chart-card">
           <div className="rp-chart-title">Report 10 — Customer Interest by Category</div>
-          <div className="rp-chart-subtitle">Bookings trend by category · {periodLabel}</div>
+          <div className="rp-chart-subtitle">Bookings trend by category · {dateRangeLabel}</div>
           <div className="rp-chart-inner">
             {loading ? <Spinner /> : r10ChartData ? <Line data={r10ChartData} options={CHART_DEFAULTS} /> : <NoData />}
           </div>
@@ -562,7 +620,7 @@ function Reports() {
         {/* Report 11 — Peak Showtime Hours by Category */}
         <div className="rp-chart-card">
           <div className="rp-chart-title">Report 11 — Peak Showtime Hours by Category</div>
-          <div className="rp-chart-subtitle">Tickets sold by hour and category · {periodLabel}</div>
+          <div className="rp-chart-subtitle">Tickets sold by hour and category · {dateRangeLabel}</div>
           <div className="rp-chart-inner">
             {loading ? <Spinner /> : r11ChartData ? <Bar data={r11ChartData} options={CHART_DEFAULTS} /> : <NoData />}
           </div>
@@ -571,14 +629,14 @@ function Reports() {
         {/* Report 2 — Seat Popularity Heatmap (full width) */}
         <div className="rp-chart-card full-width">
           <div className="rp-chart-title">Report 2 — Seat Popularity Heatmap</div>
-          <div className="rp-chart-subtitle">Impact Arena · seat selection frequency · {periodLabel}</div>
+          <div className="rp-chart-subtitle">Impact Arena · seat selection frequency · {dateRangeLabel}</div>
           {loading ? <Spinner /> : <SeatHeatmap heatmapData={reportData?.r2} />}
         </div>
 
         {/* Report 12 — Failed Payment Rate Heatmap (full width) */}
         <div className="rp-chart-card full-width">
           <div className="rp-chart-title">Report 12 — Failed Payment Rate Heatmap</div>
-          <div className="rp-chart-subtitle">% of booking attempts that failed · seat type &times; event · {periodLabel}</div>
+          <div className="rp-chart-subtitle">% of booking attempts that failed · seat type &times; event · {dateRangeLabel}</div>
           {loading ? <Spinner /> : <CancellationHeatmap heatmapData={reportData?.r12} />}
         </div>
 

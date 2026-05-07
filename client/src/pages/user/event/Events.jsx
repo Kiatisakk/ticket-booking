@@ -5,6 +5,13 @@ import './Events.css';
 
 const API_URL = 'http://localhost:4000/api';
 
+function isEventPast(event) {
+  if (!event.Showtimes || event.Showtimes.length === 0) return false;
+  const now = new Date();
+  // Event is past if ALL its showtimes are in the past
+  return event.Showtimes.every(s => new Date(s.StartDateTime) < now);
+}
+
 function Events() {
   const [events, setEvents] = useState([]);
   const [filteredEvents, setFilteredEvents] = useState([]);
@@ -37,7 +44,7 @@ function Events() {
     }
 
     if (searchTerm) {
-      filtered = filtered.filter(e => 
+      filtered = filtered.filter(e =>
         e.Title?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
@@ -48,6 +55,59 @@ function Events() {
   if (loading) {
     return <div className="events-page"><div className="loading">Loading events...</div></div>;
   }
+
+  const upcomingEvents = filteredEvents.filter(e => !isEventPast(e));
+  const pastEvents     = filteredEvents.filter(e => isEventPast(e));
+
+  const renderEventCard = (event, isPast) => (
+    <div
+      key={event.EventID}
+      className={`event-card${isPast ? ' event-card-past' : ''}`}
+      onClick={() => navigate(`/events/${event.EventID}`)}
+    >
+      {isPast && <div className="event-past-ribbon">Past Event</div>}
+      <div className="event-icon">
+        {
+          event.Category?.CategoryName === 'Movie' ? '🎬' :
+          event.Category?.CategoryName === 'Concert' ? '🎵' :
+          event.Category?.CategoryName === 'Seminar' ? '📚' : '🎫'
+        }
+      </div>
+      <h3>{event.Title}</h3>
+      {event.Category?.CategoryName && (
+        <div className="event-category">
+          {event.Category.CategoryName}
+        </div>
+      )}
+      <p className="event-description">
+        {event.Description?.substring(0, 100)}...
+      </p>
+
+      {event.Showtimes?.length > 0 && (() => {
+        const nearest = event.Showtimes
+          .slice()
+          .sort((a, b) => new Date(a.StartDateTime) - new Date(b.StartDateTime))[0];
+        return (
+          <div className={`event-booking-deadline${isPast ? ' event-deadline-past' : ''}`}>
+            {isPast ? '📅 Was on:' : '⏰ Book by:'}{' '}
+            <span className="deadline-item">
+              {new Date(nearest.StartDateTime).toLocaleString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false
+              })}
+            </span>
+          </div>
+        );
+      })()}
+
+      <button className={`event-button${isPast ? ' event-button-past' : ''}`} disabled={isPast}>
+        {isPast ? 'Event Ended' : 'View Details →'}
+      </button>
+    </div>
+  );
 
   return (
     <div className="events-page">
@@ -91,59 +151,33 @@ function Events() {
           </select>
         </div>
 
-        {/* Event List */}
-        {filteredEvents.length === 0 ? (
-          <div className="no-events">
-            <p>No events found</p>
+        {/* Upcoming Events */}
+        <div className="events-section">
+          <div className="events-section-header">
+            <h2 className="events-section-title">Upcoming Events</h2>
+            <span className="events-section-count">{upcomingEvents.length} events</span>
           </div>
-        ) : (
-          <div className="events-grid">
-            {filteredEvents.map(event => (
-              <div
-                key={event.EventID}
-                className="event-card"
-                onClick={() => navigate(`/events/${event.EventID}`)}
-              >
-                <div className="event-icon">
-                  {
-                    event.Category?.CategoryName === 'Movie' ? '🎬' :
-                    event.Category?.CategoryName === 'Concert' ? '🎵' :
-                    event.Category?.CategoryName === 'Seminar' ? '📚' : '🎫' 
-                  }
-                </div>
-                <h3>{event.Title}</h3>
-                {event.Category?.CategoryName && (
-                  <div className="event-category">
-                    {event.Category.CategoryName}
-                  </div>
-                )}
-                <p className="event-description">
-                  {event.Description?.substring(0, 100)}...
-                </p>
+          {upcomingEvents.length === 0 ? (
+            <div className="no-events">
+              <p>No upcoming events found</p>
+            </div>
+          ) : (
+            <div className="events-grid">
+              {upcomingEvents.map(event => renderEventCard(event, false))}
+            </div>
+          )}
+        </div>
 
-                {event.Showtimes?.length > 0 && (() => {
-                  const nearest = event.Showtimes
-                    .slice()
-                    .sort((a, b) => new Date(a.StartDateTime) - new Date(b.StartDateTime))[0];
-                  return (
-                    <div className="event-booking-deadline">
-                      ⏰ Book by:{' '}
-                      <span className="deadline-item">
-                        {new Date(nearest.StartDateTime).toLocaleString('en-US', {
-                          month: 'short',
-                          day: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                          hour12: false
-                        })}
-                      </span>
-                    </div>
-                  );
-                })()}
-
-                <button className="event-button">View Details →</button>
-              </div>
-            ))}
+        {/* Past Events */}
+        {pastEvents.length > 0 && (
+          <div className="events-section events-section-past">
+            <div className="events-section-header">
+              <h2 className="events-section-title events-section-title-past">Past Events</h2>
+              <span className="events-section-count">{pastEvents.length} events</span>
+            </div>
+            <div className="events-grid">
+              {pastEvents.map(event => renderEventCard(event, true))}
+            </div>
           </div>
         )}
       </div>

@@ -16,6 +16,18 @@ const NAV_ITEMS = [
     )
   },
   {
+    to: '/admin/users',
+    label: 'User Management',
+    icon: (
+      <svg className="admin-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+        <circle cx="9" cy="7" r="4" />
+        <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+      </svg>
+    )
+  },
+  {
     to: '/admin/transactions',
     label: 'Transactions',
     icon: (
@@ -42,6 +54,7 @@ function getPageTitle(pathname) {
   if (pathname.includes('/events/add')) return 'Add Event';
   if (pathname.includes('/events') && pathname.includes('/edit')) return 'Edit Event';
   if (pathname.includes('/events')) return 'Event Management';
+  if (pathname.includes('/users')) return 'User Management';
   if (pathname.includes('/transactions')) return 'Transactions';
   if (pathname.includes('/reports')) return 'Reports & Analytics';
   return 'Admin';

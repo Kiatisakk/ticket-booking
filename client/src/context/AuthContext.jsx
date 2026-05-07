@@ -45,6 +45,30 @@ export function AuthProvider({ children }) {
     }
   };
 
+  const register = async (fullName, email, password) => {
+    try {
+      const response = await axios.post(`${API_URL}/auth/register`, {
+        fullName,
+        email,
+        password
+      });
+
+      const { user, token } = response.data;
+
+      setUser(user);
+      setToken(token);
+      localStorage.setItem('user', JSON.stringify(user));
+      localStorage.setItem('token', token);
+
+      return { success: true };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.response?.data?.error || 'Registration failed'
+      };
+    }
+  };
+
   const logout = () => {
     setUser(null);
     setToken(null);
@@ -57,6 +81,7 @@ export function AuthProvider({ children }) {
     token,
     loading,
     login,
+    register,
     logout,
     isAuthenticated: !!user
   };

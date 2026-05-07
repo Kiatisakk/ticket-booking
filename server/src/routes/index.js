@@ -63,6 +63,10 @@ router.post('/admin/events', authenticateAdmin, adminController.createEvent);
 router.put('/admin/events/:id', authenticateAdmin, adminController.updateEvent);
 router.delete('/admin/events/:id', authenticateAdmin, adminController.deleteEvent);
 
+// Admin Users
+router.get('/admin/users', authenticateAdmin, adminController.getAllUsers);
+router.delete('/admin/users/:id', authenticateAdmin, adminController.deleteUser);
+
 // Admin Transactions
 router.get('/admin/transactions', authenticateAdmin, adminController.getAllTransactions);
 router.patch('/admin/transactions/:id/refund', authenticateAdmin, adminController.refundTransaction);

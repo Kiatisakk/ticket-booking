@@ -83,6 +83,7 @@ exports.getAllEvents = async (req, res) => {
 
     // Showtime has no TotalSeats/SeatsRemaining/StartTime — use StartDateTime and
     // compute capacity from Seat count for the venue.
+    const now = new Date();
     const mapped = await Promise.all(events.map(async e => {
       const showtime = e.Showtimes?.[0] ?? null;
       const venueID  = showtime?.VenueID ?? null;
@@ -94,6 +95,14 @@ exports.getAllEvents = async (req, res) => {
       const bookedCount = showtime
         ? await prisma.bookingDetail.count({ where: { ShowtimeID: showtime.ShowtimeID } })
         : 0;
+
+      // Check if ALL showtimes are in the past
+      const latestShowtime = e.Showtimes?.length > 0
+        ? e.Showtimes.reduce((latest, s) =>
+            new Date(s.StartDateTime) > new Date(latest.StartDateTime) ? s : latest
+          , e.Showtimes[0])
+        : null;
+      const isPast = latestShowtime ? new Date(latestShowtime.StartDateTime) < now : false;
 
       return {
         id:            e.EventID,
@@ -107,7 +116,9 @@ exports.getAllEvents = async (req, res) => {
         totalSeats,
         seatsRemaining: totalSeats - bookedCount,
         startDateTime: showtime?.StartDateTime ?? null,
-        showtimeId:    showtime?.ShowtimeID ?? null
+        showtimeId:    showtime?.ShowtimeID ?? null,
+        isPast,
+        latestShowtime: latestShowtime?.StartDateTime ?? null
       };
     }));
 
@@ -441,6 +452,91 @@ exports.markAsPaid = async (req, res) => {
   }
 };
 
+// ─── Admin User Management ───────────────────────────────────────────────────
+
+exports.getAllUsers = async (req, res) => {
+  try {
+    const users = await prisma.user.findMany({
+      include: {
+        Role: true,
+        _count: { select: { Bookings: true } }
+      },
+      orderBy: { CreatedAt: 'desc' }
+    });
+
+    const result = users.map(u => ({
+      id: u.UserID,
+      fullName: u.FullName,
+      email: u.Email,
+      role: u.Role?.RoleName || 'Unknown',
+      roleId: u.RoleID,
+      bookingsCount: u._count.Bookings,
+      createdAt: u.CreatedAt
+    }));
+
+    res.json(result);
+  } catch (error) {
+    console.error('Admin getAllUsers error:', error);
+    res.status(500).json({ error: 'Failed to fetch users' });
+  }
+};
+
+exports.deleteUser = async (req, res) => {
+  try {
+    const userId = parseInt(req.params.id);
+
+    const user = await prisma.user.findUnique({
+      where: { UserID: userId },
+      include: { Role: true }
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    if (user.Role?.RoleName === 'Admin') {
+      return res.status(403).json({ error: 'Cannot delete admin users' });
+    }
+
+    // Delete related data in order: Tickets → Payments → BookingDetails → Bookings → User
+    const bookings = await prisma.booking.findMany({
+      where: { UserID: userId },
+      select: { BookingID: true }
+    });
+    const bookingIds = bookings.map(b => b.BookingID);
+
+    if (bookingIds.length > 0) {
+      // Delete tickets for this user's booking details
+      await prisma.ticket.deleteMany({
+        where: { Detail: { BookingID: { in: bookingIds } } }
+      });
+
+      // Delete payments
+      await prisma.payment.deleteMany({
+        where: { BookingID: { in: bookingIds } }
+      });
+
+      // Delete booking details
+      await prisma.bookingDetail.deleteMany({
+        where: { BookingID: { in: bookingIds } }
+      });
+
+      // Delete bookings
+      await prisma.booking.deleteMany({
+        where: { UserID: userId }
+      });
+    }
+
+    // Delete user
+    await prisma.user.delete({ where: { UserID: userId } });
+
+    res.json({ message: 'User deleted successfully' });
+  } catch (error) {
+    console.error('Admin deleteUser error:', error);
+    res.status(500).json({ error: 'Failed to delete user' });
+  }
+};
+
 // ─── Admin Lookup Endpoints ───────────────────────────────────────────────────
 
 exports.getCategories = async (req, res) => {
@@ -472,20 +568,71 @@ exports.getAdminVenues = async (req, res) => {
 // ─── Report Helpers ───────────────────────────────────────────────────────────
 
 const MONTHS_LABEL = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-const YEAR = 2024;
-const YEAR_START = new Date(`${YEAR}-01-01T00:00:00.000Z`);
-const YEAR_END   = new Date(`${YEAR + 1}-01-01T00:00:00.000Z`);
+const DATA_START = new Date('2025-05-01T00:00:00.000Z');
+const DATA_END   = new Date('2026-06-01T00:00:00.000Z');
+
+/**
+ * Calculate date range from startDate/endDate query params.
+ * Returns { start, end, months } where months is an array of { year, month }
+ * spanning every calendar month in the range. Handles cross-year ranges.
+ */
+function getDateRange(query) {
+  const { startDate, endDate } = query || {};
+
+  let start, end;
+  if (startDate && endDate) {
+    start = new Date(`${startDate}T00:00:00.000Z`);
+    const endParsed = new Date(`${endDate}T00:00:00.000Z`);
+    end = new Date(endParsed.getTime() + 24 * 60 * 60 * 1000);
+  } else {
+    start = DATA_START;
+    end = DATA_END;
+  }
+
+  // Build months array spanning the full range
+  const months = [];
+  const cursor = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), 1));
+  const endMonth = new Date(end);
+  while (cursor < endMonth) {
+    months.push({ year: cursor.getUTCFullYear(), month: cursor.getUTCMonth() + 1 });
+    cursor.setUTCMonth(cursor.getUTCMonth() + 1);
+  }
+
+  return { start, end, months };
+}
+
+/** Build short month labels like "May'25", "Jun'25", …, "Jan'26" */
+function monthLabels(months) {
+  const crossYear = months.length > 0 && months[0].year !== months[months.length - 1].year;
+  return months.map(m => {
+    const label = MONTHS_LABEL[m.month - 1];
+    return crossYear ? `${label}'${String(m.year).slice(2)}` : label;
+  });
+}
 
 // ─── Report KPI ───────────────────────────────────────────────────────────────
 
 exports.getReportKpi = async (req, res) => {
   try {
+    const { category } = req.query;
+    const { start, end } = getDateRange(req.query);
+    const catFilter = category && category !== 'all' ? category : null;
+
     const revenueResult = await prisma.$queryRaw`
-      SELECT COALESCE(SUM(p."Amount"), 0)::float8 as revenue
-      FROM "Payments" p
-      WHERE p."StatusID" = 2
-        AND p."PaidAt" >= ${YEAR_START}
-        AND p."PaidAt" <  ${YEAR_END}
+      SELECT COALESCE(SUM(sub.amount), 0)::float8 as revenue
+      FROM (
+        SELECT DISTINCT p."PaymentID", p."Amount" as amount
+        FROM "Payments" p
+        JOIN "Bookings" b ON p."BookingID" = b."BookingID"
+        JOIN "BookingDetails" bd ON bd."BookingID" = b."BookingID"
+        JOIN "Showtimes" s ON bd."ShowtimeID" = s."ShowtimeID"
+        JOIN "Events" e ON s."EventID" = e."EventID"
+        JOIN "EventCategories" ec ON e."CategoryID" = ec."CategoryID"
+        WHERE p."StatusID" = 2
+          AND p."PaidAt" >= ${start}
+          AND p."PaidAt" <  ${end}
+          AND (${catFilter}::text IS NULL OR ec."CategoryName" = ${catFilter})
+      ) sub
     `;
     const totalRevenue = Number(revenueResult[0]?.revenue ?? 0);
 
@@ -493,14 +640,23 @@ exports.getReportKpi = async (req, res) => {
       SELECT COUNT(bd."DetailID")::int as count
       FROM "BookingDetails" bd
       JOIN "Bookings" b ON bd."BookingID" = b."BookingID"
+      JOIN "Showtimes" s ON bd."ShowtimeID" = s."ShowtimeID"
+      JOIN "Events" e ON s."EventID" = e."EventID"
+      JOIN "EventCategories" ec ON e."CategoryID" = ec."CategoryID"
       WHERE b."StatusID" = 2
-        AND b."BookingTimestamp" >= ${YEAR_START}
-        AND b."BookingTimestamp" <  ${YEAR_END}
+        AND b."BookingTimestamp" >= ${start}
+        AND b."BookingTimestamp" <  ${end}
+        AND (${catFilter}::text IS NULL OR ec."CategoryName" = ${catFilter})
     `;
     const totalBookings = Number(bookingsResult[0]?.count ?? 0);
 
-    const topCatResult = await prisma.$queryRaw`
-      SELECT ec."CategoryName" as category, SUM(p."Amount")::float8 as revenue
+    // Per-category analysis (always return all categories for dropdown)
+    const categoryAnalysis = await prisma.$queryRaw`
+      SELECT
+        ec."CategoryName" as category,
+        COALESCE(SUM(p."Amount"), 0)::float8 as revenue,
+        COUNT(DISTINCT b."BookingID")::int as bookings,
+        COUNT(bd."DetailID")::int as tickets
       FROM "Payments" p
       JOIN "Bookings" b ON p."BookingID" = b."BookingID"
       JOIN "BookingDetails" bd ON bd."BookingID" = b."BookingID"
@@ -508,15 +664,22 @@ exports.getReportKpi = async (req, res) => {
       JOIN "Events" e ON s."EventID" = e."EventID"
       JOIN "EventCategories" ec ON e."CategoryID" = ec."CategoryID"
       WHERE p."StatusID" = 2
-        AND p."PaidAt" >= ${YEAR_START}
-        AND p."PaidAt" <  ${YEAR_END}
+        AND p."PaidAt" >= ${start}
+        AND p."PaidAt" <  ${end}
       GROUP BY ec."CategoryName"
       ORDER BY revenue DESC
-      LIMIT 1
     `;
-    const topCategory = topCatResult[0]?.category || 'N/A';
 
-    res.json({ totalRevenue, totalBookings, topCategory });
+    const categories = categoryAnalysis.map(c => ({
+      name:     c.category,
+      revenue:  Number(c.revenue),
+      bookings: Number(c.bookings),
+      tickets:  Number(c.tickets)
+    }));
+
+    const topCategory = categories[0]?.name || 'N/A';
+
+    res.json({ totalRevenue, totalBookings, topCategory, categories });
   } catch (error) {
     console.error('getReportKpi error:', error);
     res.status(500).json({ error: 'Failed to fetch KPI data' });
@@ -527,9 +690,14 @@ exports.getReportKpi = async (req, res) => {
 
 exports.getRevenueByCategory = async (req, res) => {
   try {
+    const { category } = req.query;
+    const { start, end, months } = getDateRange(req.query);
+    const catFilter = category && category !== 'all' ? category : null;
+
     const rows = await prisma.$queryRaw`
       SELECT
         ec."CategoryName" as category,
+        EXTRACT(YEAR FROM p."PaidAt")::int as yr,
         EXTRACT(MONTH FROM p."PaidAt")::int as month,
         COALESCE(SUM(p."Amount"), 0)::float8 as revenue
       FROM "Payments" p
@@ -539,23 +707,24 @@ exports.getRevenueByCategory = async (req, res) => {
       JOIN "Events" e ON s."EventID" = e."EventID"
       JOIN "EventCategories" ec ON e."CategoryID" = ec."CategoryID"
       WHERE p."StatusID" = 2
-        AND p."PaidAt" >= ${YEAR_START}
-        AND p."PaidAt" <  ${YEAR_END}
-      GROUP BY ec."CategoryName", EXTRACT(MONTH FROM p."PaidAt")
-      ORDER BY month
+        AND p."PaidAt" >= ${start}
+        AND p."PaidAt" <  ${end}
+        AND (${catFilter}::text IS NULL OR ec."CategoryName" = ${catFilter})
+      GROUP BY ec."CategoryName", EXTRACT(YEAR FROM p."PaidAt"), EXTRACT(MONTH FROM p."PaidAt")
+      ORDER BY yr, month
     `;
 
-    const months = MONTHS_LABEL.slice(0, 10);
+    const labels = monthLabels(months);
     const datasets = { Concert: [], Movie: [], Seminar: [] };
 
-    for (let m = 1; m <= 10; m++) {
+    for (const { year, month } of months) {
       for (const cat of Object.keys(datasets)) {
-        const found = rows.find(r => r.category === cat && r.month === m);
+        const found = rows.find(r => r.category === cat && r.yr === year && r.month === month);
         datasets[cat].push(Number(found?.revenue ?? 0));
       }
     }
 
-    res.json({ labels: months, datasets });
+    res.json({ labels, datasets });
   } catch (error) {
     console.error('getRevenueByCategory error:', error);
     res.status(500).json({ error: 'Failed to fetch revenue by category' });
@@ -566,24 +735,27 @@ exports.getRevenueByCategory = async (req, res) => {
 
 exports.getUserGrowth = async (req, res) => {
   try {
+    const { start, end, months } = getDateRange(req.query);
+
     const rows = await prisma.$queryRaw`
-      SELECT EXTRACT(MONTH FROM "CreatedAt")::int as month,
+      SELECT EXTRACT(YEAR FROM "CreatedAt")::int as yr,
+             EXTRACT(MONTH FROM "CreatedAt")::int as month,
              COUNT(*)::int as count
       FROM "Users"
-      WHERE "CreatedAt" >= ${YEAR_START}
-        AND "CreatedAt" <  ${YEAR_END}
-      GROUP BY month
-      ORDER BY month
+      WHERE "CreatedAt" >= ${start}
+        AND "CreatedAt" <  ${end}
+      GROUP BY yr, month
+      ORDER BY yr, month
     `;
 
-    const months = MONTHS_LABEL.slice(0, 10);
+    const labels = monthLabels(months);
     const data = [];
-    for (let m = 1; m <= 10; m++) {
-      const found = rows.find(r => r.month === m);
+    for (const { year, month } of months) {
+      const found = rows.find(r => r.yr === year && r.month === month);
       data.push(Number(found?.count ?? 0));
     }
 
-    res.json({ labels: months, data });
+    res.json({ labels, data });
   } catch (error) {
     console.error('getUserGrowth error:', error);
     res.status(500).json({ error: 'Failed to fetch user growth' });
@@ -594,9 +766,14 @@ exports.getUserGrowth = async (req, res) => {
 
 exports.getRevenueByVenue = async (req, res) => {
   try {
+    const { category } = req.query;
+    const { start, end, months } = getDateRange(req.query);
+    const catFilter = category && category !== 'all' ? category : null;
+
     const rows = await prisma.$queryRaw`
       SELECT
         v."VenueName" as venue,
+        EXTRACT(YEAR FROM p."PaidAt")::int as yr,
         EXTRACT(MONTH FROM p."PaidAt")::int as month,
         COALESCE(SUM(p."Amount"), 0)::float8 as revenue
       FROM "Payments" p
@@ -604,26 +781,29 @@ exports.getRevenueByVenue = async (req, res) => {
       JOIN "BookingDetails" bd ON bd."BookingID" = b."BookingID"
       JOIN "Showtimes" s ON bd."ShowtimeID" = s."ShowtimeID"
       JOIN "Venues" v ON s."VenueID" = v."VenueID"
+      JOIN "Events" e ON s."EventID" = e."EventID"
+      JOIN "EventCategories" ec ON e."CategoryID" = ec."CategoryID"
       WHERE p."StatusID" = 2
-        AND p."PaidAt" >= ${YEAR_START}
-        AND p."PaidAt" <  ${YEAR_END}
-      GROUP BY v."VenueName", EXTRACT(MONTH FROM p."PaidAt")
-      ORDER BY month
+        AND p."PaidAt" >= ${start}
+        AND p."PaidAt" <  ${end}
+        AND (${catFilter}::text IS NULL OR ec."CategoryName" = ${catFilter})
+      GROUP BY v."VenueName", EXTRACT(YEAR FROM p."PaidAt"), EXTRACT(MONTH FROM p."PaidAt")
+      ORDER BY yr, month
     `;
 
     const venueNames = [...new Set(rows.map(r => r.venue))].sort();
-    const months = MONTHS_LABEL.slice(0, 10);
+    const labels = monthLabels(months);
 
     const datasets = {};
     for (const vn of venueNames) {
       datasets[vn] = [];
-      for (let m = 1; m <= 10; m++) {
-        const found = rows.find(r => r.venue === vn && r.month === m);
+      for (const { year, month } of months) {
+        const found = rows.find(r => r.venue === vn && r.yr === year && r.month === month);
         datasets[vn].push(Number(found?.revenue ?? 0));
       }
     }
 
-    res.json({ labels: months, datasets });
+    res.json({ labels, datasets });
   } catch (error) {
     console.error('getRevenueByVenue error:', error);
     res.status(500).json({ error: 'Failed to fetch revenue by venue' });
@@ -634,13 +814,23 @@ exports.getRevenueByVenue = async (req, res) => {
 
 exports.getBookingsByHour = async (req, res) => {
   try {
+    const { category } = req.query;
+    const { start, end } = getDateRange(req.query);
+    const catFilter = category && category !== 'all' ? category : null;
+
     const rows = await prisma.$queryRaw`
       SELECT EXTRACT(HOUR FROM p."PaidAt")::int as hour,
-             COUNT(*)::int as count
+             COUNT(DISTINCT p."PaymentID")::int as count
       FROM "Payments" p
+      JOIN "Bookings" b ON p."BookingID" = b."BookingID"
+      JOIN "BookingDetails" bd ON bd."BookingID" = b."BookingID"
+      JOIN "Showtimes" s ON bd."ShowtimeID" = s."ShowtimeID"
+      JOIN "Events" e ON s."EventID" = e."EventID"
+      JOIN "EventCategories" ec ON e."CategoryID" = ec."CategoryID"
       WHERE p."StatusID" = 2
-        AND p."PaidAt" >= ${YEAR_START}
-        AND p."PaidAt" <  ${YEAR_END}
+        AND p."PaidAt" >= ${start}
+        AND p."PaidAt" <  ${end}
+        AND (${catFilter}::text IS NULL OR ec."CategoryName" = ${catFilter})
       GROUP BY hour
       ORDER BY hour
     `;
@@ -664,10 +854,18 @@ exports.getBookingsByHour = async (req, res) => {
 
 exports.getBookingVsCapacity = async (req, res) => {
   try {
+    const { category } = req.query;
+    const catFilter = category && category !== 'all' ? category : null;
+
+    const stWhere = { StartDateTime: { lt: new Date() } };
+    if (catFilter) {
+      stWhere.Event = { Category: { CategoryName: catFilter } };
+    }
+
     const showtimes = await prisma.showtime.findMany({
-      where: { StartDateTime: { lt: new Date() } },
+      where: stWhere,
       include: {
-        Event: true,
+        Event: { include: { Category: true } },
         Venue: {
           include: { Seats: true }
         }
@@ -712,6 +910,9 @@ exports.getBookingVsCapacity = async (req, res) => {
 
 exports.getVenueUtilization = async (req, res) => {
   try {
+    const { category } = req.query;
+    const catFilter = category && category !== 'all' ? category : null;
+
     const rows = await prisma.$queryRaw`
       SELECT v."VenueName" as venue,
              ec."CategoryName" as category,
@@ -721,6 +922,7 @@ exports.getVenueUtilization = async (req, res) => {
       JOIN "Events" e ON s."EventID" = e."EventID"
       JOIN "EventCategories" ec ON e."CategoryID" = ec."CategoryID"
       WHERE s."StartDateTime" < NOW()
+        AND (${catFilter}::text IS NULL OR ec."CategoryName" = ${catFilter})
       GROUP BY v."VenueName", ec."CategoryName"
     `;
 
@@ -746,6 +948,9 @@ exports.getVenueUtilization = async (req, res) => {
 
 exports.getSeatTypeRevenue = async (req, res) => {
   try {
+    const { category } = req.query;
+    const catFilter = category && category !== 'all' ? category : null;
+
     const rows = await prisma.$queryRaw`
       SELECT st."TypeName" as typename,
              COALESCE(SUM(t."FinalPrice"), 0)::float8 as revenue
@@ -754,7 +959,11 @@ exports.getSeatTypeRevenue = async (req, res) => {
       JOIN "Seats" seat ON bd."SeatID" = seat."SeatID"
       JOIN "SeatTypes" st ON seat."SeatTypeID" = st."SeatTypeID"
       JOIN "Bookings" b ON bd."BookingID" = b."BookingID"
+      JOIN "Showtimes" s ON bd."ShowtimeID" = s."ShowtimeID"
+      JOIN "Events" e ON s."EventID" = e."EventID"
+      JOIN "EventCategories" ec ON e."CategoryID" = ec."CategoryID"
       WHERE b."StatusID" = 2
+        AND (${catFilter}::text IS NULL OR ec."CategoryName" = ${catFilter})
       GROUP BY st."TypeName"
     `;
 
@@ -773,15 +982,23 @@ exports.getSeatTypeRevenue = async (req, res) => {
 
 exports.getCustomerRetention = async (req, res) => {
   try {
+    const { category } = req.query;
+    const catFilter = category && category !== 'all' ? category : null;
+
     const rows = await prisma.$queryRaw`
       SELECT
         CASE WHEN booking_count > 1 THEN 'Repeat' ELSE 'One-time' END as type,
         COUNT(*)::int as users
       FROM (
-        SELECT "UserID", COUNT(*) as booking_count
-        FROM "Bookings"
-        WHERE "StatusID" = 2
-        GROUP BY "UserID"
+        SELECT b."UserID", COUNT(DISTINCT b."BookingID") as booking_count
+        FROM "Bookings" b
+        JOIN "BookingDetails" bd ON bd."BookingID" = b."BookingID"
+        JOIN "Showtimes" s ON bd."ShowtimeID" = s."ShowtimeID"
+        JOIN "Events" e ON s."EventID" = e."EventID"
+        JOIN "EventCategories" ec ON e."CategoryID" = ec."CategoryID"
+        WHERE b."StatusID" = 2
+          AND (${catFilter}::text IS NULL OR ec."CategoryName" = ${catFilter})
+        GROUP BY b."UserID"
       ) sub
       GROUP BY type
     `;
@@ -810,8 +1027,13 @@ exports.getCustomerRetention = async (req, res) => {
 
 exports.getInterestByCategory = async (req, res) => {
   try {
+    const { category } = req.query;
+    const { start, end, months } = getDateRange(req.query);
+    const catFilter = category && category !== 'all' ? category : null;
+
     const rows = await prisma.$queryRaw`
       SELECT ec."CategoryName" as category,
+             EXTRACT(YEAR FROM b."BookingTimestamp")::int as yr,
              EXTRACT(MONTH FROM b."BookingTimestamp")::int as month,
              COUNT(bd."DetailID")::int as count
       FROM "BookingDetails" bd
@@ -819,23 +1041,24 @@ exports.getInterestByCategory = async (req, res) => {
       JOIN "Showtimes" s ON bd."ShowtimeID" = s."ShowtimeID"
       JOIN "Events" e ON s."EventID" = e."EventID"
       JOIN "EventCategories" ec ON e."CategoryID" = ec."CategoryID"
-      WHERE b."BookingTimestamp" >= ${YEAR_START}
-        AND b."BookingTimestamp" <  ${YEAR_END}
-      GROUP BY ec."CategoryName", EXTRACT(MONTH FROM b."BookingTimestamp")
-      ORDER BY month
+      WHERE b."BookingTimestamp" >= ${start}
+        AND b."BookingTimestamp" <  ${end}
+        AND (${catFilter}::text IS NULL OR ec."CategoryName" = ${catFilter})
+      GROUP BY ec."CategoryName", EXTRACT(YEAR FROM b."BookingTimestamp"), EXTRACT(MONTH FROM b."BookingTimestamp")
+      ORDER BY yr, month
     `;
 
-    const months   = MONTHS_LABEL.slice(0, 10);
+    const labels   = monthLabels(months);
     const datasets = { Concert: [], Movie: [], Seminar: [] };
 
-    for (let m = 1; m <= 10; m++) {
+    for (const { year, month } of months) {
       for (const cat of Object.keys(datasets)) {
-        const found = rows.find(r => r.category === cat && r.month === m);
+        const found = rows.find(r => r.category === cat && r.yr === year && r.month === month);
         datasets[cat].push(Number(found?.count ?? 0));
       }
     }
 
-    res.json({ labels: months, datasets });
+    res.json({ labels, datasets });
   } catch (error) {
     console.error('getInterestByCategory error:', error);
     res.status(500).json({ error: 'Failed to fetch interest by category' });
@@ -846,6 +1069,9 @@ exports.getInterestByCategory = async (req, res) => {
 
 exports.getPeakShowtimeHours = async (req, res) => {
   try {
+    const { category } = req.query;
+    const catFilter = category && category !== 'all' ? category : null;
+
     const rows = await prisma.$queryRaw`
       SELECT ec."CategoryName" as category,
              EXTRACT(HOUR FROM s."StartDateTime")::int as hour,
@@ -855,6 +1081,7 @@ exports.getPeakShowtimeHours = async (req, res) => {
       JOIN "Showtimes" s ON bd."ShowtimeID" = s."ShowtimeID"
       JOIN "Events" e ON s."EventID" = e."EventID"
       JOIN "EventCategories" ec ON e."CategoryID" = ec."CategoryID"
+      WHERE (${catFilter}::text IS NULL OR ec."CategoryName" = ${catFilter})
       GROUP BY ec."CategoryName", EXTRACT(HOUR FROM s."StartDateTime")
       ORDER BY hour
     `;
@@ -882,6 +1109,9 @@ exports.getPeakShowtimeHours = async (req, res) => {
 
 exports.getSeatHeatmap = async (req, res) => {
   try {
+    const { category } = req.query;
+    const catFilter = category && category !== 'all' ? category : null;
+
     const rows = await prisma.$queryRaw`
       SELECT seat."RowLabel" as rowlabel,
              seat."SeatNumber" as seatnumber,
@@ -889,7 +1119,11 @@ exports.getSeatHeatmap = async (req, res) => {
       FROM "BookingDetails" bd
       JOIN "Seats" seat ON bd."SeatID" = seat."SeatID"
       JOIN "Venues" v ON seat."VenueID" = v."VenueID"
+      JOIN "Showtimes" s ON bd."ShowtimeID" = s."ShowtimeID"
+      JOIN "Events" e ON s."EventID" = e."EventID"
+      JOIN "EventCategories" ec ON e."CategoryID" = ec."CategoryID"
       WHERE v."VenueName" = 'Impact Arena'
+        AND (${catFilter}::text IS NULL OR ec."CategoryName" = ${catFilter})
       GROUP BY seat."RowLabel", seat."SeatNumber"
       ORDER BY seat."RowLabel", seat."SeatNumber"::int
     `;
@@ -924,6 +1158,9 @@ exports.getCancellationHeatmap = async (req, res) => {
     });
     const failedStatusId = failedStatus?.StatusID ?? 3;
 
+    const { category } = req.query;
+    const catFilter = category && category !== 'all' ? category : null;
+
     const rows = await prisma.$queryRaw`
       SELECT
         st."TypeName" as seattype,
@@ -937,7 +1174,9 @@ exports.getCancellationHeatmap = async (req, res) => {
       JOIN "SeatTypes" st ON seat."SeatTypeID" = st."SeatTypeID"
       JOIN "Showtimes" s ON bd."ShowtimeID" = s."ShowtimeID"
       JOIN "Events" e ON s."EventID" = e."EventID"
+      JOIN "EventCategories" ec ON e."CategoryID" = ec."CategoryID"
       WHERE s."StartDateTime" < NOW()
+        AND (${catFilter}::text IS NULL OR ec."CategoryName" = ${catFilter})
       GROUP BY st."TypeName", e."Title"
     `;
 

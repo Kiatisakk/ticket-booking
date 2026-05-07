@@ -129,6 +129,25 @@ exports.createBooking = async (req, res) => {
 
 exports.getMyBookings = async (req, res) => {
   try {
+    // Auto-cancel expired pending bookings before returning
+    const pendingStatus = await prisma.bookingStatus.findFirst({
+      where: { StatusName: 'Pending' }
+    });
+    const cancelledStatus = await prisma.bookingStatus.findFirst({
+      where: { StatusName: 'Cancelled' }
+    });
+
+    if (pendingStatus && cancelledStatus) {
+      await prisma.booking.updateMany({
+        where: {
+          UserID: req.user.userId,
+          StatusID: pendingStatus.StatusID,
+          ExpiresAt: { lt: new Date() }
+        },
+        data: { StatusID: cancelledStatus.StatusID }
+      });
+    }
+
     const bookings = await prisma.booking.findMany({
       where: { UserID: req.user.userId },
       include: {

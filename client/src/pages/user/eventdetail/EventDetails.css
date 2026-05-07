@@ -356,6 +356,82 @@
   margin-bottom: 14px;
 }
 
+/* --- PAST EVENT STYLES --- */
+.event-hero-past {
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 60%, #11141a 100%);
+}
+
+.past-event-badge {
+  display: inline-block;
+  background: rgba(100, 116, 139, 0.25);
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 5px 14px;
+  border-radius: 6px;
+  border: 1px solid rgba(100, 116, 139, 0.3);
+  margin-bottom: 12px;
+}
+
+.section-card-past {
+  opacity: 0.6;
+}
+
+.showtime-row-past {
+  opacity: 0.7;
+  border-color: rgba(100, 116, 139, 0.15) !important;
+}
+
+.showtime-row-past .st-date,
+.showtime-row-past .st-time {
+  color: var(--muted) !important;
+}
+
+.status-badge.ended {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.booking-panel-past {
+  opacity: 0.55;
+  pointer-events: none;
+  position: relative;
+}
+
+.booking-panel-past .bp-title {
+  color: var(--muted);
+}
+
+.booking-panel-past .bp-summary-row {
+  color: var(--muted);
+}
+
+.bp-past-notice {
+  background: rgba(100, 116, 139, 0.12);
+  border: 1px solid rgba(100, 116, 139, 0.2);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 13px;
+  color: var(--muted2);
+  margin-bottom: 14px;
+  line-height: 1.5;
+}
+
+.bp-checkout-btn-past {
+  background: var(--surface2) !important;
+  color: var(--muted) !important;
+  cursor: not-allowed !important;
+  border: 1px solid var(--border) !important;
+}
+
+.bp-checkout-btn-past:hover {
+  transform: none !important;
+  background: var(--surface2) !important;
+}
+
 /* --- RESPONSIVE --- */
 @media (max-width: 992px) {
   .layout-grid {
