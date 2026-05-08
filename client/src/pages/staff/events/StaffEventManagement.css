@@ -1,0 +1,230 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap');
+
+.staff-event-management {
+  font-family: 'DM Sans', sans-serif;
+  color: #f1f5f9;
+}
+
+.event-management-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 28px;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.event-management-header h2 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  color: #f1f5f9;
+}
+
+.add-event-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #6366f1;
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: 'DM Sans', sans-serif;
+  cursor: pointer;
+  transition: background 0.2s;
+  white-space: nowrap;
+}
+
+.add-event-btn:hover {
+  background: #818cf8;
+}
+
+.error-message {
+  background: rgba(239,68,68,0.1);
+  border: 1px solid rgba(239,68,68,0.3);
+  border-radius: 8px;
+  padding: 10px 14px;
+  color: #ef4444;
+  font-size: 13px;
+  margin-bottom: 20px;
+}
+
+.no-events-message {
+  text-align: center;
+  padding: 60px 20px;
+  color: #64748b;
+  background: #13161d;
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 14px;
+}
+
+.events-table-container {
+  background: #13161d;
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 14px;
+  overflow: hidden;
+  overflow-x: auto;
+}
+
+.events-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.events-table thead th {
+  background: #1a1e27;
+  padding: 14px 18px;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+  color: #64748b;
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+  white-space: nowrap;
+}
+
+.events-table tbody tr {
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  transition: background 0.15s;
+}
+
+.events-table tbody tr:last-child {
+  border-bottom: none;
+}
+
+.events-table tbody tr:hover {
+  background: rgba(255,255,255,0.02);
+}
+
+.events-table td {
+  padding: 14px 18px;
+  font-size: 14px;
+  color: #f1f5f9;
+  vertical-align: middle;
+}
+
+.event-title-cell {
+  font-weight: 600;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.status-badge.upcoming {
+  background: rgba(34,197,94,0.12);
+  color: #4ade80;
+  border: 1px solid rgba(34,197,94,0.25);
+}
+
+.status-badge.past {
+  background: rgba(100,116,139,0.12);
+  color: #94a3b8;
+  border: 1px solid rgba(100,116,139,0.2);
+}
+
+.action-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-view {
+  background: rgba(99,102,241,0.12);
+  border: 1px solid rgba(99,102,241,0.25);
+  color: #818cf8;
+  border-radius: 7px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: 'DM Sans', sans-serif;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.btn-view:hover {
+  background: rgba(99,102,241,0.2);
+}
+
+.btn-edit {
+  background: rgba(34,197,94,0.1);
+  border: 1px solid rgba(34,197,94,0.25);
+  color: #4ade80;
+  border-radius: 7px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: 'DM Sans', sans-serif;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.btn-edit:hover {
+  background: rgba(34,197,94,0.18);
+}
+
+.btn-delete {
+  background: rgba(239,68,68,0.08);
+  border: 1px solid rgba(239,68,68,0.2);
+  color: #ef4444;
+  border-radius: 7px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: 'DM Sans', sans-serif;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.btn-delete:hover {
+  background: rgba(239,68,68,0.15);
+}
+
+.btn-delete-disabled {
+  opacity: 0.35;
+  cursor: not-allowed !important;
+}
+.btn-delete-disabled:hover {
+  background: rgba(239,68,68,0.08) !important;
+}
+
+.loading {
+  text-align: center;
+  padding: 60px;
+  color: #64748b;
+}
+
+@media (max-width: 768px) {
+  .event-management-header {
+    flex-direction: column;
+    gap: 15px;
+    align-items: flex-start;
+  }
+
+  .events-table {
+    font-size: 13px;
+  }
+
+  .events-table th,
+  .events-table td {
+    padding: 10px 14px;
+  }
+
+  .action-buttons {
+    flex-direction: column;
+  }
+
+  .btn-view,
+  .btn-edit,
+  .btn-delete {
+    width: 100%;
+    text-align: center;
+  }
+}

@@ -18,6 +18,7 @@ function UserManagement() {
   const [roleFilter, setRoleFilter] = useState('All');
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [processing, setProcessing] = useState(false);
+  const [roleChanging, setRoleChanging] = useState(null);
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
@@ -62,15 +63,32 @@ function UserManagement() {
     }
   };
 
+  const handleRoleChange = async (userId, newRoleId) => {
+    setRoleChanging(userId);
+    try {
+      const res = await axios.patch(`${API_URL}/admin/users/${userId}/role`, { roleId: newRoleId }, {
+        headers: { Authorization: `Bearer ${adminToken}` }
+      });
+      setUsers(prev => prev.map(u =>
+        u.id === userId ? { ...u, role: res.data.role, roleId: newRoleId } : u
+      ));
+    } catch (error) {
+      alert(error.response?.data?.error || 'Failed to update role');
+    } finally {
+      setRoleChanging(null);
+    }
+  };
+
   const totalCustomers = users.filter(u => u.role === 'Customer').length;
   const totalAdmins = users.filter(u => u.role === 'Admin').length;
+  const totalStaff = users.filter(u => u.role === 'Staff').length;
 
   return (
     <div className="um-root">
       <div className="um-header">
         <div>
           <div className="um-title">User Management</div>
-          <div className="um-subtitle">{users.length} total users · {totalCustomers} customers · {totalAdmins} admins</div>
+          <div className="um-subtitle">{users.length} total users · {totalCustomers} customers · {totalStaff} staff · {totalAdmins} admins</div>
         </div>
       </div>
 
@@ -85,6 +103,7 @@ function UserManagement() {
         <select className="um-filter-select" value={roleFilter} onChange={e => setRoleFilter(e.target.value)}>
           <option value="All">All Roles</option>
           <option value="Customer">Customer</option>
+          <option value="Staff">Staff</option>
           <option value="Admin">Admin</option>
         </select>
       </div>
@@ -127,10 +146,31 @@ function UserManagement() {
                     <td>
                       {user.role === 'Admin' ? (
                         <span className="um-dash">-</span>
+                      ) : user.bookingsCount > 0 ? (
+                        <select
+                          className="um-role-select"
+                          value={user.roleId}
+                          onChange={e => handleRoleChange(user.id, parseInt(e.target.value))}
+                          disabled={roleChanging === user.id}
+                        >
+                          <option value={2}>Staff</option>
+                          <option value={3}>Customer</option>
+                        </select>
                       ) : (
-                        <button className="um-delete-btn" onClick={() => setDeleteTarget(user)}>
-                          Delete
-                        </button>
+                        <div className="um-action-group">
+                          <select
+                            className="um-role-select"
+                            value={user.roleId}
+                            onChange={e => handleRoleChange(user.id, parseInt(e.target.value))}
+                            disabled={roleChanging === user.id}
+                          >
+                            <option value={2}>Staff</option>
+                            <option value={3}>Customer</option>
+                          </select>
+                          <button className="um-delete-btn" onClick={() => setDeleteTarget(user)}>
+                            Delete
+                          </button>
+                        </div>
                       )}
                     </td>
                   </tr>
@@ -163,13 +203,9 @@ function UserManagement() {
                 <span>Email</span>
                 <strong>{deleteTarget.email}</strong>
               </div>
-              <div className="um-modal-row">
-                <span>Bookings</span>
-                <strong>{deleteTarget.bookingsCount}</strong>
-              </div>
             </div>
             <div className="um-modal-warning">
-              This will permanently delete this user and all their bookings, payments, and tickets. This action cannot be undone.
+              This will permanently delete this user account. This action cannot be undone.
             </div>
             <div className="um-modal-actions">
               <button className="um-modal-cancel" onClick={() => setDeleteTarget(null)}>Cancel</button>

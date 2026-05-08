@@ -53,15 +53,16 @@ model SeatType {
 }
 
 model User {
-  UserID    Int       @id @default(autoincrement()) @map("UserID")
-  RoleID    Int       @default(3) @map("RoleID")
-  FullName  String    @map("FullName")
-  Email     String    @unique @map("Email")
-  Password  String    @map("Password")
-  CreatedAt DateTime  @default(now()) @map("CreatedAt")
-  UpdatedAt DateTime  @default(now()) @updatedAt @map("UpdatedAt")
-  Role      Role      @relation(fields: [RoleID], references: [RoleID], onDelete: SetDefault)
-  Bookings  Booking[]
+  UserID                 Int       @id @default(autoincrement()) @map("UserID")
+  RoleID                 Int       @default(3) @map("RoleID")
+  FullName               String    @map("FullName")
+  Email                  String    @unique @map("Email")
+  Password               String    @map("Password")
+  CreatedAt              DateTime  @default(now()) @map("CreatedAt")
+  UpdatedAt              DateTime  @default(now()) @updatedAt @map("UpdatedAt")
+  Role                   Role      @relation(fields: [RoleID], references: [RoleID], onDelete: SetDefault)
+  Bookings               Booking[]
+  EventsCreatedByUser    Event[]   @relation("EventsCreatedByUser")
 
   @@map("Users")
 }
@@ -79,14 +80,16 @@ model Venue {
 }
 
 model Event {
-  EventID     Int           @id @default(autoincrement()) @map("EventID")
-  CategoryID  Int           @map("CategoryID")
-  Title       String        @map("Title")
-  Description String?       @map("Description")
-  CreatedAt   DateTime      @default(now()) @map("CreatedAt")
-  UpdatedAt   DateTime      @default(now()) @updatedAt @map("UpdatedAt")
-  Category    EventCategory @relation(fields: [CategoryID], references: [CategoryID], onDelete: Restrict)
-  Showtimes   Showtime[]
+  EventID         Int           @id @default(autoincrement()) @map("EventID")
+  CategoryID      Int           @map("CategoryID")
+  CreatedByUserID Int?          @map("CreatedByUserID")
+  Title           String        @map("Title")
+  Description     String?       @map("Description")
+  CreatedAt       DateTime      @default(now()) @map("CreatedAt")
+  UpdatedAt       DateTime      @default(now()) @updatedAt @map("UpdatedAt")
+  Category        EventCategory @relation(fields: [CategoryID], references: [CategoryID], onDelete: Restrict)
+  CreatedByUser   User?         @relation("EventsCreatedByUser", fields: [CreatedByUserID], references: [UserID], onDelete: SetNull)
+  Showtimes       Showtime[]
 
   @@map("Events")
 }

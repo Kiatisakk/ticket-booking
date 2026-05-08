@@ -37,8 +37,15 @@ function Navbar() {
             !isAuthPage && (
               <>
                 <Link to="/" className="navbar-link">Sign In</Link>
-                <Link to="/register" className="navbar-btn" style={{ textDecoration: 'none', display: 'inline-block' }}>
+                <Link to="/register" className="navbar-link" style={{ marginRight: '5px' }}>
                   Register
+                </Link>
+                <span className="navbar-divider">|</span>
+                <Link to="/admin/login" className="navbar-link" style={{ marginLeft: '5px' }}>
+                  Admin
+                </Link>
+                <Link to="/staff/login" className="navbar-btn" style={{ textDecoration: 'none', display: 'inline-block' }}>
+                  Staff
                 </Link>
               </>
             )

@@ -439,6 +439,8 @@
   flex-shrink: 0;
 }
 .eed-btn-danger:hover { background: rgba(239,68,68,0.18); }
+.eed-btn-danger:disabled { opacity: 0.35; cursor: not-allowed; }
+.eed-btn-danger:disabled:hover { background: rgba(239,68,68,0.1); }
 
 /* ── Modal ── */
 .eed-modal-bg {

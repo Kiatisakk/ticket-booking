@@ -71,7 +71,8 @@ exports.createEvent = async (req, res) => {
       data: {
         Title: title,
         Description: description,
-        CategoryID: categoryId
+        CategoryID: categoryId,
+        CreatedByUserID: req.user.userId
       }
     });
 

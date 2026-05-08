@@ -96,10 +96,10 @@ function Register() {
                   id="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Min 8 characters"
+                  placeholder="Min 6 characters"
                   required
                   disabled={isLoading}
-                  minLength={8}
+                  minLength={6}
                 />
                 <button
                   type="button"
@@ -123,7 +123,7 @@ function Register() {
                   placeholder="Repeat password"
                   required
                   disabled={isLoading}
-                  minLength={8}
+                  minLength={6}
                 />
                 <button
                   type="button"

@@ -65,8 +65,7 @@ function MyTickets() {
   };
 
   const handlePayNow = (booking) => {
-    const createdTime = new Date(booking.BookingDate || booking.CreatedAt).getTime();
-    const expireTime = createdTime + (5 * 60 * 1000); 
+    const expireTime = new Date(booking.ExpiresAt).getTime();
     const now = new Date().getTime();
 
     if (now > expireTime) {
@@ -75,12 +74,12 @@ function MyTickets() {
       return;
     }
 
-    navigate('/payment', { 
-      state: { 
+    navigate('/payment', {
+      state: {
         bookingId: booking.BookingID,
         totalAmount: booking.TotalAmount,
         expireTime: expireTime
-      } 
+      }
     });
   };
 
@@ -169,7 +168,8 @@ function MyTickets() {
               const seats = booking.BookingDetails?.map(d => `${d.Seat?.RowLabel}${d.Seat?.SeatNumber}`) || [];
               const theme = getStatusTheme(booking.StatusID, booking.Status);
               const emojiInfo = getEventEmojiInfo(eventInfo.EventID);
-              const ticketIdString = `TKT-${10000 + booking.BookingID}`;
+              const firstTicket = booking.BookingDetails?.find(d => d.Ticket)?.Ticket;
+              const ticketIdString = firstTicket?.TicketNo || `BK-${booking.BookingID}`;
 
               return (
                 <div key={booking.BookingID} className="ticket-card">

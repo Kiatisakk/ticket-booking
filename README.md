@@ -1,121 +1,84 @@
-# 🎫 Ticket Booking System
+# Ticket Booking System
 
-A full-stack web application for booking event tickets with seat selection, payment processing, and ticket generation.
+A full-stack web application for booking event tickets with seat selection, payment processing, and ticket generation. Features role-based access control with Admin, Staff, and Customer interfaces.
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 ### Backend
 
 - **Node.js** + **Express.js** - REST API server
-- **Prisma ORM** - Database client
+- **Prisma ORM** - Database client & migrations
 - **PostgreSQL 17** - Relational database
-- **JWT** + **bcrypt** - Authentication
+- **JWT** + **bcrypt** - Authentication & password hashing
 
 ### Frontend
 
 - **React 19** - UI framework
+- **React Router** - Client-side routing
+- **Axios** - HTTP client
 - **Vite** - Build tool
 
 ### Infrastructure
 
-- **Docker Compose** - Database containerization
+- **Docker Compose** - Database & Adminer containerization
 
 ---
 
-## 📋 Prerequisites
-
-Before you begin, ensure you have the following installed:
+## Prerequisites
 
 - [Node.js](https://nodejs.org/) (v20 or higher)
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/) - For database
-- [Git](https://git-scm.com/) - Version control
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/)
+- [Git](https://git-scm.com/)
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
-### Step 1: Clone the Repository
+### 1. Clone & Environment Setup
 
 ```bash
 git clone <your-repo-url>
 cd ticket-booking
 ```
 
-### Step 2: Create Environment Files
-
-You need to create two `.env` files locally (they are not included in the repository for security):
-
-#### Root `.env` file
-
-Create a file named `.env` in the project root:
+Create `.env` in project root:
 
 ```env
-# Database Settings
 POSTGRES_USER=admin
 POSTGRES_PASSWORD=password123
 POSTGRES_DB=ticket_booking_db
 PORT_DB=5433
-
-# Server Settings
 PORT_SERVER=4000
 HOST_SERVER=0.0.0.0
-
-# Client Settings
 PORT_CLIENT=3000
 VITE_API_BASE=http://localhost:4000
 ```
 
-#### Server `.env` file
-
-Create a file named `.env` inside the `server` folder:
+Create `server/.env`:
 
 ```env
 DATABASE_URL="postgresql://admin:password123@localhost:5433/ticket_booking_db"
 ```
 
-> ⚠️ **Note:** These credentials are for local development. Change them for production!
-
-### Step 3: Start the Database
+### 2. Start Database
 
 ```bash
 docker-compose up -d database
 ```
 
-> ⏳ Wait ~15 seconds for the database to initialize.
-
-### Step 4: Setup the Server
+### 3. Setup & Run Server
 
 ```bash
 cd server
-
-# Install dependencies
 npm install
-
-# Generate Prisma client
 npx prisma generate
-
-# Push schema to database
 npx prisma db push
-
-# Seed sample data
 npm run db:seed
-
-# Seed historical data
 npm run db:seed-historical
-```
-
-### Step 5: Start the API Server
-
-```bash
-# From server directory
 npm run dev
 ```
 
-✅ **Server running at:** http://localhost:4000
-
-### Step 6: (Optional) Start the Frontend
-
-Open a new terminal:
+### 4. Setup & Run Client
 
 ```bash
 cd client
@@ -123,136 +86,229 @@ npm install
 npm run dev
 ```
 
-✅ **Frontend running at:** http://localhost:3000
+---
+
+## Available Services
+
+| Service      | Command                         | URL                   |
+| ------------ | ------------------------------- | --------------------- |
+| Database     | `docker-compose up -d database` | localhost:5433        |
+| API Server   | `cd server && npm run dev`      | http://localhost:4000 |
+| Frontend     | `cd client && npm run dev`      | http://localhost:3000 |
+| Adminer (DB) | `docker-compose up -d adminer`  | http://localhost:8080 |
 
 ---
 
-## 📊 Available Services
+## Sample Login Credentials
 
-| Service        | Command                         | URL                   | Status      |
-| -------------- | ------------------------------- | --------------------- | ----------- |
-| **Database**   | `docker-compose up -d database` | localhost:5433        | ✅ Required |
-| **API Server** | `cd server && npm run dev`      | http://localhost:4000 | ✅ Required |
-| **Frontend**   | `cd client && npm run dev`      | http://localhost:3000 | 🔲 Optional |
-| **Adminer**    | `docker-compose up -d adminer`  | http://localhost:8080 | 🔲 Optional |
-
----
-
-## 🔐 Sample Login Credentials
-
-After running `npm run db:seed`:
-
-| Role         | Email             | Password    |
-| ------------ | ----------------- | ----------- |
-| **Admin**    | admin@example.com | password123 |
-| **Customer** | john@example.com  | password123 |
+| Role     | Email / Login     | Password    | URL                               |
+| -------- | ----------------- | ----------- | --------------------------------- |
+| Admin    | admin@example.com | password123 | http://localhost:3000/admin/login |
+| Staff    | staff@example.com | password123 | http://localhost:3000/staff/login |
+| Customer | john@example.com  | password123 | http://localhost:3000             |
 
 ---
 
-## 📚 API Documentation
-
-Complete API documentation is available at: [server/API.md](server/API.md)
-
-### Quick Examples
-
-**Get all events:**
-
-```bash
-curl http://localhost:4000/api/events
-```
-
-**Login:**
-
-```bash
-curl -X POST http://localhost:4000/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"john@example.com","password":"password123"}'
-```
-
-**Create booking (requires auth token):**
-
-```bash
-curl -X POST http://localhost:4000/api/bookings \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_TOKEN" \
-  -d '{"showtimeId":1,"seatIds":[1,2,3]}'
-```
-
----
-
-## 🧪 Test the API
-
-```bash
-cd server
-node test-api.js
-```
-
-Expected output:
+## Project Structure
 
 ```
-✅ GET /api/events          - 3 events found
-✅ GET /api/venues          - 1 venue found
-✅ GET /api/seat-types      - 3 seat types found
-✅ POST /api/auth/login     - Login successful
-✅ GET /api/bookings/my     - Authenticated!
-✅ GET /api/payment-methods - 4 payment methods found
-```
-
----
-
-## 🗂️ Project Structure
-
-```
-ticket-booking/
-├── server/
-│   ├── prisma/
-│   │   ├── schema.prisma    # Database schema
-│   │   └── seed.js          # Sample data seeder
-│   ├── index.js             # Express server + all API routes
-│   ├── API.md               # API documentation
-│   ├── test-api.js          # API test script
-│   └── package.json
-├── client/
+db_proj4/
+├── client/                          # React Frontend
 │   └── src/
-│       └── App.jsx          # React frontend (default template)
-├── database/
-│   └── init/
-│       └── schema.sql.bak   # Original SQL schema (backup)
-├── docker-compose.yml       # Docker configuration
-├── setup.bat               # Windows quick setup script
-└── QUICKSTART.md           # Detailed setup guide
+│       ├── App.jsx                  # Router & route definitions
+│       ├── App.css
+│       ├── components/
+│       │   ├── Navbar.jsx           # User navigation bar
+│       │   └── Navbar.css
+│       ├── context/
+│       │   ├── AuthContext.jsx       # Customer authentication context
+│       │   ├── AdminAuthContext.jsx  # Admin authentication context
+│       │   └── BookingContext.jsx    # Booking/cart state management
+│       └── pages/
+│           ├── user/                # Customer-facing pages
+│           │   ├── login/           # Login page
+│           │   ├── register/        # Registration page
+│           │   ├── event/           # Event listing
+│           │   ├── eventdetail/     # Event detail & showtime selection
+│           │   ├── seatSelection/   # Interactive seat map
+│           │   ├── BookingCart/      # Booking cart
+│           │   ├── payment/         # Payment processing
+│           │   └── tickets/         # My Tickets (QR codes, expiry timer)
+│           ├── admin/               # Admin panel pages
+│           │   ├── login/           # Admin login
+│           │   ├── layout/          # Admin sidebar layout
+│           │   ├── events/          # Event CRUD (list, add, edit)
+│           │   ├── users/           # User management (role change, delete)
+│           │   ├── transactions/    # Transaction management (mark paid, refund)
+│           │   └── reports/         # Analytics & reports (12 chart types)
+│           └── staff/               # Staff panel pages
+│               ├── login/           # Staff login
+│               ├── layout/          # Staff sidebar layout
+│               ├── dashboard/       # Staff dashboard (stats overview)
+│               ├── events/          # Staff event management (own events)
+│               └── transactions/    # Staff transaction view
+│
+├── server/                          # Express.js Backend
+│   ├── index.js                     # Server entry point
+│   ├── prisma/
+│   │   ├── schema.prisma            # Database schema & relations
+│   │   ├── seed.js                  # Sample data seeder
+│   │   └── migrations/              # Prisma migrations
+│   └── src/
+│       ├── config/
+│       │   └── prisma.js            # Prisma client instance
+│       ├── middleware/
+│       │   ├── auth.middleware.js        # Customer JWT auth
+│       │   ├── adminAuth.middleware.js   # Admin JWT auth
+│       │   └── staffAuth.middleware.js   # Staff JWT auth
+│       ├── routes/
+│       │   └── index.js             # All API route definitions
+│       ├── controllers/
+│       │   ├── auth.controller.js       # Register, login
+│       │   ├── event.controller.js      # Public event queries
+│       │   ├── venue.controller.js      # Venue & seat type queries
+│       │   ├── showtime.controller.js   # Showtime & booked seats
+│       │   ├── booking.controller.js    # Create/cancel bookings
+│       │   ├── payment.controller.js    # Payment processing & ticket generation
+│       │   ├── ticket.controller.js     # Ticket retrieval & QR verification
+│       │   ├── admin.controller.js      # Admin: events, users, transactions, reports
+│       │   └── staff.controller.js      # Staff: own events, transactions, dashboard
+│       └── seed-historical.js       # Historical data generator for reports
+│
+├── docker-compose.yml               # Docker services (PostgreSQL, Adminer)
+└── .env                             # Environment variables (not committed)
 ```
 
 ---
 
-## 🗄️ Database Schema
+## API Routes
 
-The system includes these main tables:
+### Public
 
-- **Users** - Role-based access (Admin, Staff, Customer)
-- **Events & Categories** - Movies, Concerts, Seminars
-- **Venues & Seats** - VIP, Standard, Sofa Bed types
-- **Showtimes** - Event schedules with base pricing
-- **Bookings** - Cart with 15-minute expiration
-- **Payments** - PromptPay, Credit Card, TrueMoney, ShopeePay
-- **Tickets** - Generated after successful payment
+| Method | Route                             | Description               |
+| ------ | --------------------------------- | ------------------------- |
+| POST   | `/api/auth/register`              | Register new user         |
+| POST   | `/api/auth/login`                 | User login                |
+| GET    | `/api/events`                     | List all events           |
+| GET    | `/api/events/:id`                 | Event detail              |
+| GET    | `/api/venues`                     | List venues               |
+| GET    | `/api/seat-types`                 | List seat types           |
+| GET    | `/api/showtimes/event/:eventId`   | Showtimes for an event    |
+| GET    | `/api/showtimes/:id/booked-seats` | Booked seats for showtime |
+| GET    | `/api/payment-methods`            | Available payment methods |
+| GET    | `/api/tickets/verify/:ticketNo`   | Verify ticket by QR code  |
+
+### Customer (requires auth)
+
+| Method | Route                             | Description           |
+| ------ | --------------------------------- | --------------------- |
+| POST   | `/api/bookings`                   | Create booking        |
+| GET    | `/api/bookings/my`                | My bookings           |
+| GET    | `/api/bookings/:id`               | Booking detail        |
+| POST   | `/api/bookings/:id/cancel`        | Cancel booking        |
+| POST   | `/api/payments`                   | Process payment       |
+| GET    | `/api/tickets/booking/:bookingId` | Tickets for a booking |
+
+### Admin (requires admin auth)
+
+| Method | Route                                   | Description             |
+| ------ | --------------------------------------- | ----------------------- |
+| POST   | `/api/admin/auth/login`                 | Admin login             |
+| GET    | `/api/admin/events`                     | List all events         |
+| GET    | `/api/admin/events/:id`                 | Event detail with stats |
+| POST   | `/api/admin/events`                     | Create event            |
+| PUT    | `/api/admin/events/:id`                 | Update event            |
+| DELETE | `/api/admin/events/:id`                 | Delete event (RESTRICT) |
+| GET    | `/api/admin/users`                      | List all users          |
+| PATCH  | `/api/admin/users/:id/role`             | Change user role        |
+| DELETE | `/api/admin/users/:id`                  | Delete user (RESTRICT)  |
+| GET    | `/api/admin/transactions`               | List all transactions   |
+| PATCH  | `/api/admin/transactions/:id/mark-paid` | Mark failed as paid     |
+| PATCH  | `/api/admin/transactions/:id/refund`    | Refund transaction      |
+| GET    | `/api/admin/categories`                 | Event categories        |
+| GET    | `/api/admin/venues`                     | Venues with capacity    |
+| POST   | `/api/admin/staff/add`                  | Add staff user          |
+| GET    | `/api/admin/staff`                      | List staff              |
+| GET    | `/api/admin/reports/*`                  | 13 report endpoints     |
+
+### Staff (requires staff auth)
+
+| Method | Route                     | Description                 |
+| ------ | ------------------------- | --------------------------- |
+| POST   | `/api/staff/auth/login`   | Staff login                 |
+| GET    | `/api/staff/events`       | List own events             |
+| GET    | `/api/staff/events/:id`   | Own event detail            |
+| POST   | `/api/staff/events`       | Create event                |
+| PUT    | `/api/staff/events/:id`   | Update own event            |
+| DELETE | `/api/staff/events/:id`   | Delete own event (RESTRICT) |
+| GET    | `/api/staff/transactions` | Own event transactions      |
+| GET    | `/api/staff/dashboard`    | Dashboard stats             |
 
 ---
 
-## 🔧 Available Scripts
+## Database Schema
 
-### Server Scripts (`cd server`)
+### Tables & Relationships
 
-| Command               | Description                                 |
-| --------------------- | ------------------------------------------- |
-| `npm run dev`         | Start development server (requires nodemon) |
-| `npm start`           | Start production server                     |
-| `npm run db:migrate`  | Run database migrations                     |
-| `npm run db:generate` | Generate Prisma client                      |
-| `npm run db:push`     | Push schema to database                     |
-| `npm run db:seed`     | Seed database with sample data              |
+| Table           | Description                                  |
+| --------------- | -------------------------------------------- |
+| Roles           | Admin, Staff, Customer                       |
+| Users           | User accounts with role-based access         |
+| EventCategories | Movie, Concert, Seminar                      |
+| Events          | Events with category and creator tracking    |
+| Venues          | Venue information                            |
+| SeatTypes       | VIP (2x), Standard (1x), Sofa Bed (1.5x)     |
+| Seats           | Individual seats linked to venue and type    |
+| Showtimes       | Event schedules with base pricing per venue  |
+| BookingStatuses | Pending, Completed, Cancelled                |
+| Bookings        | User bookings with 15-minute expiration      |
+| BookingDetails  | Individual seat reservations per booking     |
+| PaymentMethods  | Credit Card, PromptPay, TrueMoney, ShopeePay |
+| PaymentStatuses | Pending, Success, Failed, Refunded           |
+| Payments        | Payment records linked to bookings           |
+| Tickets         | Generated after payment with unique TicketNo |
 
-### Client Scripts (`cd client`)
+### ON DELETE Behaviors
+
+| Relationship              | ON DELETE   | Behavior                                 |
+| ------------------------- | ----------- | ---------------------------------------- |
+| Role -> User              | SET DEFAULT | Deleted role -> user becomes Customer    |
+| User -> Booking           | RESTRICT    | Cannot delete user with bookings         |
+| Event -> Showtime         | CASCADE     | Delete event removes its showtimes       |
+| Showtime -> BookingDetail | RESTRICT    | Cannot delete showtime with bookings     |
+| Booking -> Payment        | CASCADE     | Delete booking removes payment           |
+| Booking -> BookingDetail  | CASCADE     | Delete booking removes seat reservations |
+| BookingDetail -> Ticket   | CASCADE     | Delete detail removes ticket             |
+
+---
+
+## Business Rules
+
+- **Booking Expiry**: Pending bookings expire after 15 minutes
+- **Seat Availability**: A seat is unavailable if it has a Completed booking OR a Pending booking that hasn't expired
+- **Ticket Generation**: Tickets are generated automatically when payment is completed (one per seat)
+- **Password**: Minimum 6 characters
+- **Ticket Price**: `BasePrice x SeatType.PriceModifier`
+- **RESTRICT Deletion**: Users with bookings and events with bookings cannot be deleted
+- **Role Management**: Admin can change user roles between Staff and Customer
+
+---
+
+## Available Scripts
+
+### Server (`cd server`)
+
+| Command                      | Description                      |
+| ---------------------------- | -------------------------------- |
+| `npm run dev`                | Start dev server (nodemon)       |
+| `npm start`                  | Start production server          |
+| `npm run db:migrate`         | Run database migrations          |
+| `npm run db:generate`        | Generate Prisma client           |
+| `npm run db:push`            | Push schema to database          |
+| `npm run db:seed`            | Seed sample data                 |
+| `npm run db:seed-historical` | Seed historical data for reports |
+
+### Client (`cd client`)
 
 | Command           | Description              |
 | ----------------- | ------------------------ |
@@ -262,89 +318,11 @@ The system includes these main tables:
 
 ---
 
-## ⚙️ Environment Variables
-
-### Server (`server/.env`)
-
-```env
-DATABASE_URL="postgresql://admin:password123@localhost:5433/ticket_booking_db"
-```
-
-### Root (`.env`)
-
-```env
-POSTGRES_USER=admin
-POSTGRES_PASSWORD=password123
-POSTGRES_DB=ticket_booking_db
-PORT_DB=5433
-PORT_SERVER=4000
-PORT_CLIENT=3000
-```
-
-> ⚠️ **Important:** Never commit `.env` files to GitHub! They are already in `.gitignore`.
-
----
-
-## 🐳 Docker Setup
-
-### Start Database Only (Recommended)
-
-```bash
-docker-compose up -d database
-```
-
-### Start All Services
-
-```bash
-docker-compose up -d
-```
-
-### Stop All Services
-
-```bash
-docker-compose down
-```
-
-### Reset Database
-
-```bash
-docker-compose down -v
-docker-compose up -d database
-```
-
----
-
-## 🎯 Next Steps
-
-1. ✅ Backend API is complete and tested
-2. 🔲 Build the React frontend with:
-   - Event listing page
-   - Seat selection UI
-   - Booking cart & checkout
-   - Payment page
-   - User dashboard (My Tickets)
-3. 🔲 Integrate frontend with API
-4. 🔲 Add real payment gateway integration
-5. 🔲 Deploy to production
-
----
-
-## 📖 Documentation
-
-- [API Documentation](server/API.md) - Complete REST API reference
-- [Server README](server/README.md) - Backend setup details
-- [Quick Start Guide](QUICKSTART.md) - Detailed setup instructions
-
----
-
-## 🐛 Troubleshooting
+## Troubleshooting
 
 ### Port Already in Use
 
-If you get "port already in use" error:
-
 ```bash
-# Windows - Find and kill process
 netstat -ano | findstr ":4000"
 taskkill /F /T /PID <PID>
 ```
@@ -352,35 +330,23 @@ taskkill /F /T /PID <PID>
 ### Database Connection Error
 
 ```bash
-# Restart database
 docker-compose down -v
 docker-compose up -d database
-
-# Wait 15 seconds, then
+# Wait 15 seconds
 cd server
 npx prisma db push
 npm run db:seed
+npm run db:seed-historical
 ```
 
-### Prisma Not Found
+### Adminer Connection (localhost:8080)
 
-```bash
-cd server
-npx prisma generate
-```
+- System: **PostgreSQL**
+- Server: **database**
+- Username / Password / Database: from `.env`
 
 ---
 
-## 📝 License
+## License
 
 ISC
-
----
-
-## 👥 Contributing
-
-1. Fork the repository
-2. Create your feature branch
-3. Commit your changes
-4. Push to the branch
-5. Open a Pull Request

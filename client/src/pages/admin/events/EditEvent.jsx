@@ -185,13 +185,15 @@ function EditEvent() {
   };
 
   // ── Delete event ─────────────────────────────────────────────────────────────
+  const eventHasBookings = showtimes.some(s => s.booked > 0);
+
   const handleDelete = async () => {
     setDeleting(true);
     try {
       await axios.delete(`${API_URL}/admin/events/${id}`, { headers });
       navigate('/admin/events');
-    } catch {
-      showToast('Failed to delete event', 'error');
+    } catch (error) {
+      showToast(error.response?.data?.error || 'Failed to delete event', 'error');
     } finally {
       setDeleting(false);
       setDeleteModal(false);
@@ -460,10 +462,17 @@ function EditEvent() {
             Delete This Event
           </div>
           <div className="eed-danger-desc">
-            Permanently remove this event and all its showtimes. Showtimes with bookings cannot be auto-deleted.
+            {eventHasBookings
+              ? 'This event has existing bookings and cannot be deleted.'
+              : 'Permanently remove this event and all its showtimes. This action cannot be undone.'}
           </div>
         </div>
-        <button className="eed-btn-danger" onClick={() => setDeleteModal(true)}>
+        <button
+          className="eed-btn-danger"
+          onClick={() => setDeleteModal(true)}
+          disabled={eventHasBookings}
+          title={eventHasBookings ? 'Cannot delete — has bookings' : ''}
+        >
           Delete Event
         </button>
       </div>

@@ -40,6 +40,22 @@ function subtractDays(date, days) {
 async function main() {
   console.log('=== Historical Seed Starting ===\n');
 
+  // Create roles if they don't exist
+  const roleNames = [
+    { id: 1, name: 'Admin', description: 'System Administrator' },
+    { id: 2, name: 'Staff', description: 'Event Staff' },
+    { id: 3, name: 'Customer', description: 'Regular Customer' }
+  ];
+
+  for (const role of roleNames) {
+    let record = await prisma.role.findFirst({ where: { RoleName: role.name } });
+    if (!record) {
+      await prisma.role.create({
+        data: { RoleID: role.id, RoleName: role.name, Description: role.description }
+      });
+    }
+  }
+
   const seatTypeNames = [
     { name: 'VIP', modifier: 2.0 },
     { name: 'Standard', modifier: 1.0 },

@@ -63,8 +63,8 @@ function EventManagement() {
         headers: { Authorization: `Bearer ${adminToken}` }
       });
       setEvents(prev => prev.filter(e => e.id !== deleteTarget.id));
-    } catch {
-      // still remove from local list for UX
+    } catch (error) {
+      alert(error.response?.data?.error || 'Failed to delete event');
     } finally {
       setDeleting(false);
       setDeleteTarget(null);
@@ -126,9 +126,15 @@ function EventManagement() {
                   <button className="em-edit-btn" onClick={() => navigate(`/admin/events/${event.id}/edit`)}>
                     Edit
                   </button>
-                  <button className="em-del-btn" onClick={() => setDeleteTarget(event)}>
-                    Delete
-                  </button>
+                  {event.hasBookings ? (
+                    <button className="em-del-btn em-del-disabled" disabled title="Cannot delete — has bookings">
+                      Delete
+                    </button>
+                  ) : (
+                    <button className="em-del-btn" onClick={() => setDeleteTarget(event)}>
+                      Delete
+                    </button>
+                  )}
                 </div>
               </td>
             </tr>

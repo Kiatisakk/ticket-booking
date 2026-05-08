@@ -97,6 +97,11 @@
   box-shadow: 0 6px 20px rgba(99,102,241,0.35);
 }
 
+.navbar-divider {
+  color: var(--border);
+  margin: 0 5px;
+}
+
 @media (max-width: 768px) {
   .navbar-container {
     flex-direction: column;

@@ -147,6 +147,36 @@
   border: 1px solid rgba(168,85,247,0.25);
 }
 
+.um-role-staff {
+  background: rgba(59,130,246,0.12);
+  color: #60a5fa;
+  border: 1px solid rgba(59,130,246,0.25);
+}
+
+/* Action Group */
+.um-action-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Role Select */
+.um-role-select {
+  background: #1a1e27;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 7px;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #f1f5f9;
+  font-family: 'DM Sans', sans-serif;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.um-role-select:focus { border-color: #6366f1; }
+.um-role-select:disabled { opacity: 0.5; cursor: not-allowed; }
+
 /* Delete Button */
 .um-delete-btn {
   background: rgba(239,68,68,0.1);

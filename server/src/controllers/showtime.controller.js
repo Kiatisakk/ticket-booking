@@ -63,14 +63,18 @@ exports.getBookedSeats = async (req, res) => {
   try {
     const showtimeId = parseInt(req.params.id);
 
-    // A seat is "booked" if a BookingDetail exists for that showtime with a
-    // non-cancelled booking. We exclude cancelled bookings so seats freed up
-    // via refund/cancel become available again.
+    // A seat is unavailable if linked to a Completed booking,
+    // or a Pending booking whose ExpiresAt has not passed.
+    // Cancelled bookings and expired pending bookings release the seat.
+    const now = new Date();
     const bookedDetails = await prisma.bookingDetail.findMany({
       where: {
         ShowtimeID: showtimeId,
         Booking: {
-          Status: { StatusName: { not: 'Cancelled' } }
+          OR: [
+            { Status: { StatusName: 'Completed' } },
+            { Status: { StatusName: 'Pending' }, ExpiresAt: { gt: now } }
+          ]
         }
       },
       select: { SeatID: true }

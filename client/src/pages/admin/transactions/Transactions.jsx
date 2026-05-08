@@ -17,7 +17,8 @@ function getStatusClass(status) {
     case 'success':   return 'tx-badge tx-badge-completed';
     case 'failed':    return 'tx-badge tx-badge-failed';
     case 'pending':   return 'tx-badge tx-badge-pending';
-    case 'completed': return 'tx-badge tx-badge-completed'; // backwards compat
+    case 'completed': return 'tx-badge tx-badge-completed';
+    case 'refunded':  return 'tx-badge tx-badge-refunded';
     default:          return 'tx-badge tx-badge-pending';
   }
 }
@@ -35,6 +36,7 @@ function Transactions() {
   const [statusFilter, setStatusFilter] = useState('All');
   const [methodFilter, setMethodFilter] = useState('All');
   const [paidTarget, setPaidTarget] = useState(null);
+  const [refundTarget, setRefundTarget] = useState(null);
   const [processing, setProcessing] = useState(false);
 
   const fetchTransactions = useCallback(async () => {
@@ -82,11 +84,29 @@ function Transactions() {
       setTransactions(prev => prev.map(t =>
         t.id === paidTarget.id ? { ...t, status: 'Completed' } : t
       ));
-    } catch {
-      // optimistic update for demo
+    } catch (error) {
+      alert(error.response?.data?.error || 'Failed to mark as paid');
     } finally {
       setProcessing(false);
       setPaidTarget(null);
+    }
+  };
+
+  const handleRefund = async () => {
+    if (!refundTarget) return;
+    setProcessing(true);
+    try {
+      await axios.patch(`${API_URL}/admin/transactions/${refundTarget.id}/refund`, {}, {
+        headers: { Authorization: `Bearer ${adminToken}` }
+      });
+      setTransactions(prev => prev.map(t =>
+        t.id === refundTarget.id ? { ...t, status: 'Refunded' } : t
+      ));
+    } catch (error) {
+      alert(error.response?.data?.error || 'Failed to refund transaction');
+    } finally {
+      setProcessing(false);
+      setRefundTarget(null);
     }
   };
 
@@ -112,6 +132,7 @@ function Transactions() {
           <option value="Pending">Pending</option>
           <option value="Success">Success</option>
           <option value="Failed">Failed</option>
+          <option value="Refunded">Refunded</option>
         </select>
         <select className="tx-filter-select" value={methodFilter} onChange={e => setMethodFilter(e.target.value)}>
           <option value="All">All Methods</option>
@@ -156,6 +177,10 @@ function Transactions() {
                       {tx.status === 'Failed' ? (
                         <button className="tx-mark-paid-btn" onClick={() => setPaidTarget(tx)}>
                           Mark as Paid
+                        </button>
+                      ) : tx.status === 'Success' ? (
+                        <button className="tx-refund-btn" onClick={() => setRefundTarget(tx)}>
+                          Refund
                         </button>
                       ) : (
                         <span className="tx-dash">—</span>
@@ -218,12 +243,54 @@ function Transactions() {
               </div>
             </div>
             <div className="tx-modal-warning" style={{ background: 'rgba(34,197,94,0.08)', borderColor: 'rgba(34,197,94,0.2)', color: '#4ade80' }}>
-              This will mark the failed transaction as successfully completed.
+              This will mark the failed transaction as successfully completed and generate tickets.
             </div>
             <div className="tx-modal-actions">
               <button className="tx-modal-cancel" onClick={() => setPaidTarget(null)}>Cancel</button>
               <button className="tx-modal-confirm-paid" onClick={handleMarkPaid} disabled={processing}>
                 {processing ? 'Processing...' : 'Confirm Mark as Paid'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Refund Modal */}
+      {refundTarget && (
+        <div className="tx-modal-overlay" onClick={() => setRefundTarget(null)}>
+          <div className="tx-modal" onClick={e => e.stopPropagation()}>
+            <div className="tx-modal-icon refund">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="1 4 1 10 7 10" />
+                <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+              </svg>
+            </div>
+            <div className="tx-modal-title">Refund Transaction</div>
+            <div className="tx-modal-booking-info">
+              <div className="tx-modal-booking-row">
+                <span>Booking ID</span>
+                <strong>#{refundTarget.bookingId}</strong>
+              </div>
+              <div className="tx-modal-booking-row">
+                <span>Transaction</span>
+                <strong>{refundTarget.transactionId}</strong>
+              </div>
+              <div className="tx-modal-booking-row">
+                <span>Customer</span>
+                <strong>{refundTarget.user}</strong>
+              </div>
+              <div className="tx-modal-booking-row">
+                <span>Refund Amount</span>
+                <strong style={{ color: '#f59e0b' }}>฿{Number(refundTarget.amount).toLocaleString()}</strong>
+              </div>
+            </div>
+            <div className="tx-modal-warning">
+              This will refund the payment, cancel the booking, and revoke all associated tickets. This action cannot be undone.
+            </div>
+            <div className="tx-modal-actions">
+              <button className="tx-modal-cancel" onClick={() => setRefundTarget(null)}>Cancel</button>
+              <button className="tx-modal-confirm-refund" onClick={handleRefund} disabled={processing}>
+                {processing ? 'Processing...' : 'Confirm Refund'}
               </button>
             </div>
           </div>

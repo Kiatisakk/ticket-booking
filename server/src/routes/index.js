@@ -1,6 +1,7 @@
 const express = require('express');
 const { authenticateToken } = require('../middleware/auth.middleware');
 const { authenticateAdmin } = require('../middleware/adminAuth.middleware');
+const { authenticateStaff } = require('../middleware/staffAuth.middleware');
 
 const authController = require('../controllers/auth.controller');
 const eventController = require('../controllers/event.controller');
@@ -10,6 +11,7 @@ const bookingController = require('../controllers/booking.controller');
 const paymentController = require('../controllers/payment.controller');
 const ticketController = require('../controllers/ticket.controller');
 const adminController = require('../controllers/admin.controller');
+const staffController = require('../controllers/staff.controller');
 
 const router = express.Router();
 
@@ -52,6 +54,10 @@ router.get('/tickets/verify/:ticketNo', ticketController.verifyTicket);
 // Admin Auth (no middleware — public)
 router.post('/admin/auth/login', adminController.adminLogin);
 
+// Admin Staff Management
+router.post('/admin/staff/add', authenticateAdmin, adminController.addStaffUser);
+router.get('/admin/staff', authenticateAdmin, adminController.getAllStaff);
+
 // Admin Lookup
 router.get('/admin/categories', authenticateAdmin, adminController.getCategories);
 router.get('/admin/venues',     authenticateAdmin, adminController.getAdminVenues);
@@ -65,6 +71,7 @@ router.delete('/admin/events/:id', authenticateAdmin, adminController.deleteEven
 
 // Admin Users
 router.get('/admin/users', authenticateAdmin, adminController.getAllUsers);
+router.patch('/admin/users/:id/role', authenticateAdmin, adminController.updateUserRole);
 router.delete('/admin/users/:id', authenticateAdmin, adminController.deleteUser);
 
 // Admin Transactions
@@ -86,6 +93,24 @@ router.get('/admin/reports/interest-by-category', authenticateAdmin, adminContro
 router.get('/admin/reports/peak-showtime-hours',   authenticateAdmin, adminController.getPeakShowtimeHours);
 router.get('/admin/reports/seat-heatmap',          authenticateAdmin, adminController.getSeatHeatmap);
 router.get('/admin/reports/cancellation-heatmap',  authenticateAdmin, adminController.getCancellationHeatmap);
+
+// ─── Staff Routes ─────────────────────────────────────────────────────────────
+
+// Staff Auth (no middleware — public)
+router.post('/staff/auth/login', adminController.staffLogin);
+
+// Staff Events
+router.get('/staff/events', authenticateStaff, staffController.getAllEvents);
+router.get('/staff/events/:id', authenticateStaff, staffController.getEventById);
+router.post('/staff/events', authenticateStaff, staffController.createEvent);
+router.put('/staff/events/:id', authenticateStaff, staffController.updateEvent);
+router.delete('/staff/events/:id', authenticateStaff, staffController.deleteEvent);
+
+// Staff Transactions
+router.get('/staff/transactions', authenticateStaff, staffController.getAllTransactions);
+
+// Staff Dashboard
+router.get('/staff/dashboard', authenticateStaff, staffController.getDashboard);
 
 // Seat Lock Routes (development helpers)
 router.post('/seats/lock', (req, res) => {

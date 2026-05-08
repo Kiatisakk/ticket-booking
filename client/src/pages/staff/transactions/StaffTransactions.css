@@ -1,0 +1,289 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap');
+
+.staff-transactions {
+  font-family: 'DM Sans', sans-serif;
+  color: #f1f5f9;
+}
+
+.transactions-header {
+  margin-bottom: 28px;
+}
+
+.transactions-header h2 {
+  margin: 0 0 4px 0;
+  font-size: 22px;
+  font-weight: 700;
+  color: #f1f5f9;
+}
+
+.subtitle {
+  color: #64748b;
+  margin: 0;
+  font-size: 13px;
+}
+
+.filter-section {
+  background: #13161d;
+  border: 1px solid rgba(255,255,255,0.07);
+  padding: 14px 20px;
+  border-radius: 14px;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.filter-section label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #94a3b8;
+}
+
+.filter-section select {
+  background: #1a1e27;
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 10px;
+  padding: 8px 16px;
+  font-size: 14px;
+  color: #f1f5f9;
+  font-family: 'DM Sans', sans-serif;
+  outline: none;
+  cursor: pointer;
+  min-width: 150px;
+}
+
+.filter-section select:focus {
+  border-color: #6366f1;
+}
+
+.error-message {
+  background: rgba(239,68,68,0.1);
+  border: 1px solid rgba(239,68,68,0.3);
+  border-radius: 8px;
+  padding: 10px 14px;
+  color: #ef4444;
+  font-size: 13px;
+  margin-bottom: 20px;
+}
+
+.no-transactions {
+  text-align: center;
+  padding: 60px 20px;
+  color: #64748b;
+  background: #13161d;
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 14px;
+}
+
+.loading {
+  text-align: center;
+  padding: 60px;
+  color: #64748b;
+}
+
+.transactions-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.transaction-card {
+  background: #13161d;
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 14px;
+  padding: 24px;
+  border-left: 3px solid #6366f1;
+}
+
+.transaction-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 20px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+}
+
+.transaction-header h3 {
+  margin: 0 0 5px 0;
+  color: #f1f5f9;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.customer-email {
+  margin: 0;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.transaction-amount {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.amount {
+  font-size: 22px;
+  font-weight: 700;
+  color: #22c55e;
+}
+
+.payment-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.payment-status.success {
+  background: rgba(34,197,94,0.12);
+  color: #4ade80;
+  border: 1px solid rgba(34,197,94,0.25);
+}
+
+.payment-status.pending {
+  background: rgba(245,158,11,0.12);
+  color: #fbbf24;
+  border: 1px solid rgba(245,158,11,0.25);
+}
+
+.payment-status.failed {
+  background: rgba(239,68,68,0.12);
+  color: #f87171;
+  border: 1px solid rgba(239,68,68,0.25);
+}
+
+.payment-status.refunded {
+  background: rgba(168,85,247,0.12);
+  color: #c084fc;
+  border: 1px solid rgba(168,85,247,0.25);
+}
+
+.transaction-details {
+  margin-bottom: 20px;
+}
+
+.detail-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 0;
+  font-size: 14px;
+  color: #94a3b8;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+
+.detail-row:last-child {
+  border-bottom: none;
+}
+
+.detail-label {
+  font-weight: 600;
+  color: #64748b;
+  min-width: 150px;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.transaction-id {
+  font-family: monospace;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.transaction-items {
+  background: #1a1e27;
+  border: 1px solid rgba(255,255,255,0.05);
+  padding: 16px 20px;
+  border-radius: 10px;
+}
+
+.transaction-items h4 {
+  margin: 0 0 16px 0;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+}
+
+.item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+
+.item:last-child {
+  border-bottom: none;
+}
+
+.item-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.item-info strong {
+  color: #f1f5f9;
+  font-size: 14px;
+}
+
+.venue,
+.showtime,
+.seat {
+  font-size: 13px;
+  color: #64748b;
+}
+
+.item-price {
+  font-weight: 700;
+  color: #22c55e;
+  min-width: 80px;
+  text-align: right;
+  font-size: 14px;
+}
+
+@media (max-width: 768px) {
+  .transactions-header h2 {
+    font-size: 20px;
+  }
+
+  .transaction-header {
+    flex-direction: column;
+    gap: 15px;
+  }
+
+  .transaction-amount {
+    align-items: flex-start;
+  }
+
+  .filter-section {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .detail-row {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .item-price {
+    width: 100%;
+    text-align: left;
+  }
+}

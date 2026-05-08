@@ -58,6 +58,141 @@ exports.adminLogin = async (req, res) => {
   }
 };
 
+// ─── Staff Auth ───────────────────────────────────────────────────────────────
+
+exports.staffLogin = async (req, res) => {
+  try {
+    const { username, password } = req.body;
+
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Username and password are required' });
+    }
+
+    const user = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { Email: username },
+          { FullName: username }
+        ]
+      },
+      include: { Role: true }
+    });
+
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    if (!user.Role || user.Role.RoleName !== 'Staff') {
+      return res.status(403).json({ error: 'Staff access required' });
+    }
+
+    const validPassword = await bcrypt.compare(password, user.Password);
+    if (!validPassword) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    const token = jwt.sign(
+      { userId: user.UserID, email: user.Email, role: user.RoleID },
+      JWT_SECRET,
+      { expiresIn: '8h' }
+    );
+
+    res.json({
+      message: 'Staff login successful',
+      token,
+      user: {
+        id: user.UserID,
+        fullName: user.FullName,
+        email: user.Email,
+        role: user.Role.RoleName
+      }
+    });
+  } catch (error) {
+    console.error('Staff login error:', error);
+    res.status(500).json({ error: 'Failed to login' });
+  }
+};
+
+// ─── Staff User Management (Admin Only) ───────────────────────────────────────
+
+exports.addStaffUser = async (req, res) => {
+  try {
+    const { fullName, email, password } = req.body;
+
+    if (!fullName || !email || !password) {
+      return res.status(400).json({ error: 'Full name, email, and password are required' });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters long' });
+    }
+
+    const existingUser = await prisma.user.findUnique({ where: { Email: email } });
+    if (existingUser) {
+      return res.status(400).json({ error: 'User already exists' });
+    }
+
+    const staffRole = await prisma.role.findFirst({ where: { RoleName: 'Staff' } });
+    if (!staffRole) {
+      return res.status(500).json({ error: 'Staff role not found' });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const staffUser = await prisma.user.create({
+      data: {
+        FullName: fullName,
+        Email: email,
+        Password: hashedPassword,
+        RoleID: staffRole.RoleID
+      }
+    });
+
+    res.status(201).json({
+      message: 'Staff user created successfully',
+      user: {
+        id: staffUser.UserID,
+        fullName: staffUser.FullName,
+        email: staffUser.Email
+      }
+    });
+  } catch (error) {
+    console.error('Add staff user error:', error);
+    res.status(500).json({ error: 'Failed to create staff user' });
+  }
+};
+
+exports.getAllStaff = async (req, res) => {
+  try {
+    const staffRole = await prisma.role.findFirst({ where: { RoleName: 'Staff' } });
+    if (!staffRole) {
+      return res.json([]);
+    }
+
+    const staff = await prisma.user.findMany({
+      where: { RoleID: staffRole.RoleID },
+      include: {
+        _count: {
+          select: { EventsCreatedByUser: true }
+        }
+      },
+      orderBy: { CreatedAt: 'desc' }
+    });
+
+    const result = staff.map(s => ({
+      id: s.UserID,
+      fullName: s.FullName,
+      email: s.Email,
+      eventsCreated: s._count.EventsCreatedByUser,
+      createdAt: s.CreatedAt
+    }));
+
+    res.json(result);
+  } catch (error) {
+    console.error('Get all staff error:', error);
+    res.status(500).json({ error: 'Failed to fetch staff' });
+  }
+};
+
 // ─── Admin Events ─────────────────────────────────────────────────────────────
 
 exports.getAllEvents = async (req, res) => {
@@ -93,7 +228,25 @@ exports.getAllEvents = async (req, res) => {
         : 0;
 
       const bookedCount = showtime
-        ? await prisma.bookingDetail.count({ where: { ShowtimeID: showtime.ShowtimeID } })
+        ? await prisma.bookingDetail.count({
+            where: {
+              ShowtimeID: showtime.ShowtimeID,
+              Booking: {
+                OR: [
+                  { Status: { StatusName: 'Completed' } },
+                  { Status: { StatusName: 'Pending' }, ExpiresAt: { gt: now } }
+                ]
+              }
+            }
+          })
+        : 0;
+
+      // Check if event has any bookings across all showtimes
+      const allShowtimeIds = e.Showtimes?.map(s => s.ShowtimeID) || [];
+      const totalBookings = allShowtimeIds.length > 0
+        ? await prisma.bookingDetail.count({
+            where: { ShowtimeID: { in: allShowtimeIds } }
+          })
         : 0;
 
       // Check if ALL showtimes are in the past
@@ -118,6 +271,7 @@ exports.getAllEvents = async (req, res) => {
         startDateTime: showtime?.StartDateTime ?? null,
         showtimeId:    showtime?.ShowtimeID ?? null,
         isPast,
+        hasBookings:   totalBookings > 0,
         latestShowtime: latestShowtime?.StartDateTime ?? null
       };
     }));
@@ -144,9 +298,20 @@ exports.getEventById = async (req, res) => {
 
     if (!event) return res.status(404).json({ error: 'Event not found' });
 
+    const now = new Date();
     const showtimes = await Promise.all(event.Showtimes.map(async s => {
       const capacity = await prisma.seat.count({ where: { VenueID: s.VenueID } });
-      const booked   = await prisma.bookingDetail.count({ where: { ShowtimeID: s.ShowtimeID } });
+      const booked   = await prisma.bookingDetail.count({
+        where: {
+          ShowtimeID: s.ShowtimeID,
+          Booking: {
+            OR: [
+              { Status: { StatusName: 'Completed' } },
+              { Status: { StatusName: 'Pending' }, ExpiresAt: { gt: now } }
+            ]
+          }
+        }
+      });
       return {
         id:            s.ShowtimeID,
         venueId:       s.VenueID,
@@ -178,16 +343,29 @@ exports.createEvent = async (req, res) => {
     const { title, description, categoryId, showtimes = [] } = req.body;
 
     if (!title?.trim()) return res.status(400).json({ error: 'Event title is required' });
+    if (!categoryId) return res.status(400).json({ error: 'Category is required' });
+
+    const parsedCategoryId = parseInt(categoryId);
+    const category = await prisma.eventCategory.findUnique({
+      where: { CategoryID: parsedCategoryId }
+    });
+    if (!category) return res.status(400).json({ error: 'Invalid category' });
 
     const event = await prisma.event.create({
       data: {
-        Title:       title.trim(),
-        Description: description?.trim() || '',
-        CategoryID:  categoryId ? parseInt(categoryId) : null
+        Title:           title.trim(),
+        Description:     description?.trim() || '',
+        CategoryID:      parsedCategoryId,
+        CreatedByUserID: req.user.userId
       }
     });
 
     if (showtimes.length > 0) {
+      for (const s of showtimes) {
+        if (parseFloat(s.basePrice) < 0) {
+          return res.status(400).json({ error: 'Base price cannot be negative' });
+        }
+      }
       await prisma.showtime.createMany({
         data: showtimes.map(s => ({
           EventID:       event.EventID,
@@ -211,13 +389,20 @@ exports.updateEvent = async (req, res) => {
     const eventId = parseInt(req.params.id);
 
     if (!title?.trim()) return res.status(400).json({ error: 'Event title is required' });
+    if (!categoryId) return res.status(400).json({ error: 'Category is required' });
+
+    const parsedCategoryId = parseInt(categoryId);
+    const category = await prisma.eventCategory.findUnique({
+      where: { CategoryID: parsedCategoryId }
+    });
+    if (!category) return res.status(400).json({ error: 'Invalid category' });
 
     await prisma.event.update({
       where: { EventID: eventId },
       data: {
         Title:       title.trim(),
         Description: description?.trim() || '',
-        CategoryID:  categoryId ? parseInt(categoryId) : null
+        CategoryID:  parsedCategoryId
       }
     });
 
@@ -229,7 +414,12 @@ exports.updateEvent = async (req, res) => {
       }
     }
 
-    // Upsert showtimes
+    // Validate and upsert showtimes
+    for (const s of showtimes) {
+      if (parseFloat(s.basePrice) < 0) {
+        return res.status(400).json({ error: 'Base price cannot be negative' });
+      }
+    }
     for (const s of showtimes) {
       if (s.id) {
         await prisma.showtime.update({
@@ -263,30 +453,24 @@ exports.deleteEvent = async (req, res) => {
   try {
     const eventId = parseInt(req.params.id);
 
-    // Find all showtimes for this event
+    // RESTRICT: Check if any showtimes have booking details
     const showtimes = await prisma.showtime.findMany({
       where: { EventID: eventId },
       select: { ShowtimeID: true }
     });
     const showtimeIds = showtimes.map(s => s.ShowtimeID);
 
-    // Find all booking details for these showtimes
-    const bookingDetails = await prisma.bookingDetail.findMany({
-      where: { ShowtimeID: { in: showtimeIds } },
-      select: { DetailID: true, BookingID: true }
-    });
-    const detailIds  = bookingDetails.map(d => d.DetailID);
-    const bookingIds = [...new Set(bookingDetails.map(d => d.BookingID))];
+    if (showtimeIds.length > 0) {
+      const bookingDetailCount = await prisma.bookingDetail.count({
+        where: { ShowtimeID: { in: showtimeIds } }
+      });
+      if (bookingDetailCount > 0) {
+        return res.status(400).json({ error: 'Cannot delete event with existing bookings' });
+      }
+    }
 
-    // Cascade delete in proper order to respect FK constraints
-    await prisma.$transaction([
-      prisma.ticket.deleteMany({          where: { DetailID:   { in: detailIds   } } }),
-      prisma.bookingDetail.deleteMany({   where: { DetailID:   { in: detailIds   } } }),
-      prisma.payment.deleteMany({         where: { BookingID:  { in: bookingIds  } } }),
-      prisma.booking.deleteMany({         where: { BookingID:  { in: bookingIds  } } }),
-      prisma.showtime.deleteMany({        where: { EventID: eventId } }),
-      prisma.event.delete({               where: { EventID: eventId } })
-    ]);
+    // Safe to delete: Event -> Showtimes will CASCADE, no booking details exist
+    await prisma.event.delete({ where: { EventID: eventId } });
 
     res.json({ message: 'Event deleted successfully' });
   } catch (error) {
@@ -404,6 +588,11 @@ exports.refundTransaction = async (req, res) => {
       });
     }
 
+    // Delete tickets for the refunded booking so they no longer pass verification
+    await prisma.ticket.deleteMany({
+      where: { Detail: { BookingID: payment.BookingID } }
+    });
+
     res.json({ message: 'Payment refunded successfully' });
   } catch (error) {
     console.error('Admin refundTransaction error:', error);
@@ -443,6 +632,38 @@ exports.markAsPaid = async (req, res) => {
         where: { BookingID: payment.BookingID },
         data:  { StatusID: completedStatus.StatusID }
       });
+    }
+
+    // Generate tickets for each seat in the booking (one ticket per BookingDetail)
+    const booking = await prisma.booking.findUnique({
+      where: { BookingID: payment.BookingID },
+      include: {
+        BookingDetails: {
+          include: {
+            Showtime: true,
+            Seat: { include: { SeatType: true } },
+            Ticket: true
+          }
+        }
+      }
+    });
+
+    if (booking) {
+      for (const detail of booking.BookingDetails) {
+        if (!detail.Ticket) {
+          const finalPrice = Number(detail.Showtime.BasePrice) * Number(detail.Seat.SeatType.PriceModifier);
+          const timestamp = Date.now().toString(36).toUpperCase();
+          const random = Math.random().toString(36).slice(2, 7).toUpperCase();
+          const ticketNo = `TKT${timestamp}${random}`.slice(0, 20);
+          await prisma.ticket.create({
+            data: {
+              TicketNo: ticketNo,
+              DetailID: detail.DetailID,
+              FinalPrice: finalPrice
+            }
+          });
+        }
+      }
     }
 
     res.json({ message: 'Payment marked as paid successfully' });
@@ -498,42 +719,65 @@ exports.deleteUser = async (req, res) => {
       return res.status(403).json({ error: 'Cannot delete admin users' });
     }
 
-    // Delete related data in order: Tickets → Payments → BookingDetails → Bookings → User
-    const bookings = await prisma.booking.findMany({
-      where: { UserID: userId },
-      select: { BookingID: true }
-    });
-    const bookingIds = bookings.map(b => b.BookingID);
-
-    if (bookingIds.length > 0) {
-      // Delete tickets for this user's booking details
-      await prisma.ticket.deleteMany({
-        where: { Detail: { BookingID: { in: bookingIds } } }
-      });
-
-      // Delete payments
-      await prisma.payment.deleteMany({
-        where: { BookingID: { in: bookingIds } }
-      });
-
-      // Delete booking details
-      await prisma.bookingDetail.deleteMany({
-        where: { BookingID: { in: bookingIds } }
-      });
-
-      // Delete bookings
-      await prisma.booking.deleteMany({
-        where: { UserID: userId }
-      });
+    // RESTRICT: Cannot delete user with existing bookings (preserve booking history for reporting)
+    const bookingCount = await prisma.booking.count({ where: { UserID: userId } });
+    if (bookingCount > 0) {
+      return res.status(400).json({ error: 'Cannot delete user with existing booking history' });
     }
 
-    // Delete user
+    // Delete user (safe - no bookings exist)
     await prisma.user.delete({ where: { UserID: userId } });
 
     res.json({ message: 'User deleted successfully' });
   } catch (error) {
     console.error('Admin deleteUser error:', error);
     res.status(500).json({ error: 'Failed to delete user' });
+  }
+};
+
+exports.updateUserRole = async (req, res) => {
+  try {
+    const userId = parseInt(req.params.id);
+    const { roleId } = req.body;
+
+    if (!roleId) {
+      return res.status(400).json({ error: 'Role is required' });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { UserID: userId },
+      include: { Role: true }
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    if (user.Role?.RoleName === 'Admin') {
+      return res.status(403).json({ error: 'Cannot change admin role' });
+    }
+
+    const role = await prisma.role.findUnique({
+      where: { RoleID: parseInt(roleId) }
+    });
+
+    if (!role) {
+      return res.status(400).json({ error: 'Invalid role' });
+    }
+
+    if (role.RoleName === 'Admin') {
+      return res.status(403).json({ error: 'Cannot assign admin role' });
+    }
+
+    await prisma.user.update({
+      where: { UserID: userId },
+      data: { RoleID: parseInt(roleId) }
+    });
+
+    res.json({ message: 'User role updated successfully', role: role.RoleName });
+  } catch (error) {
+    console.error('Admin updateUserRole error:', error);
+    res.status(500).json({ error: 'Failed to update user role' });
   }
 };
 

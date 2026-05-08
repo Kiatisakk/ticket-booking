@@ -187,8 +187,7 @@ function SeatSelection() {
   );
 
   const subtotal = calculateSubtotal();
-  const serviceFee = selectedSeats.length * 50;
-  const total = subtotal + serviceFee;
+  const total = subtotal;
 
   const isShowtimePast = new Date(showtime.StartDateTime) < new Date();
 
@@ -263,7 +262,6 @@ function SeatSelection() {
               <span>{selectedSeats.length} ticket(s)</span>
               <span>฿ {subtotal.toLocaleString()}</span>
             </div>
-            <div className="pb-row"><span>Service fee</span><span>฿ {serviceFee.toLocaleString()}</span></div>
             <div className="pb-total"><span>Total</span><span>฿ {total.toLocaleString()}</span></div>
           </div>
 

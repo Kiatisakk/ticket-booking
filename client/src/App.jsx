@@ -21,6 +21,12 @@ import UserManagement from './pages/admin/users/UserManagement';
 import Transactions from './pages/admin/transactions/Transactions';
 import Reports from './pages/admin/reports/Reports';
 
+import StaffLogin from './pages/staff/login/StaffLogin';
+import StaffLayout from './pages/staff/layout/StaffLayout';
+import StaffDashboard from './pages/staff/dashboard/StaffDashboard';
+import StaffEventManagement from './pages/staff/events/StaffEventManagement';
+import StaffTransactions from './pages/staff/transactions/StaffTransactions';
+
 import './App.css';
 
 function Dashboard() {
@@ -43,6 +49,12 @@ function ProtectedRoute({ children }) {
 function AdminProtectedRoute({ children }) {
   const adminToken = localStorage.getItem('adminToken');
   if (!adminToken) return <Navigate to="/admin/login" replace />;
+  return children;
+}
+
+function StaffProtectedRoute({ children }) {
+  const staffToken = localStorage.getItem('staffToken');
+  if (!staffToken) return <Navigate to="/staff/login" replace />;
   return children;
 }
 
@@ -156,6 +168,22 @@ function App() {
           <Route path="users" element={<UserManagement />} />
           <Route path="transactions" element={<Transactions />} />
           <Route path="reports" element={<Reports />} />
+        </Route>
+
+        {/* ── Staff Routes (no Navbar, own layout) ─────────────────────── */}
+        <Route path="/staff/login" element={<StaffLogin />} />
+        <Route
+          path="/staff"
+          element={
+            <StaffProtectedRoute>
+              <StaffLayout />
+            </StaffProtectedRoute>
+          }
+        >
+          <Route index element={<Navigate to="/staff/dashboard" replace />} />
+          <Route path="dashboard" element={<StaffDashboard />} />
+          <Route path="events" element={<StaffEventManagement />} />
+          <Route path="transactions" element={<StaffTransactions />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

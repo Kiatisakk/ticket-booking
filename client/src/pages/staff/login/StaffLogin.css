@@ -1,0 +1,210 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Serif+Display&display=swap');
+
+:root {
+  --bg: #0d0f14;
+  --surface: #13161d;
+  --surface2: #1a1e27;
+  --border: rgba(255,255,255,0.07);
+  --indigo: #6366f1;
+  --indigo-light: #818cf8;
+  --indigo-dim: rgba(99,102,241,0.12);
+  --text: #f1f5f9;
+  --muted: #64748b;
+  --muted2: #94a3b8;
+  --green: #22c55e;
+  --red: #ef4444;
+}
+
+.staff-login-container {
+  min-height: 100vh;
+  background: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'DM Sans', sans-serif;
+  position: relative;
+  overflow: hidden;
+}
+
+.staff-login-blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(90px);
+  opacity: 0.18;
+  pointer-events: none;
+}
+
+.staff-login-blob-1 {
+  width: 420px;
+  height: 420px;
+  background: var(--indigo);
+  top: -100px;
+  left: -120px;
+}
+
+.staff-login-blob-2 {
+  width: 340px;
+  height: 340px;
+  background: #a855f7;
+  bottom: -80px;
+  right: -80px;
+}
+
+.staff-login-box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 48px 44px;
+  width: 100%;
+  max-width: 420px;
+  position: relative;
+  z-index: 1;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.5);
+}
+
+.login-header {
+  margin-bottom: 8px;
+}
+
+.login-header h1 {
+  font-family: 'DM Serif Display', serif;
+  font-size: 28px;
+  color: var(--text);
+  margin: 0 0 4px 0;
+  letter-spacing: -0.5px;
+}
+
+.login-header h1 span {
+  color: var(--indigo);
+}
+
+.login-header p {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 0 0 28px 0;
+}
+
+.staff-login-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--indigo-dim);
+  border: 1px solid rgba(99,102,241,0.25);
+  border-radius: 20px;
+  padding: 4px 12px;
+  font-size: 12px;
+  color: var(--indigo-light);
+  margin-bottom: 28px;
+  font-weight: 500;
+}
+
+.staff-login-badge-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--green);
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted2);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  margin-bottom: 8px;
+  display: block;
+}
+
+.form-group input {
+  width: 100%;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 16px;
+  font-size: 15px;
+  color: var(--text);
+  font-family: 'DM Sans', sans-serif;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.form-group input::placeholder {
+  color: var(--muted);
+}
+
+.form-group input:focus {
+  border-color: var(--indigo);
+  box-shadow: 0 0 0 3px var(--indigo-dim);
+}
+
+.error-message {
+  background: rgba(239,68,68,0.1);
+  border: 1px solid rgba(239,68,68,0.3);
+  border-radius: 8px;
+  padding: 10px 14px;
+  color: var(--red);
+  font-size: 13px;
+  margin-bottom: 20px;
+}
+
+.login-btn {
+  width: 100%;
+  background: var(--indigo);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  padding: 13px;
+  font-size: 15px;
+  font-weight: 600;
+  font-family: 'DM Sans', sans-serif;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s;
+  margin-top: 8px;
+  margin-bottom: 0;
+}
+
+.login-btn:hover:not(:disabled) {
+  background: var(--indigo-light);
+}
+
+.login-btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.login-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.demo-credentials {
+  margin-top: 32px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+  text-align: center;
+}
+
+.demo-credentials strong {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--muted2);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+
+.demo-credentials p {
+  margin: 4px 0;
+  font-size: 13px;
+  color: var(--muted);
+}

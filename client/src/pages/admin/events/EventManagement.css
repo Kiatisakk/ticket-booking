@@ -286,6 +286,15 @@
   background: rgba(239,68,68,0.15);
 }
 
+.em-del-btn.em-del-disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  background: rgba(239,68,68,0.04);
+}
+.em-del-btn.em-del-disabled:hover {
+  background: rgba(239,68,68,0.04);
+}
+
 .em-empty {
   text-align: center;
   padding: 60px 20px;

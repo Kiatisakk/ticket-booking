@@ -118,6 +118,15 @@ async function main() {
     }
   });
 
+  const staffUser = await prisma.user.create({
+    data: {
+      FullName: 'Staff User',
+      Email: 'staff@example.com',
+      Password: hashedPassword,
+      RoleID: staffRole.RoleID
+    }
+  });
+
   const customerUser = await prisma.user.create({
     data: {
       FullName: 'John Doe',
@@ -187,7 +196,8 @@ async function main() {
     data: {
       Title: 'Avengers: Secret Wars',
       Description: 'The epic conclusion to the Multiverse Saga.\n\nCast: Robert Downey Jr., Chris Evans, Tom Holland, Benedict Cumberbatch',
-      CategoryID: categories[0].CategoryID // Movie
+      CategoryID: categories[0].CategoryID, // Movie
+      CreatedByUserID: adminUser.UserID
     }
   });
 
@@ -195,7 +205,8 @@ async function main() {
     data: {
       Title: 'Coldplay Live in Bangkok',
       Description: 'Experience Coldplay\'s Music of the Spheres World Tour live!\n\nPerformers: Chris Martin, Guy Berryman, Jonny Buckland, Will Champion',
-      CategoryID: categories[1].CategoryID // Concert
+      CategoryID: categories[1].CategoryID, // Concert
+      CreatedByUserID: staffUser.UserID
     }
   });
 
@@ -203,7 +214,8 @@ async function main() {
     data: {
       Title: 'Tech Innovation Summit 2025',
       Description: 'Join industry leaders discussing the future of AI, Web3, and Cloud Computing.\n\nSpeakers: Sam Altman (OpenAI), Jensen Huang (NVIDIA), Vitalik Buterin (Ethereum)',
-      CategoryID: categories[2].CategoryID // Seminar
+      CategoryID: categories[2].CategoryID, // Seminar
+      CreatedByUserID: adminUser.UserID
     }
   });
 
@@ -250,6 +262,7 @@ async function main() {
   console.log('✅ Database seeded successfully!');
   console.log('\n📋 Sample Credentials:');
   console.log('   Admin: admin@example.com / password123');
+  console.log('   Staff: staff@example.com / password123');
   console.log('   Customer: john@example.com / password123');
 }
 
