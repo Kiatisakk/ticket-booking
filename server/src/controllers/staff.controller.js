@@ -317,6 +317,114 @@ exports.deleteEvent = async (req, res) => {
   }
 };
 
+// ─── Staff Bookings ──────────────────────────────────────────────────────────
+
+exports.getAllBookings = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { search, status } = req.query;
+
+    // Get all events created by this staff
+    const staffEvents = await prisma.event.findMany({
+      where: { CreatedByUserID: userId },
+      select: { EventID: true }
+    });
+    const staffEventIds = staffEvents.map(e => e.EventID);
+
+    if (staffEventIds.length === 0) {
+      return res.json([]);
+    }
+
+    // Find all showtimes for staff's events
+    const showtimes = await prisma.showtime.findMany({
+      where: { EventID: { in: staffEventIds } },
+      select: { ShowtimeID: true }
+    });
+    const showtimeIds = showtimes.map(s => s.ShowtimeID);
+
+    // Find bookings that have at least one BookingDetail with one of these showtimes
+    const where = {
+      BookingDetails: {
+        some: {
+          ShowtimeID: { in: showtimeIds }
+        }
+      }
+    };
+
+    if (status && status !== 'All') {
+      const bookingStatus = await prisma.bookingStatus.findFirst({
+        where: { StatusName: status }
+      });
+      if (bookingStatus) {
+        where.StatusID = bookingStatus.StatusID;
+      }
+    }
+
+    if (search) {
+      const searchNum = parseInt(search);
+      if (!isNaN(searchNum)) {
+        where.BookingID = searchNum;
+      } else {
+        where.User = {
+          OR: [
+            { FullName: { contains: search, mode: 'insensitive' } },
+            { Email: { contains: search, mode: 'insensitive' } }
+          ]
+        };
+      }
+    }
+
+    const bookings = await prisma.booking.findMany({
+      where,
+      include: {
+        User: { select: { FullName: true, Email: true, Role: { select: { RoleName: true } } } },
+        Status: true,
+        BookingDetails: {
+          include: {
+            Showtime: {
+              include: {
+                Event: { select: { Title: true, EventID: true } }
+              }
+            }
+          }
+        },
+        Payment: {
+          include: { Status: true, Method: true }
+        }
+      },
+      orderBy: { CreatedAt: 'desc' }
+    });
+
+    const mapped = bookings.map(b => {
+      const events = [...new Set(
+        b.BookingDetails
+          .map(d => d.Showtime?.Event?.Title)
+          .filter(Boolean)
+      )];
+
+      return {
+        id: b.BookingID,
+        user: b.User?.FullName || 'Unknown',
+        userEmail: b.User?.Email || '',
+        userRole: b.User?.Role?.RoleName || 'Unknown',
+        status: b.Status?.StatusName || 'Unknown',
+        totalAmount: Number(b.TotalAmount),
+        seatCount: b.BookingDetails.length,
+        events: events,
+        bookingDate: b.BookingTimestamp,
+        expiresAt: b.ExpiresAt,
+        paymentStatus: b.Payment?.Status?.StatusName || null,
+        paymentMethod: b.Payment?.Method?.MethodName || null
+      };
+    });
+
+    res.json(mapped);
+  } catch (error) {
+    console.error('Staff getAllBookings error:', error);
+    res.status(500).json({ error: 'Failed to fetch bookings' });
+  }
+};
+
 // ─── Staff Transactions ────────────────────────────────────────────────────────
 
 exports.getAllTransactions = async (req, res) => {

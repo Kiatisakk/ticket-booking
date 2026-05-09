@@ -1,0 +1,225 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap');
+
+.sbk-root {
+  font-family: 'DM Sans', sans-serif;
+  color: #f1f5f9;
+}
+
+.sbk-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 28px;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.sbk-title {
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.sbk-subtitle {
+  font-size: 13px;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+.sbk-filters {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.sbk-search {
+  flex: 1;
+  min-width: 220px;
+  background: #13161d;
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 10px;
+  padding: 10px 16px;
+  font-size: 14px;
+  color: #f1f5f9;
+  font-family: 'DM Sans', sans-serif;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.sbk-search::placeholder { color: #64748b; }
+.sbk-search:focus { border-color: #6366f1; }
+
+.sbk-filter-select {
+  background: #13161d;
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 10px;
+  padding: 10px 16px;
+  font-size: 14px;
+  color: #f1f5f9;
+  font-family: 'DM Sans', sans-serif;
+  outline: none;
+  cursor: pointer;
+  min-width: 150px;
+}
+
+.sbk-filter-select:focus { border-color: #6366f1; }
+
+.sbk-table-wrap {
+  background: #13161d;
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 14px;
+  overflow: hidden;
+  margin-bottom: 28px;
+}
+
+.sbk-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 800px;
+}
+
+.sbk-table-scroll {
+  overflow-x: auto;
+}
+
+.sbk-table thead th {
+  background: #1a1e27;
+  padding: 14px 18px;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+  color: #64748b;
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+  white-space: nowrap;
+}
+
+.sbk-table tbody tr {
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  transition: background 0.15s;
+}
+
+.sbk-table tbody tr:last-child { border-bottom: none; }
+.sbk-table tbody tr:hover { background: rgba(255,255,255,0.02); }
+
+.sbk-table tbody td {
+  padding: 14px 18px;
+  font-size: 13px;
+  color: #f1f5f9;
+  vertical-align: middle;
+}
+
+.sbk-mono {
+  font-family: monospace;
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.sbk-center { text-align: center; }
+
+.sbk-user-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sbk-user-name {
+  font-size: 13px;
+  color: #f1f5f9;
+}
+
+.sbk-event-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.sbk-event-tag {
+  background: rgba(99,102,241,0.1);
+  border: 1px solid rgba(99,102,241,0.2);
+  color: #a5b4fc;
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.sbk-amount {
+  font-weight: 700;
+  color: #22c55e;
+}
+
+/* Status Badges */
+.sbk-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.sbk-badge::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.sbk-badge-completed {
+  background: rgba(34,197,94,0.12);
+  color: #4ade80;
+  border: 1px solid rgba(34,197,94,0.25);
+}
+
+.sbk-badge-pending {
+  background: rgba(245,158,11,0.12);
+  color: #fbbf24;
+  border: 1px solid rgba(245,158,11,0.25);
+}
+
+.sbk-badge-cancelled {
+  background: rgba(239,68,68,0.12);
+  color: #f87171;
+  border: 1px solid rgba(239,68,68,0.25);
+}
+
+/* Payment info */
+.sbk-payment-info {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.sbk-pay-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.sbk-pay-dot.sbk-pay-success { background: #4ade80; }
+.sbk-pay-dot.sbk-pay-failed { background: #f87171; }
+.sbk-pay-dot.sbk-pay-pending { background: #fbbf24; }
+.sbk-pay-dot.sbk-pay-refunded { background: #94a3b8; }
+
+.sbk-dash { color: #475569; font-size: 12px; }
+
+.sbk-empty {
+  text-align: center;
+  padding: 60px 20px;
+  color: #64748b;
+}
+
+.sbk-loading {
+  text-align: center;
+  padding: 60px;
+  color: #64748b;
+}

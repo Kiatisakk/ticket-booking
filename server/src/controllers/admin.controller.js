@@ -512,7 +512,7 @@ exports.getAllTransactions = async (req, res) => {
       include: {
         Booking: {
           include: {
-            User: { select: { FullName: true, Email: true } }
+            User: { select: { FullName: true, Email: true, Role: { select: { RoleName: true } } } }
           }
         },
         Method: true,
@@ -529,14 +529,16 @@ exports.getAllTransactions = async (req, res) => {
       method:        p.Method?.MethodName || 'Unknown',
       status:        p.Status?.StatusName || 'Unknown',
       date:          p.PaidAt,
-      user:          p.Booking?.User?.FullName || 'Unknown'
+      user:          p.Booking?.User?.FullName || 'Unknown',
+      userRole:      p.Booking?.User?.Role?.RoleName || 'Unknown'
     }));
 
     // Apply search filter (client-side after DB fetch)
     if (search) {
       mapped = mapped.filter(t =>
         t.bookingId?.toString().includes(search) ||
-        t.transactionId?.includes(search)
+        t.transactionId?.includes(search) ||
+        t.user?.toLowerCase().includes(search.toLowerCase())
       );
     }
 
@@ -670,6 +672,88 @@ exports.markAsPaid = async (req, res) => {
   } catch (error) {
     console.error('Admin markAsPaid error:', error);
     res.status(500).json({ error: 'Failed to mark payment as paid' });
+  }
+};
+
+// ─── Admin Booking Management ────────────────────────────────────────────────
+
+exports.getAllBookings = async (req, res) => {
+  try {
+    const { search, status } = req.query;
+
+    const where = {};
+
+    if (status && status !== 'All') {
+      const bookingStatus = await prisma.bookingStatus.findFirst({
+        where: { StatusName: status }
+      });
+      if (bookingStatus) {
+        where.StatusID = bookingStatus.StatusID;
+      }
+    }
+
+    if (search) {
+      const searchNum = parseInt(search);
+      if (!isNaN(searchNum)) {
+        where.BookingID = searchNum;
+      } else {
+        where.User = {
+          OR: [
+            { FullName: { contains: search, mode: 'insensitive' } },
+            { Email: { contains: search, mode: 'insensitive' } }
+          ]
+        };
+      }
+    }
+
+    const bookings = await prisma.booking.findMany({
+      where,
+      include: {
+        User: { select: { FullName: true, Email: true, Role: { select: { RoleName: true } } } },
+        Status: true,
+        BookingDetails: {
+          include: {
+            Showtime: {
+              include: {
+                Event: { select: { Title: true, EventID: true } }
+              }
+            }
+          }
+        },
+        Payment: {
+          include: { Status: true, Method: true }
+        }
+      },
+      orderBy: { CreatedAt: 'desc' }
+    });
+
+    const mapped = bookings.map(b => {
+      const events = [...new Set(
+        b.BookingDetails
+          .map(d => d.Showtime?.Event?.Title)
+          .filter(Boolean)
+      )];
+
+      return {
+        id: b.BookingID,
+        user: b.User?.FullName || 'Unknown',
+        userEmail: b.User?.Email || '',
+        userRole: b.User?.Role?.RoleName || 'Unknown',
+        status: b.Status?.StatusName || 'Unknown',
+        totalAmount: Number(b.TotalAmount),
+        seatCount: b.BookingDetails.length,
+        events: events,
+        bookingDate: b.BookingTimestamp,
+        expiresAt: b.ExpiresAt,
+        paymentStatus: b.Payment?.Status?.StatusName || null,
+        paymentMethod: b.Payment?.Method?.MethodName || null
+      };
+    });
+
+    res.json(mapped);
+  } catch (error) {
+    console.error('Admin getAllBookings error:', error);
+    res.status(500).json({ error: 'Failed to fetch bookings' });
   }
 };
 

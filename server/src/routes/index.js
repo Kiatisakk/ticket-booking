@@ -74,6 +74,9 @@ router.get('/admin/users', authenticateAdmin, adminController.getAllUsers);
 router.patch('/admin/users/:id/role', authenticateAdmin, adminController.updateUserRole);
 router.delete('/admin/users/:id', authenticateAdmin, adminController.deleteUser);
 
+// Admin Bookings
+router.get('/admin/bookings', authenticateAdmin, adminController.getAllBookings);
+
 // Admin Transactions
 router.get('/admin/transactions', authenticateAdmin, adminController.getAllTransactions);
 router.patch('/admin/transactions/:id/refund', authenticateAdmin, adminController.refundTransaction);
@@ -105,6 +108,9 @@ router.get('/staff/events/:id', authenticateStaff, staffController.getEventById)
 router.post('/staff/events', authenticateStaff, staffController.createEvent);
 router.put('/staff/events/:id', authenticateStaff, staffController.updateEvent);
 router.delete('/staff/events/:id', authenticateStaff, staffController.deleteEvent);
+
+// Staff Bookings
+router.get('/staff/bookings', authenticateStaff, staffController.getAllBookings);
 
 // Staff Transactions
 router.get('/staff/transactions', authenticateStaff, staffController.getAllTransactions);

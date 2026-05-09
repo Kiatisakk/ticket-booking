@@ -65,7 +65,8 @@ function Transactions() {
   const filtered = transactions.filter(t => {
     const matchSearch = !search ||
       t.bookingId?.toString().includes(search) ||
-      t.transactionId?.includes(search);
+      t.transactionId?.includes(search) ||
+      t.user?.toLowerCase().includes(search.toLowerCase());
     const matchStatus = statusFilter === 'All' || t.status === statusFilter;
     const matchMethod = methodFilter === 'All' || t.method?.toLowerCase().includes(methodFilter.toLowerCase());
     return matchSearch && matchStatus && matchMethod;
@@ -123,7 +124,7 @@ function Transactions() {
         <input
           className="tx-search"
           type="text"
-          placeholder="Search by Booking ID or Transaction ID..."
+          placeholder="Search by Booking ID, Transaction ID, or User..."
           value={search}
           onChange={e => setSearch(e.target.value)}
         />
@@ -155,6 +156,7 @@ function Transactions() {
                 <tr>
                   <th>Booking ID</th>
                   <th>Transaction ID</th>
+                  <th>User</th>
                   <th>Method</th>
                   <th>Amount (THB)</th>
                   <th>Date</th>
@@ -167,6 +169,14 @@ function Transactions() {
                   <tr key={tx.id}>
                     <td className="tx-mono">#{tx.bookingId}</td>
                     <td className="tx-mono">{tx.transactionId}</td>
+                    <td>
+                      <div className="tx-user-cell">
+                        <span className="tx-user-name">{tx.user}</span>
+                        {tx.userRole && tx.userRole !== 'Customer' && (
+                          <span className={`tx-role-badge tx-role-${tx.userRole?.toLowerCase()}`}>{tx.userRole}</span>
+                        )}
+                      </div>
+                    </td>
                     <td>{tx.method}</td>
                     <td className="tx-amount">฿{Number(tx.amount).toLocaleString()}</td>
                     <td style={{ color: '#94a3b8', fontSize: '12px' }}>{formatDate(tx.date)}</td>

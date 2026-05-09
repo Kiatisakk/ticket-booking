@@ -740,37 +740,9 @@ async function main() {
     }
   }
 
-  // ── (c) Add ghost Pending bookings for transaction variety ──────────────────
-  console.log('\n=== Adding Pending Ghost Bookings ===');
-
-  let pendingCount = 0;
-  for (const eventTitle of Object.keys(showtimeIndex)) {
-    const stInfo = showtimeIndex[eventTitle][0];
-    const { basePrice, startDT } = stInfo;
-
-    // 2 pending bookings per event (still in checkout)
-    for (let i = 0; i < 2; i++) {
-      const userID = histUserIDs[(pendingCount * 11 + 4) % histUserIDs.length];
-      const method = methodRotation[methodIdx % methodRotation.length];
-      methodIdx++;
-
-      const bookingTs = subtractDays(startDT, 1);
-      await createGhostBooking({
-        userID,
-        bookingTimestamp: bookingTs,
-        totalAmount:      basePrice,
-        bookingStatusID:  BS_PENDING,
-        paymentMethodID:  method,
-        paymentStatusID:  PS_PENDING
-      });
-      pendingCount++;
-    }
-  }
-
   console.log(`\n=== Historical Seed Complete ===`);
   console.log(`  Successful bookings: ${totalBookings}`);
   console.log(`  Failed attempts:     ${totalFailedAttempts}`);
-  console.log(`  Pending ghosts:      ${pendingCount}`);
 }
 
 main()
