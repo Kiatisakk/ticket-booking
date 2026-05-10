@@ -1,84 +1,22 @@
-const prisma = require('../config/prisma');
+const eventService = require('../services/event.service');
+const asyncHandler = require('../utils/asyncHandler');
 
-exports.getAllEvents = async (req, res) => {
-  try {
-    const { categoryId, search } = req.query;
-    const where = {};
+exports.getAllEvents = asyncHandler(async (req, res) => {
+  const events = await eventService.getAllEvents(req.query);
+  res.json(events);
+});
 
-    if (categoryId) {
-      where.CategoryID = parseInt(categoryId);
-    }
+exports.getEventById = asyncHandler(async (req, res) => {
+  const event = await eventService.getEventById(parseInt(req.params.id));
+  res.json(event);
+});
 
-    if (search) {
-      where.Title = {
-        contains: search,
-        mode: 'insensitive'
-      };
-    }
-
-    const events = await prisma.event.findMany({
-      where,
-      include: {
-        Category: true,
-        Showtimes: true
-      }
-    });
-    res.json(events);
-  } catch (error) {
-    console.error('Get events error:', error);
-    res.status(500).json({ error: 'Failed to fetch events' });
-  }
-};
-
-exports.getEventById = async (req, res) => {
-  try {
-    const event = await prisma.event.findUnique({
-      where: { EventID: parseInt(req.params.id) },
-      include: {
-        Category: true,
-        Showtimes: {
-          include: {
-            Venue: true
-          }
-        }
-      }
-    });
-
-    if (!event) {
-      return res.status(404).json({ error: 'Event not found' });
-    }
-
-    res.json(event);
-  } catch (error) {
-    console.error('Get event error:', error);
-    res.status(500).json({ error: 'Failed to fetch event' });
-  }
-};
-
-exports.createEvent = async (req, res) => {
-  try {
-    const customerRole = await prisma.role.findFirst({
-      where: { RoleName: 'Customer' }
-    });
-    
-    if (req.user.role === customerRole?.RoleID) {
-      return res.status(403).json({ error: 'Unauthorized. Admin or Staff role required.' });
-    }
-
-    const { title, description, categoryId } = req.body;
-
-    const event = await prisma.event.create({
-      data: {
-        Title: title,
-        Description: description,
-        CategoryID: categoryId,
-        CreatedByUserID: req.user.userId
-      }
-    });
-
-    res.status(201).json(event);
-  } catch (error) {
-    console.error('Create event error:', error);
-    res.status(500).json({ error: 'Failed to create event' });
-  }
-};
+exports.createEvent = asyncHandler(async (req, res) => {
+  const event = await eventService.createEvent({
+    user: req.user,
+    title: req.body.title,
+    description: req.body.description,
+    categoryId: req.body.categoryId
+  });
+  res.status(201).json(event);
+});

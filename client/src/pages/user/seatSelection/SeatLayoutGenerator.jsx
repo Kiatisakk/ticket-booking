@@ -55,13 +55,19 @@ function SeatLayoutGenerator({
                       {rowSeats.map((seat, index) => (
                         <React.Fragment key={seat.SeatID}>
                           {index === half && <div className="aisle"></div>}
-                          <div
-                            className={`seat ${getSeatStatusClass(seat)}`}
-                            onClick={() => handleSeatClick(seat)}
-                            title={`${zoneName} - Row ${seat.RowLabel} Seat ${seat.SeatNumber}`}
-                          >
-                            <span className="seat-num">{seat.SeatNumber}</span>
-                          </div>
+                          {(() => {
+                            const isTaken = isSeatBooked(seat.SeatID);
+                            return (
+                              <div
+                                className={`seat ${getSeatStatusClass(seat)}`}
+                                onClick={isTaken ? undefined : () => handleSeatClick(seat)}
+                                aria-disabled={isTaken}
+                                title={`${zoneName} - Row ${seat.RowLabel} Seat ${seat.SeatNumber}${isTaken ? ' (Taken)' : ''}`}
+                              >
+                                <span className="seat-num">{seat.SeatNumber}</span>
+                              </div>
+                            );
+                          })()}
                         </React.Fragment>
                       ))}
                     </div>
@@ -103,29 +109,37 @@ function SeatLayoutGenerator({
                     
                     {/* ฝั่งซ้าย */}
                     <div className="seminar-block">
-                      {leftSide.map(seat => (
-                        <div
-                          key={seat.SeatID}
-                          className={`seat seminar-seat ${getSeatStatusClass(seat)}`}
-                          onClick={() => handleSeatClick(seat)}
-                        >
-                          <span className="seat-num">{seat.SeatNumber}</span>
-                        </div>
-                      ))}
+                      {leftSide.map(seat => {
+                        const isTaken = isSeatBooked(seat.SeatID);
+                        return (
+                          <div
+                            key={seat.SeatID}
+                            className={`seat seminar-seat ${getSeatStatusClass(seat)}`}
+                            onClick={isTaken ? undefined : () => handleSeatClick(seat)}
+                            aria-disabled={isTaken}
+                          >
+                            <span className="seat-num">{seat.SeatNumber}</span>
+                          </div>
+                        );
+                      })}
                     </div>
 
                     <div className="seminar-aisle"></div>
 
                     <div className="seminar-block">
-                      {rightSide.map(seat => (
-                        <div
-                          key={seat.SeatID}
-                          className={`seat seminar-seat ${getSeatStatusClass(seat)}`}
-                          onClick={() => handleSeatClick(seat)}
-                        >
-                          <span className="seat-num">{seat.SeatNumber}</span>
-                        </div>
-                      ))}
+                      {rightSide.map(seat => {
+                        const isTaken = isSeatBooked(seat.SeatID);
+                        return (
+                          <div
+                            key={seat.SeatID}
+                            className={`seat seminar-seat ${getSeatStatusClass(seat)}`}
+                            onClick={isTaken ? undefined : () => handleSeatClick(seat)}
+                            aria-disabled={isTaken}
+                          >
+                            <span className="seat-num">{seat.SeatNumber}</span>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 );

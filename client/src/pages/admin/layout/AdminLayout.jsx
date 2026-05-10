@@ -1,5 +1,6 @@
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../../../context/AdminAuthContext';
+import { REPORTS, getReportById } from '../reports/reportConfig';
 import './AdminLayout.css';
 
 const NAV_ITEMS = [
@@ -58,7 +59,22 @@ const NAV_ITEMS = [
         <line x1="6" y1="20" x2="6" y2="14" />
       </svg>
     )
+  },
+  {
+    to: '/admin/settings',
+    label: 'System Settings',
+    icon: (
+      <svg className="admin-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 15.5A3.5 3.5 0 1 0 12 8a3.5 3.5 0 0 0 0 7.5Z" />
+        <path d="M19.4 15a1.8 1.8 0 0 0 .36 1.98l.05.05a2.1 2.1 0 1 1-2.97 2.97l-.05-.05a1.8 1.8 0 0 0-1.98-.36 1.8 1.8 0 0 0-1.1 1.66V21a2.1 2.1 0 1 1-4.2 0v-.08a1.8 1.8 0 0 0-1.1-1.66 1.8 1.8 0 0 0-1.98.36l-.05.05a2.1 2.1 0 1 1-2.97-2.97l.05-.05A1.8 1.8 0 0 0 4.6 15a1.8 1.8 0 0 0-1.66-1.1H2.9a2.1 2.1 0 1 1 0-4.2h.08A1.8 1.8 0 0 0 4.6 8a1.8 1.8 0 0 0-.36-1.98l-.05-.05A2.1 2.1 0 1 1 7.16 3l.05.05A1.8 1.8 0 0 0 9.2 3.4 1.8 1.8 0 0 0 10.3 1.74V1.7a2.1 2.1 0 1 1 4.2 0v.08a1.8 1.8 0 0 0 1.1 1.66 1.8 1.8 0 0 0 1.98-.36l.05-.05a2.1 2.1 0 1 1 2.97 2.97l-.05.05A1.8 1.8 0 0 0 19.4 8c.17.5.62.85 1.14.92h.56a2.1 2.1 0 1 1 0 4.2h-.08A1.8 1.8 0 0 0 19.4 15Z" />
+      </svg>
+    )
   }
+];
+
+const CUSTOMER_ITEMS = [
+  { to: '/events', label: 'Browse Events' },
+  { to: '/my-tickets', label: 'My Tickets' }
 ];
 
 function getPageTitle(pathname) {
@@ -68,7 +84,12 @@ function getPageTitle(pathname) {
   if (pathname.includes('/users')) return 'User Management';
   if (pathname.includes('/bookings')) return 'Bookings';
   if (pathname.includes('/transactions')) return 'Transactions';
+  if (pathname.includes('/reports/')) {
+    const reportId = pathname.split('/reports/')[1]?.split('/')[0];
+    return getReportById(reportId).title;
+  }
   if (pathname.includes('/reports')) return 'Reports & Analytics';
+  if (pathname.includes('/settings')) return 'System Settings';
   return 'Admin';
 }
 
@@ -79,6 +100,8 @@ function AdminLayout() {
 
   const handleLogout = () => {
     adminLogout();
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
     navigate('/admin/login');
   };
 
@@ -102,16 +125,44 @@ function AdminLayout() {
           {NAV_ITEMS.map(item => {
             const isActive = location.pathname.startsWith(item.to);
             return (
-              <Link
-                key={item.to}
-                to={item.to}
-                className={`admin-nav-link${isActive ? ' active' : ''}`}
-              >
-                {item.icon}
-                {item.label}
-              </Link>
+              <div key={item.to}>
+                <Link
+                  to={item.to}
+                  className={`admin-nav-link${isActive ? ' active' : ''}`}
+                >
+                  {item.icon}
+                  {item.label}
+                </Link>
+                {item.to === '/admin/reports' && isActive && (
+                  <div className="admin-report-subnav">
+                    {REPORTS.map(report => {
+                      const reportPath = `/admin/reports/${report.id}`;
+                      return (
+                        <Link
+                          key={report.id}
+                          to={reportPath}
+                          className={`admin-report-link${location.pathname === reportPath ? ' active' : ''}`}
+                        >
+                          <span>{report.no}</span>
+                          {report.title}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             );
           })}
+
+          <div className="admin-sidebar-section-label">Customer Area</div>
+          {CUSTOMER_ITEMS.map(item => (
+            <Link key={item.to} to={item.to} className="admin-nav-link">
+              <svg className="admin-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 7h16M4 12h16M4 17h16" />
+              </svg>
+              {item.label}
+            </Link>
+          ))}
         </nav>
 
         <div className="admin-sidebar-footer">

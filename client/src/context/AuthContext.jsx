@@ -74,6 +74,15 @@ export function AuthProvider({ children }) {
     setToken(null);
     localStorage.removeItem('user');
     localStorage.removeItem('token');
+    localStorage.removeItem('staffUser');
+    localStorage.removeItem('staffToken');
+  };
+
+  const setAuthSession = (user, token) => {
+    setUser(user);
+    setToken(token);
+    localStorage.setItem('user', JSON.stringify(user));
+    localStorage.setItem('token', token);
   };
 
   const value = {
@@ -83,6 +92,7 @@ export function AuthProvider({ children }) {
     login,
     register,
     logout,
+    setAuthSession,
     isAuthenticated: !!user
   };
 

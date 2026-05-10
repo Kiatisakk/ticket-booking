@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../../context/AuthContext';
 import './StaffLogin.css';
 
 const StaffLogin = () => {
@@ -7,6 +8,7 @@ const StaffLogin = () => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const { setAuthSession } = useAuth();
   const navigate = useNavigate();
 
   const handleLogin = async (e) => {
@@ -33,9 +35,9 @@ const StaffLogin = () => {
         return;
       }
 
-      // Store token
       localStorage.setItem('staffToken', data.token);
       localStorage.setItem('staffUser', JSON.stringify(data.user));
+      setAuthSession(data.user, data.token);
 
       navigate('/staff/dashboard');
     } catch (err) {

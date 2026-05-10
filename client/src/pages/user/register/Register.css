@@ -54,6 +54,10 @@
 /* Password toggle */
 .password-wrapper { position: relative; }
 .password-wrapper input { padding-right: 44px; }
+.password-wrapper input::-ms-reveal,
+.password-wrapper input::-ms-clear {
+  display: none;
+}
 .toggle-password {
   position: absolute;
   right: 10px;

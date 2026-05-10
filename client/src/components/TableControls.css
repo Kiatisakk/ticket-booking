@@ -1,0 +1,71 @@
+.table-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 18px;
+  border-top: 1px solid rgba(255,255,255,0.07);
+  background: #13161d;
+  flex-wrap: wrap;
+}
+
+.table-controls-summary,
+.table-page-status,
+.table-size-label {
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.table-controls-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.table-size-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.table-size-select,
+.table-page-btn {
+  background: #1a1e27;
+  border: 1px solid rgba(255,255,255,0.1);
+  color: #f1f5f9;
+  border-radius: 8px;
+  padding: 7px 10px;
+  font-family: inherit;
+  font-size: 12px;
+}
+
+.table-page-btn {
+  cursor: pointer;
+  font-weight: 700;
+  min-width: 56px;
+}
+
+.table-page-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.sortable-th {
+  cursor: pointer;
+  user-select: none;
+}
+
+.sortable-th button {
+  all: unset;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.sort-mark {
+  color: #818cf8;
+  font-size: 12px;
+}

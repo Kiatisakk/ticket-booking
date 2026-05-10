@@ -26,6 +26,10 @@ function SeatSelection() {
   const { event } = location.state || {};
 
   useEffect(() => {
+    setSelectedSeats([]);
+  }, [showtimeId, setSelectedSeats]);
+
+  useEffect(() => {
     if (event?.EventID) {
       fetchAllShowtimes(event.EventID);
     }
@@ -81,6 +85,10 @@ function SeatSelection() {
   const isSeatSelected = (seatId) => selectedSeats.some(s => s.SeatID === seatId);
 
   const handleSeatClick = async (seat) => {
+    if (isSeatBooked(seat.SeatID)) {
+      return;
+    }
+
     const alreadySelected = isSeatSelected(seat.SeatID);
 
     if (alreadySelected) {

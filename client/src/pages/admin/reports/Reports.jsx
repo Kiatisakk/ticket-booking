@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { Navigate, useParams } from 'react-router-dom';
 import axios from 'axios';
 import {
   Chart as ChartJS,
@@ -13,6 +14,7 @@ import {
   Legend
 } from 'chart.js';
 import { Bar, Line, Doughnut } from 'react-chartjs-2';
+import { REPORTS, getReportById } from './reportConfig';
 import './Reports.css';
 
 ChartJS.register(
@@ -62,585 +64,401 @@ const DOUGHNUT_OPTIONS = {
   maintainAspectRatio: false,
   cutout: '65%',
   plugins: {
-    legend: { display: false },
-    tooltip: {
-      backgroundColor: '#1a1e27',
-      borderColor: 'rgba(255,255,255,0.1)',
-      borderWidth: 1,
-      titleColor: '#f1f5f9',
-      bodyColor: '#94a3b8',
-      padding: 10
-    }
+    legend: { position: 'right', labels: { color: '#94a3b8', font: { family: 'DM Sans', size: 12 }, boxWidth: 12 } },
+    tooltip: CHART_DEFAULTS.plugins.tooltip
   }
 };
+
+const CATEGORY_COLORS = {
+  Concert: 'rgba(168,85,247,0.82)',
+  Movie: 'rgba(59,130,246,0.82)',
+  Seminar: 'rgba(20,184,166,0.82)'
+};
+
+const LINE_COLORS = ['#6366f1', '#22c55e', '#f59e0b', '#ec4899', '#14b8a6', '#94a3b8'];
+const SEAT_COLORS = ['rgba(168,85,247,0.85)', 'rgba(99,102,241,0.85)', 'rgba(20,184,166,0.85)', 'rgba(245,158,11,0.85)'];
 
 function getDefaultStartDate() {
   return '2025-05-01';
 }
 
 function getDefaultEndDate() {
-  const now = new Date();
-  return now.toISOString().slice(0, 10);
+  return new Date().toISOString().slice(0, 10);
 }
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
-
 function Spinner() {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 160, color: '#64748b', fontSize: 14 }}>
-      Loading...
-    </div>
-  );
+  return <div className="rp-state">Loading report...</div>;
 }
 
 function NoData() {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 160, color: '#475569', fontSize: 13 }}>
-      No data available
-    </div>
-  );
+  return <div className="rp-state muted">No data available</div>;
 }
 
-function DoughnutWithLegend({ data, options, legend }) {
-  return (
-    <div className="rp-doughnut-wrap">
-      <div className="rp-doughnut-chart" style={{ width: 160, height: 160 }}>
-        <Doughnut data={data} options={options} />
-      </div>
-      <div className="rp-doughnut-legend">
-        {legend.map(item => (
-          <div key={item.label} className="rp-legend-item">
-            <div className="rp-legend-dot" style={{ background: item.color }} />
-            <span className="rp-legend-label">{item.label}</span>
-            <span className="rp-legend-value">{item.value}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
+function formatMoney(value) {
+  const amount = Number(value || 0);
+  if (amount >= 1000000) return `THB ${(amount / 1000000).toFixed(2)}M`;
+  return `THB ${amount.toLocaleString()}`;
 }
 
-function SeatHeatmap({ heatmapData }) {
-  if (!heatmapData || !heatmapData.rows || heatmapData.data.every(r => r.every(v => v === 0))) {
-    return <NoData />;
-  }
-  const { rows, cols, data } = heatmapData;
-  const maxVal = Math.max(...data.flat(), 1);
+function datasetEntries(datasets = {}) {
+  return Object.entries(datasets).map(([label, data], index) => ({
+    label,
+    data,
+    backgroundColor: CATEGORY_COLORS[label] || LINE_COLORS[index % LINE_COLORS.length],
+    borderColor: CATEGORY_COLORS[label]?.replace('0.82', '1') || LINE_COLORS[index % LINE_COLORS.length],
+    borderRadius: 5,
+    tension: 0.38,
+    fill: false,
+    pointRadius: 3
+  }));
+}
+
+function SeatHeatmap({ data }) {
+  if (!data?.rows?.length || !data?.cols?.length) return <NoData />;
+
+  const maxValue = Math.max(...data.data.flat(), 1);
 
   return (
     <div className="rp-heatmap-wrap">
-      <div style={{ display: 'flex', marginLeft: 56, marginBottom: 4, gap: 3 }}>
-        {cols.map(c => (
-          <div key={c} className="rp-heatmap-col-label">{c}</div>
-        ))}
+      <div className="rp-heatmap-header" style={{ marginLeft: 56 }}>
+        {data.cols.map(col => <div key={col} className="rp-heatmap-col">{col}</div>)}
       </div>
-      <div className="rp-heatmap-rows">
-        {rows.map((row, ri) => (
-          <div key={row} className="rp-heatmap-row">
-            <div className="rp-heatmap-row-label">{row}</div>
-            {cols.map((col, ci) => {
-              const count = data[ri]?.[ci] ?? 0;
-              const opacity = Math.max(0.08, count / maxVal);
-              return (
-                <div
-                  key={col}
-                  className="rp-heatmap-cell"
-                  style={{ background: `rgba(99,102,241,${opacity.toFixed(2)})` }}
-                  title={`${row}${col}: ${count} booking${count !== 1 ? 's' : ''}`}
-                />
-              );
-            })}
-          </div>
-        ))}
-      </div>
-      <div className="rp-heatmap-legend">
-        <span>Low</span>
-        <div
-          className="rp-heatmap-gradient"
-          style={{ background: 'linear-gradient(to right, rgba(99,102,241,0.1), rgba(99,102,241,1))' }}
-        />
-        <span>High Popularity</span>
-      </div>
+      {data.rows.map((row, rowIndex) => (
+        <div key={row} className="rp-heatmap-row">
+          <div className="rp-heatmap-row-label">{row}</div>
+          {data.cols.map((col, colIndex) => {
+            const value = data.data[rowIndex]?.[colIndex] || 0;
+            const opacity = Math.max(0.08, value / maxValue);
+            return (
+              <div
+                key={`${row}-${col}`}
+                className="rp-heatmap-cell"
+                style={{ background: `rgba(99,102,241,${opacity.toFixed(2)})` }}
+                title={`${row}${col}: ${value}`}
+              >
+                {value || ''}
+              </div>
+            );
+          })}
+        </div>
+      ))}
     </div>
   );
 }
 
-function CancellationHeatmap({ heatmapData }) {
-  if (!heatmapData || !heatmapData.seatTypes || heatmapData.events.length === 0) {
-    return <NoData />;
-  }
-  const { seatTypes, events, data } = heatmapData;
-  const maxVal = Math.max(...data.flat(), 1);
+function FailureHeatmap({ data }) {
+  if (!data?.seatTypes?.length || !data?.events?.length) return <NoData />;
+
+  const maxValue = Math.max(...data.data.flat(), 1);
 
   return (
     <div className="rp-heatmap-wrap">
-      <div style={{ display: 'flex', marginLeft: 80, marginBottom: 4, gap: 3 }}>
-        {events.map(ev => (
-          <div key={ev} style={{ width: 90, textAlign: 'center', fontSize: 11, color: '#64748b', flexShrink: 0 }}>
-            {ev.length > 14 ? ev.slice(0, 13) + '…' : ev}
+      <div className="rp-heatmap-header" style={{ marginLeft: 88 }}>
+        {data.events.map(event => (
+          <div key={event} className="rp-failure-col" title={event}>
+            {event.length > 14 ? `${event.slice(0, 13)}...` : event}
           </div>
         ))}
       </div>
-      <div className="rp-heatmap-rows">
-        {seatTypes.map((row, ri) => (
-          <div key={row} className="rp-heatmap-row">
-            <div className="rp-heatmap-row-label" style={{ width: 76 }}>{row}</div>
-            {(data[ri] || []).map((val, ci) => {
-              const intensity = val / maxVal;
-              return (
-                <div
-                  key={ci}
-                  className="rp-heatmap-cell"
-                  style={{
-                    width: 90,
-                    background: `rgba(239,68,68,${(intensity * 0.85).toFixed(2)})`,
-                    fontSize: 12
-                  }}
-                  title={`${row} / ${events[ci]}: ${val}%`}
-                >
-                  <span className="rp-cancel-pct">{val > 0 ? `${val}%` : ''}</span>
-                </div>
-              );
-            })}
-          </div>
-        ))}
-      </div>
-      <div className="rp-heatmap-legend">
-        <span>Low</span>
-        <div
-          className="rp-heatmap-gradient"
-          style={{ background: 'linear-gradient(to right, rgba(239,68,68,0.1), rgba(239,68,68,0.9))' }}
-        />
-        <span>High Failure Rate</span>
-      </div>
+      {data.seatTypes.map((seatType, rowIndex) => (
+        <div key={seatType} className="rp-heatmap-row">
+          <div className="rp-heatmap-row-label wide">{seatType}</div>
+          {data.events.map((event, colIndex) => {
+            const value = data.data[rowIndex]?.[colIndex] || 0;
+            const opacity = Math.max(0.08, value / maxValue);
+            return (
+              <div
+                key={`${seatType}-${event}`}
+                className="rp-heatmap-cell wide"
+                style={{ background: `rgba(239,68,68,${opacity.toFixed(2)})` }}
+                title={`${seatType} / ${event}: ${value}%`}
+              >
+                {value ? `${value}%` : ''}
+              </div>
+            );
+          })}
+        </div>
+      ))}
     </div>
   );
 }
 
-// ─── Reports page ─────────────────────────────────────────────────────────────
+function buildChart(report, data) {
+  if (!data) return null;
+
+  if (report.id === 'revenue-by-category' || report.id === 'venue-utilization' || report.id === 'peak-showtime-hours') {
+    return {
+      chartData: {
+        labels: data.labels,
+        datasets: datasetEntries(data.datasets)
+      },
+      options: CHART_DEFAULTS,
+      Component: Bar
+    };
+  }
+
+  if (report.id === 'user-growth') {
+    return {
+      chartData: {
+        labels: data.labels,
+        datasets: [{
+          label: 'New Users',
+          data: data.data,
+          borderColor: '#6366f1',
+          backgroundColor: 'rgba(99,102,241,0.14)',
+          fill: true,
+          tension: 0.4,
+          pointRadius: 4
+        }]
+      },
+      options: CHART_DEFAULTS,
+      Component: Line
+    };
+  }
+
+  if (report.id === 'revenue-by-venue' || report.id === 'interest-by-category') {
+    return {
+      chartData: {
+        labels: data.labels,
+        datasets: datasetEntries(data.datasets).map((dataset, index) => ({
+          ...dataset,
+          backgroundColor: 'transparent',
+          borderColor: LINE_COLORS[index % LINE_COLORS.length],
+          fill: report.id === 'interest-by-category'
+        }))
+      },
+      options: CHART_DEFAULTS,
+      Component: Line
+    };
+  }
+
+  if (report.id === 'bookings-by-hour') {
+    return {
+      chartData: {
+        labels: data.labels,
+        datasets: [{
+          label: 'Bookings',
+          data: data.data,
+          backgroundColor: 'rgba(99,102,241,0.82)',
+          borderRadius: 5
+        }]
+      },
+      options: { ...CHART_DEFAULTS, plugins: { ...CHART_DEFAULTS.plugins, legend: { display: false } } },
+      Component: Bar
+    };
+  }
+
+  if (report.id === 'booking-vs-capacity') {
+    return {
+      chartData: {
+        labels: data.map(item => item.label),
+        datasets: [
+          { label: 'Capacity', data: data.map(item => item.capacity), backgroundColor: 'rgba(100,116,139,0.58)', borderRadius: 5 },
+          { label: 'Sold', data: data.map(item => item.sold), backgroundColor: 'rgba(99,102,241,0.82)', borderRadius: 5 }
+        ]
+      },
+      options: { ...CHART_DEFAULTS, indexAxis: 'y' },
+      Component: Bar
+    };
+  }
+
+  if (report.id === 'seat-type-revenue' || report.id === 'customer-retention') {
+    return {
+      chartData: {
+        labels: data.labels,
+        datasets: [{
+          data: data.data,
+          backgroundColor: SEAT_COLORS.slice(0, data.labels?.length || 0),
+          borderWidth: 0
+        }]
+      },
+      options: DOUGHNUT_OPTIONS,
+      Component: Doughnut
+    };
+  }
+
+  return null;
+}
 
 function Reports() {
+  const { reportId } = useParams();
   const [startDate, setStartDate] = useState(getDefaultStartDate);
-  const [endDate, setEndDate]     = useState(getDefaultEndDate);
-  const [reportData, setReportData] = useState(null);
-  const [loading, setLoading]       = useState(true);
+  const [endDate, setEndDate] = useState(getDefaultEndDate);
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const [selectedVenueId, setSelectedVenueId] = useState('all');
+  const [venues, setVenues] = useState([]);
+  const [reportData, setReportData] = useState(null);
+  const [kpi, setKpi] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  const dateRangeLabel = `${startDate} → ${endDate}`;
+  const selectedReport = getReportById(reportId);
+  const isKnownReport = REPORTS.some(report => report.id === reportId);
+  const hasDateFilter = selectedReport.filters.includes('date');
+  const hasCategoryFilter = selectedReport.filters.includes('category');
+  const hasVenueFilter = selectedReport.filters.includes('venue');
+  const chart = useMemo(() => buildChart(selectedReport, reportData), [selectedReport, reportData]);
+  const ChartComponent = chart?.Component;
+  const dateRangeLabel = hasDateFilter ? `${startDate} to ${endDate}` : 'Full historical range';
+  const categoryLabel = hasCategoryFilter
+    ? selectedCategory === 'all' ? 'all categories' : selectedCategory
+    : 'all categories';
+  const selectedVenue = venues.find(venue => String(venue.id) === String(selectedVenueId));
+  const venueLabel = hasVenueFilter
+    ? selectedVenueId === 'all' ? 'all venues' : selectedVenue?.name || 'selected venue'
+    : 'all venues';
+  const filterFieldCount = (hasCategoryFilter ? 1 : 0) + (hasDateFilter ? 2 : 0) + (hasVenueFilter ? 1 : 0);
 
   useEffect(() => {
-    setLoading(true);
-    const token   = localStorage.getItem('adminToken');
+    if (!hasVenueFilter) return;
+
+    const token = localStorage.getItem('adminToken');
+    axios.get(`${API_URL}/admin/venues`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(response => {
+        setVenues(response.data);
+        if (selectedReport.requireVenue && selectedVenueId === 'all' && response.data[0]) {
+          setSelectedVenueId(String(response.data[0].id));
+        }
+      })
+      .catch(err => {
+        console.error('Venue filter fetch error:', err);
+        setVenues([]);
+      });
+  }, [hasVenueFilter, selectedReport.requireVenue, selectedVenueId]);
+
+  useEffect(() => {
+    const token = localStorage.getItem('adminToken');
     const headers = { Authorization: `Bearer ${token}` };
-    const params  = { startDate, endDate, category: selectedCategory };
+    const params = {};
+    if (hasDateFilter) {
+      params.startDate = startDate;
+      params.endDate = endDate;
+    }
+    if (hasCategoryFilter) {
+      params.category = selectedCategory;
+    }
+    if (hasVenueFilter) {
+      params.venueId = selectedVenueId;
+    }
+
+    setLoading(true);
+    setError('');
+    setReportData(null);
 
     Promise.all([
-      axios.get(`${API_URL}/admin/reports/kpi`,                  { headers, params }),  // [0]  kpi
-      axios.get(`${API_URL}/admin/reports/revenue-by-category`,  { headers, params }),  // [1]  r1
-      axios.get(`${API_URL}/admin/reports/seat-heatmap`,         { headers, params }),  // [2]  r2 (heatmap)
-      axios.get(`${API_URL}/admin/reports/user-growth`,          { headers, params }),  // [3]  r3
-      axios.get(`${API_URL}/admin/reports/revenue-by-venue`,     { headers, params }),  // [4]  r4
-      axios.get(`${API_URL}/admin/reports/bookings-by-hour`,     { headers, params }),  // [5]  r5
-      axios.get(`${API_URL}/admin/reports/booking-vs-capacity`,  { headers, params }),  // [6]  r6
-      axios.get(`${API_URL}/admin/reports/venue-utilization`,    { headers, params }),  // [7]  r7
-      axios.get(`${API_URL}/admin/reports/seat-type-revenue`,    { headers, params }),  // [8]  r8
-      axios.get(`${API_URL}/admin/reports/customer-retention`,   { headers, params }),  // [9]  r9
-      axios.get(`${API_URL}/admin/reports/interest-by-category`, { headers, params }),  // [10] r10
-      axios.get(`${API_URL}/admin/reports/peak-showtime-hours`,  { headers, params }),  // [11] r11
-      axios.get(`${API_URL}/admin/reports/cancellation-heatmap`, { headers, params }),  // [12] r12
+      axios.get(`${API_URL}/admin/reports/kpi`, { headers, params }),
+      axios.get(`${API_URL}/admin/reports/${selectedReport.endpoint}`, { headers, params })
     ])
-    .then(([kpiRes, r1Res, r2Res, r3Res, r4Res, r5Res, r6Res, r7Res, r8Res, r9Res, r10Res, r11Res, r12Res]) => {
-      setReportData({
-        kpi: kpiRes.data,
-        r1:  r1Res.data,
-        r2:  r2Res.data,
-        r3:  r3Res.data,
-        r4:  r4Res.data,
-        r5:  r5Res.data,
-        r6:  r6Res.data,
-        r7:  r7Res.data,
-        r8:  r8Res.data,
-        r9:  r9Res.data,
-        r10: r10Res.data,
-        r11: r11Res.data,
-        r12: r12Res.data,
-      });
-    })
-    .catch(err => {
-      console.error('Reports fetch error:', err);
-    })
-    .finally(() => {
-      setLoading(false);
-    });
-  }, [startDate, endDate, selectedCategory]);
-
-  // ── Build chart data objects from API response ────────────────────────────
-
-  // Report 1 — Revenue by Category (Grouped Bar)
-  const r1ChartData = reportData?.r1 ? {
-    labels: reportData.r1.labels,
-    datasets: [
-      { label: 'Concert', data: reportData.r1.datasets.Concert || [], backgroundColor: 'rgba(168,85,247,0.8)', borderRadius: 4 },
-      { label: 'Movie',   data: reportData.r1.datasets.Movie   || [], backgroundColor: 'rgba(59,130,246,0.8)',  borderRadius: 4 },
-      { label: 'Seminar', data: reportData.r1.datasets.Seminar || [], backgroundColor: 'rgba(45,212,191,0.8)',  borderRadius: 4 },
-    ]
-  } : null;
-
-  // Report 3 — User Growth (Line)
-  const r3ChartData = reportData?.r3 ? {
-    labels: reportData.r3.labels,
-    datasets: [{
-      label:                'New Users',
-      data:                 reportData.r3.data,
-      borderColor:          '#6366f1',
-      backgroundColor:      'rgba(99,102,241,0.15)',
-      fill:                 true,
-      tension:              0.4,
-      pointBackgroundColor: '#6366f1',
-      pointRadius:          4
-    }]
-  } : null;
-
-  // Report 4 — Revenue by Venue (Multi-line)
-  const VENUE_COLORS = {
-    'Impact Arena':      '#6366f1',
-    'SF Cinema Paragon': '#22c55e',
-    'BITEC Bangkok':     '#f59e0b',
-  };
-  const r4ChartData = reportData?.r4 ? {
-    labels:   reportData.r4.labels,
-    datasets: Object.entries(reportData.r4.datasets).map(([name, data]) => ({
-      label:           name,
-      data,
-      borderColor:     VENUE_COLORS[name] || '#94a3b8',
-      backgroundColor: 'transparent',
-      tension:         0.4,
-      pointRadius:     3
-    }))
-  } : null;
-
-  // Report 5 — Bookings by Hour (Bar) — filter to hours with data
-  const r5ChartData = reportData?.r5 ? (() => {
-    // Only show hours 0-23 that have at least 1 booking, or always show 0-23
-    const labels = reportData.r5.labels;
-    const data   = reportData.r5.data;
-    return {
-      labels,
-      datasets: [{
-        label:           'Bookings',
-        data,
-        backgroundColor: data.map((_, i) => {
-          const h = parseInt(labels[i]);
-          return h >= 14 ? 'rgba(99,102,241,0.85)' : 'rgba(99,102,241,0.4)';
-        }),
-        borderRadius: 5
-      }]
-    };
-  })() : null;
-
-  // Report 6 — Booking vs Capacity (Horizontal Grouped Bar)
-  const r6ChartData = reportData?.r6?.length > 0 ? {
-    labels:   reportData.r6.map(d => d.label),
-    datasets: [
-      { label: 'Capacity', data: reportData.r6.map(d => d.capacity), backgroundColor: 'rgba(100,116,139,0.6)', borderRadius: 4 },
-      { label: 'Sold',     data: reportData.r6.map(d => d.sold),     backgroundColor: 'rgba(99,102,241,0.85)', borderRadius: 4 },
-    ]
-  } : null;
-  const r6Options = {
-    ...CHART_DEFAULTS,
-    indexAxis: 'y',
-    scales: {
-      x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#64748b', font: { family: 'DM Sans', size: 11 } } },
-      y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#64748b', font: { family: 'DM Sans', size: 11 } } }
-    }
-  };
-
-  // Report 7 — Venue Utilization (Grouped Bar)
-  const r7ChartData = reportData?.r7 ? {
-    labels:   reportData.r7.labels,
-    datasets: [
-      { label: 'Concert', data: reportData.r7.datasets.Concert || [], backgroundColor: 'rgba(168,85,247,0.8)', borderRadius: 4 },
-      { label: 'Movie',   data: reportData.r7.datasets.Movie   || [], backgroundColor: 'rgba(59,130,246,0.8)', borderRadius: 4 },
-      { label: 'Seminar', data: reportData.r7.datasets.Seminar || [], backgroundColor: 'rgba(20,184,166,0.8)', borderRadius: 4 },
-    ]
-  } : null;
-
-  // Report 8 — Seat Type Revenue (Doughnut)
-  const SEAT_COLORS = ['rgba(168,85,247,0.85)', 'rgba(99,102,241,0.85)', 'rgba(20,184,166,0.85)'];
-  const SEAT_DOT_COLORS = ['#a855f7', '#6366f1', '#14b8a6'];
-  const r8ChartData = reportData?.r8?.labels?.length > 0 ? {
-    labels: reportData.r8.labels,
-    datasets: [{
-      data:            reportData.r8.data,
-      backgroundColor: SEAT_COLORS.slice(0, reportData.r8.labels.length),
-      borderWidth:     0
-    }]
-  } : null;
-  const r8Legend = reportData?.r8?.labels?.length > 0
-    ? reportData.r8.labels.map((label, i) => {
-        const total = reportData.r8.total || 1;
-        const pct   = total > 0 ? Math.round((reportData.r8.data[i] / total) * 100) : 0;
-        return { label, value: `${pct}%`, color: SEAT_DOT_COLORS[i] || '#94a3b8' };
+      .then(([kpiResponse, reportResponse]) => {
+        setKpi(kpiResponse.data);
+        setReportData(reportResponse.data);
       })
-    : [];
+      .catch(err => {
+        console.error('Report fetch error:', err);
+        setError(err.response?.data?.error || 'Failed to load report');
+        setReportData(null);
+      })
+      .finally(() => setLoading(false));
+  }, [startDate, endDate, selectedCategory, selectedVenueId, selectedReport.endpoint, hasDateFilter, hasCategoryFilter, hasVenueFilter]);
 
-  // Report 9 — Customer Retention (Doughnut)
-  const r9ChartData = reportData?.r9?.data?.length > 0 ? {
-    labels: reportData.r9.labels,
-    datasets: [{
-      data:            reportData.r9.data,
-      backgroundColor: ['rgba(99,102,241,0.85)', 'rgba(100,116,139,0.5)'],
-      borderWidth:     0
-    }]
-  } : null;
-  const r9Total  = reportData?.r9 ? (reportData.r9.data[0] + reportData.r9.data[1]) || 1 : 1;
-  const r9Legend = reportData?.r9?.data?.length > 0
-    ? [
-        { label: 'Repeat Customers',   value: `${Math.round((reportData.r9.data[0] / r9Total) * 100)}%`, color: '#6366f1' },
-        { label: 'One-time Customers', value: `${Math.round((reportData.r9.data[1] / r9Total) * 100)}%`, color: '#64748b' },
-      ]
-    : [];
-
-  // Report 10 — Interest by Category (Area)
-  const r10ChartData = reportData?.r10 ? {
-    labels:   reportData.r10.labels,
-    datasets: [
-      { label: 'Concert', data: reportData.r10.datasets.Concert || [], borderColor: '#a855f7', backgroundColor: 'rgba(168,85,247,0.12)', fill: true, tension: 0.4, pointRadius: 3 },
-      { label: 'Movie',   data: reportData.r10.datasets.Movie   || [], borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,0.08)',  fill: true, tension: 0.4, pointRadius: 3 },
-      { label: 'Seminar', data: reportData.r10.datasets.Seminar || [], borderColor: '#14b8a6', backgroundColor: 'rgba(20,184,166,0.06)',  fill: true, tension: 0.4, pointRadius: 3 },
-    ]
-  } : null;
-
-  // Report 11 — Peak Showtime Hours (Grouped Bar)
-  const r11ChartData = reportData?.r11 ? {
-    labels:   reportData.r11.labels,
-    datasets: [
-      { label: 'Concert', data: reportData.r11.datasets.Concert || [], backgroundColor: 'rgba(168,85,247,0.8)', borderRadius: 4 },
-      { label: 'Movie',   data: reportData.r11.datasets.Movie   || [], backgroundColor: 'rgba(59,130,246,0.8)', borderRadius: 4 },
-      { label: 'Seminar', data: reportData.r11.datasets.Seminar || [], backgroundColor: 'rgba(20,184,166,0.8)', borderRadius: 4 },
-    ]
-  } : null;
-
-  // ── KPI values ────────────────────────────────────────────────────────────
-  const kpi = reportData?.kpi;
-  const totalRevenueDisplay = kpi
-    ? kpi.totalRevenue >= 1_000_000
-      ? `฿${(kpi.totalRevenue / 1_000_000).toFixed(2)}M`
-      : `฿${kpi.totalRevenue.toLocaleString()}`
-    : '—';
-  const totalBookingsDisplay = kpi
-    ? kpi.totalBookings.toLocaleString()
-    : '—';
-
-  // Category analysis from KPI — categories always contains all categories
-  const categories = kpi?.categories || [];
-  const selectedCatData = selectedCategory === 'all'
-    ? {
-        revenue:  categories.reduce((sum, c) => sum + c.revenue, 0),
-        bookings: categories.reduce((sum, c) => sum + c.bookings, 0),
-        tickets:  categories.reduce((sum, c) => sum + c.tickets, 0)
-      }
-    : categories.find(c => c.name === selectedCategory) || { revenue: 0, bookings: 0, tickets: 0 };
-
-  const catRevenueDisplay = selectedCatData.revenue >= 1_000_000
-    ? `฿${(selectedCatData.revenue / 1_000_000).toFixed(2)}M`
-    : `฿${selectedCatData.revenue.toLocaleString()}`;
+  if (!isKnownReport) {
+    return <Navigate to="/admin/reports/revenue-by-category" replace />;
+  }
 
   return (
     <div className="rp-root">
       <div className="rp-header">
         <div>
           <div className="rp-title">Reports &amp; Analytics</div>
-          <div className="rp-subtitle">12 reports · {dateRangeLabel}{selectedCategory !== 'all' ? ` · ${selectedCategory}` : ''}</div>
-        </div>
-        <div className="rp-date-range">
-          <label className="rp-date-label">
-            From
-            <input
-              type="date"
-              className="rp-date-input"
-              value={startDate}
-              onChange={e => setStartDate(e.target.value)}
-            />
-          </label>
-          <label className="rp-date-label">
-            To
-            <input
-              type="date"
-              className="rp-date-input"
-              value={endDate}
-              onChange={e => setEndDate(e.target.value)}
-            />
-          </label>
+          <div className="rp-subtitle">Report {selectedReport.no} of 12 · {selectedReport.title}</div>
         </div>
       </div>
 
-      {/* KPI Cards */}
+      {(hasDateFilter || hasCategoryFilter || hasVenueFilter) && (
+        <div className={`rp-filter-panel cols-${filterFieldCount}`}>
+          {hasCategoryFilter && (
+            <label className="rp-filter-field">
+              Category
+              <select value={selectedCategory} onChange={e => setSelectedCategory(e.target.value)}>
+                <option value="all">All Categories</option>
+                <option value="Concert">Concert</option>
+                <option value="Movie">Movie</option>
+                <option value="Seminar">Seminar</option>
+              </select>
+            </label>
+          )}
+
+          {hasDateFilter && (
+            <>
+              <label className="rp-filter-field">
+                From
+                <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />
+              </label>
+
+              <label className="rp-filter-field">
+                To
+                <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} />
+              </label>
+            </>
+          )}
+
+          {hasVenueFilter && (
+            <label className="rp-filter-field">
+              Venue
+              <select value={selectedVenueId} onChange={e => setSelectedVenueId(e.target.value)}>
+                {!selectedReport.requireVenue && <option value="all">All Venues</option>}
+                {venues.map(venue => (
+                  <option key={venue.id} value={venue.id}>{venue.name}</option>
+                ))}
+              </select>
+            </label>
+          )}
+        </div>
+      )}
+
       <div className="rp-kpi-row">
         <div className="rp-kpi">
-          <div className="rp-kpi-label">Total Revenue</div>
-          <div className="rp-kpi-value">
-            {loading ? '...' : totalRevenueDisplay}
-          </div>
-          <div className="rp-kpi-sub">{dateRangeLabel}</div>
+          <span className="rp-kpi-label">Total Revenue</span>
+          <strong>{loading ? '...' : formatMoney(kpi?.totalRevenue)}</strong>
+          <span>{dateRangeLabel}</span>
         </div>
         <div className="rp-kpi">
-          <div className="rp-kpi-label">Total Bookings</div>
-          <div className="rp-kpi-value">
-            {loading ? '...' : totalBookingsDisplay}
-          </div>
-          <div className="rp-kpi-sub">{dateRangeLabel} · Tickets</div>
+          <span className="rp-kpi-label">Total Bookings</span>
+          <strong>{loading ? '...' : Number(kpi?.totalBookings || 0).toLocaleString()}</strong>
+          <span>{categoryLabel}</span>
         </div>
-        <div className="rp-kpi rp-kpi-category">
-          <div className="rp-kpi-label">
-            Category Analysis
-            <select
-              className="rp-cat-select"
-              value={selectedCategory}
-              onChange={e => setSelectedCategory(e.target.value)}
-            >
-              <option value="all">All Categories</option>
-              <option value="Concert">Concert</option>
-              <option value="Movie">Movie</option>
-              <option value="Seminar">Seminar</option>
-            </select>
+        <div className="rp-kpi">
+          <span className="rp-kpi-label">Top Category</span>
+          <strong>{loading ? '...' : kpi?.topCategory || '-'}</strong>
+          <span>Based on revenue</span>
+        </div>
+      </div>
+
+      <section className="rp-report-card">
+        <div className="rp-report-header">
+          <div>
+            <div className="rp-report-eyebrow">Report {selectedReport.no}</div>
+            <h2>{selectedReport.title}</h2>
+            <p>{selectedReport.description} Filter: {dateRangeLabel}, {categoryLabel}, {venueLabel}.</p>
           </div>
+        </div>
+
+        {error && <div className="rp-error">{error}</div>}
+
+        <div className={`rp-visual ${selectedReport.chart.includes('Heatmap') ? 'heatmap' : ''}`}>
           {loading ? (
-            <div className="rp-kpi-value">...</div>
+            <Spinner />
+          ) : selectedReport.chart === 'seatHeatmap' ? (
+            <SeatHeatmap data={reportData} />
+          ) : selectedReport.chart === 'failureHeatmap' ? (
+            <FailureHeatmap data={reportData} />
+          ) : ChartComponent ? (
+            <ChartComponent data={chart.chartData} options={chart.options} />
           ) : (
-            <div className="rp-cat-stats">
-              <div className="rp-cat-stat">
-                <span className="rp-cat-stat-value">{catRevenueDisplay}</span>
-                <span className="rp-cat-stat-label">Revenue</span>
-              </div>
-              <div className="rp-cat-stat">
-                <span className="rp-cat-stat-value">{selectedCatData.bookings.toLocaleString()}</span>
-                <span className="rp-cat-stat-label">Bookings</span>
-              </div>
-              <div className="rp-cat-stat">
-                <span className="rp-cat-stat-value">{selectedCatData.tickets.toLocaleString()}</span>
-                <span className="rp-cat-stat-label">Tickets</span>
-              </div>
-            </div>
+            <NoData />
           )}
-          <div className="rp-kpi-sub">{dateRangeLabel} · {selectedCategory === 'all' ? 'All categories' : selectedCategory}</div>
         </div>
-      </div>
-
-      {/* 2-column chart grid */}
-      <div className="rp-grid">
-
-        {/* Report 1 — Revenue by Category */}
-        <div className="rp-chart-card">
-          <div className="rp-chart-title">Report 1 — Revenue by Category</div>
-          <div className="rp-chart-subtitle">Monthly revenue (THB) · {dateRangeLabel}</div>
-          <div className="rp-chart-inner">
-            {loading ? <Spinner /> : r1ChartData ? <Bar data={r1ChartData} options={CHART_DEFAULTS} /> : <NoData />}
-          </div>
-        </div>
-
-        {/* Report 3 — Platform User Growth */}
-        <div className="rp-chart-card">
-          <div className="rp-chart-title">Report 3 — Platform User Growth</div>
-          <div className="rp-chart-subtitle">Monthly new registrations · {dateRangeLabel}</div>
-          <div className="rp-chart-inner">
-            {loading ? <Spinner /> : r3ChartData ? <Line data={r3ChartData} options={CHART_DEFAULTS} /> : <NoData />}
-          </div>
-        </div>
-
-        {/* Report 4 — Revenue by Venue */}
-        <div className="rp-chart-card">
-          <div className="rp-chart-title">Report 4 — Revenue by Venue</div>
-          <div className="rp-chart-subtitle">Monthly venue revenue (THB) · {dateRangeLabel}</div>
-          <div className="rp-chart-inner">
-            {loading ? <Spinner /> : r4ChartData ? <Line data={r4ChartData} options={CHART_DEFAULTS} /> : <NoData />}
-          </div>
-        </div>
-
-        {/* Report 5 — Bookings by Hour */}
-        <div className="rp-chart-card">
-          <div className="rp-chart-title">Report 5 — Bookings by Hour</div>
-          <div className="rp-chart-subtitle">Total payments per hour of day · {dateRangeLabel}</div>
-          <div className="rp-chart-inner">
-            {loading ? <Spinner /> : r5ChartData ? (
-              <Bar data={r5ChartData} options={{ ...CHART_DEFAULTS, plugins: { ...CHART_DEFAULTS.plugins, legend: { display: false } } }} />
-            ) : <NoData />}
-          </div>
-        </div>
-
-        {/* Report 6 — Booking vs Capacity */}
-        <div className="rp-chart-card">
-          <div className="rp-chart-title">Report 6 — Booking vs Capacity</div>
-          <div className="rp-chart-subtitle">Capacity vs sold tickets per showtime · {dateRangeLabel}</div>
-          <div className="rp-chart-inner">
-            {loading ? <Spinner /> : r6ChartData ? <Bar data={r6ChartData} options={r6Options} /> : <NoData />}
-          </div>
-        </div>
-
-        {/* Report 7 — Venue Utilization by Category */}
-        <div className="rp-chart-card">
-          <div className="rp-chart-title">Report 7 — Venue Utilization by Category</div>
-          <div className="rp-chart-subtitle">Number of showtimes per venue × category · {dateRangeLabel}</div>
-          <div className="rp-chart-inner">
-            {loading ? <Spinner /> : r7ChartData ? <Bar data={r7ChartData} options={CHART_DEFAULTS} /> : <NoData />}
-          </div>
-        </div>
-
-        {/* Report 8 — Seat Type Revenue */}
-        <div className="rp-chart-card">
-          <div className="rp-chart-title">Report 8 — Seat Type Revenue</div>
-          <div className="rp-chart-subtitle">Revenue share by seat type · {dateRangeLabel}</div>
-          <div className="rp-chart-inner" style={{ minHeight: 180 }}>
-            {loading ? <Spinner /> : r8ChartData ? (
-              <DoughnutWithLegend data={r8ChartData} options={DOUGHNUT_OPTIONS} legend={r8Legend} />
-            ) : <NoData />}
-          </div>
-        </div>
-
-        {/* Report 9 — Customer Retention */}
-        <div className="rp-chart-card">
-          <div className="rp-chart-title">Report 9 — Customer Retention</div>
-          <div className="rp-chart-subtitle">Repeat vs one-time customers · {dateRangeLabel}</div>
-          <div className="rp-chart-inner" style={{ minHeight: 180 }}>
-            {loading ? <Spinner /> : r9ChartData ? (
-              <DoughnutWithLegend data={r9ChartData} options={DOUGHNUT_OPTIONS} legend={r9Legend} />
-            ) : <NoData />}
-          </div>
-        </div>
-
-        {/* Report 10 — Customer Interest by Category */}
-        <div className="rp-chart-card">
-          <div className="rp-chart-title">Report 10 — Customer Interest by Category</div>
-          <div className="rp-chart-subtitle">Bookings trend by category · {dateRangeLabel}</div>
-          <div className="rp-chart-inner">
-            {loading ? <Spinner /> : r10ChartData ? <Line data={r10ChartData} options={CHART_DEFAULTS} /> : <NoData />}
-          </div>
-        </div>
-
-        {/* Report 11 — Peak Showtime Hours by Category */}
-        <div className="rp-chart-card">
-          <div className="rp-chart-title">Report 11 — Peak Showtime Hours by Category</div>
-          <div className="rp-chart-subtitle">Tickets sold by hour and category · {dateRangeLabel}</div>
-          <div className="rp-chart-inner">
-            {loading ? <Spinner /> : r11ChartData ? <Bar data={r11ChartData} options={CHART_DEFAULTS} /> : <NoData />}
-          </div>
-        </div>
-
-        {/* Report 2 — Seat Popularity Heatmap (full width) */}
-        <div className="rp-chart-card full-width">
-          <div className="rp-chart-title">Report 2 — Seat Popularity Heatmap</div>
-          <div className="rp-chart-subtitle">Impact Arena · seat selection frequency · {dateRangeLabel}</div>
-          {loading ? <Spinner /> : <SeatHeatmap heatmapData={reportData?.r2} />}
-        </div>
-
-        {/* Report 12 — Failed Payment Rate Heatmap (full width) */}
-        <div className="rp-chart-card full-width">
-          <div className="rp-chart-title">Report 12 — Failed Payment Rate Heatmap</div>
-          <div className="rp-chart-subtitle">% of booking attempts that failed · seat type &times; event · {dateRangeLabel}</div>
-          {loading ? <Spinner /> : <CancellationHeatmap heatmapData={reportData?.r12} />}
-        </div>
-
-      </div>
+      </section>
     </div>
   );
 }

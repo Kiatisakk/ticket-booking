@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAdminAuth } from '../../../context/AdminAuthContext';
 import './EventManagement.css';
@@ -22,7 +22,13 @@ function getCategoryClass(cat) {
 
 function EventManagement() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { adminToken } = useAdminAuth();
+  const isStaffMode = location.pathname.startsWith('/staff');
+  const authToken = isStaffMode ? localStorage.getItem('staffToken') : adminToken;
+  const basePath = isStaffMode ? '/staff/events' : '/admin/events';
+  const addPath = isStaffMode ? '/staff/events/create' : '/admin/events/add';
+  const apiScope = isStaffMode ? 'staff' : 'admin';
 
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -39,8 +45,8 @@ function EventManagement() {
       if (search) params.search = search;
       if (categoryFilter) params.category = categoryFilter;
 
-      const res = await axios.get(`${API_URL}/admin/events`, {
-        headers: { Authorization: `Bearer ${adminToken}` },
+      const res = await axios.get(`${API_URL}/${apiScope}/events`, {
+        headers: { Authorization: `Bearer ${authToken}` },
         params
       });
       setEvents(res.data);
@@ -49,7 +55,7 @@ function EventManagement() {
     } finally {
       setLoading(false);
     }
-  }, [adminToken, search, categoryFilter]);
+  }, [apiScope, authToken, search, categoryFilter]);
 
   useEffect(() => {
     fetchEvents();
@@ -59,8 +65,8 @@ function EventManagement() {
     if (!deleteTarget) return;
     setDeleting(true);
     try {
-      await axios.delete(`${API_URL}/admin/events/${deleteTarget.id}`, {
-        headers: { Authorization: `Bearer ${adminToken}` }
+      await axios.delete(`${API_URL}/${apiScope}/events/${deleteTarget.id}`, {
+        headers: { Authorization: `Bearer ${authToken}` }
       });
       setEvents(prev => prev.filter(e => e.id !== deleteTarget.id));
     } catch (error) {
@@ -123,7 +129,7 @@ function EventManagement() {
               </td>
               <td>
                 <div className="em-actions">
-                  <button className="em-edit-btn" onClick={() => navigate(`/admin/events/${event.id}/edit`)}>
+                  <button className="em-edit-btn" onClick={() => navigate(`${basePath}/${event.id}/edit`)}>
                     Edit
                   </button>
                   {event.hasBookings ? (
@@ -151,7 +157,7 @@ function EventManagement() {
           <div className="em-title">Event Management</div>
           <div className="em-title-sub">{events.length} total events · {upcomingCount} upcoming · {pastCount} past</div>
         </div>
-        <button className="em-add-btn" onClick={() => navigate('/admin/events/add')}>
+        <button className="em-add-btn" onClick={() => navigate(addPath)}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
           </svg>

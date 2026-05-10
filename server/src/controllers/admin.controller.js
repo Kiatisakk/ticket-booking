@@ -49,7 +49,8 @@ exports.adminLogin = async (req, res) => {
         id: user.UserID,
         fullName: user.FullName,
         email: user.Email,
-        role: user.Role.RoleName
+        role: user.Role.RoleName,
+        roleId: user.RoleID
       }
     });
   } catch (error) {
@@ -104,7 +105,8 @@ exports.staffLogin = async (req, res) => {
         id: user.UserID,
         fullName: user.FullName,
         email: user.Email,
-        role: user.Role.RoleName
+        role: user.Role.RoleName,
+        roleId: user.RoleID
       }
     });
   } catch (error) {
@@ -893,6 +895,62 @@ exports.getAdminVenues = async (req, res) => {
   }
 };
 
+exports.getSystemSettings = async (req, res) => {
+  try {
+    const [categories, venues, paymentMethods] = await Promise.all([
+      prisma.eventCategory.findMany({ orderBy: { CategoryID: 'asc' } }),
+      prisma.venue.findMany({ orderBy: { VenueID: 'asc' } }),
+      prisma.paymentMethod.findMany({ orderBy: { MethodID: 'asc' } })
+    ]);
+
+    res.json({
+      categories: categories.map(c => ({
+        id: c.CategoryID,
+        name: c.CategoryName,
+        createdAt: c.CreatedAt
+      })),
+      venues: venues.map(v => ({
+        id: v.VenueID,
+        name: v.VenueName,
+        location: v.Location
+      })),
+      paymentMethods: paymentMethods.map(m => ({
+        id: m.MethodID,
+        name: m.MethodName,
+        isActive: m.IsActive
+      }))
+    });
+  } catch (error) {
+    console.error('Get system settings error:', error);
+    res.status(500).json({ error: 'Failed to fetch system settings' });
+  }
+};
+
+exports.updatePaymentMethod = async (req, res) => {
+  try {
+    const methodId = parseInt(req.params.id);
+    const { isActive } = req.body;
+
+    if (typeof isActive !== 'boolean') {
+      return res.status(400).json({ error: 'isActive must be a boolean' });
+    }
+
+    const method = await prisma.paymentMethod.update({
+      where: { MethodID: methodId },
+      data: { IsActive: isActive }
+    });
+
+    res.json({
+      id: method.MethodID,
+      name: method.MethodName,
+      isActive: method.IsActive
+    });
+  } catch (error) {
+    console.error('Update payment method error:', error);
+    res.status(500).json({ error: 'Failed to update payment method' });
+  }
+};
+
 // ─── Report Helpers ───────────────────────────────────────────────────────────
 
 const MONTHS_LABEL = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -942,9 +1000,10 @@ function monthLabels(months) {
 
 exports.getReportKpi = async (req, res) => {
   try {
-    const { category } = req.query;
+    const { category, venueId } = req.query;
     const { start, end } = getDateRange(req.query);
     const catFilter = category && category !== 'all' ? category : null;
+    const venueFilter = venueId && venueId !== 'all' ? parseInt(venueId) : null;
 
     const revenueResult = await prisma.$queryRaw`
       SELECT COALESCE(SUM(sub.amount), 0)::float8 as revenue
@@ -960,6 +1019,7 @@ exports.getReportKpi = async (req, res) => {
           AND p."PaidAt" >= ${start}
           AND p."PaidAt" <  ${end}
           AND (${catFilter}::text IS NULL OR ec."CategoryName" = ${catFilter})
+          AND (${venueFilter}::int IS NULL OR s."VenueID" = ${venueFilter})
       ) sub
     `;
     const totalRevenue = Number(revenueResult[0]?.revenue ?? 0);
@@ -975,6 +1035,7 @@ exports.getReportKpi = async (req, res) => {
         AND b."BookingTimestamp" >= ${start}
         AND b."BookingTimestamp" <  ${end}
         AND (${catFilter}::text IS NULL OR ec."CategoryName" = ${catFilter})
+        AND (${venueFilter}::int IS NULL OR s."VenueID" = ${venueFilter})
     `;
     const totalBookings = Number(bookingsResult[0]?.count ?? 0);
 
@@ -994,6 +1055,8 @@ exports.getReportKpi = async (req, res) => {
       WHERE p."StatusID" = 2
         AND p."PaidAt" >= ${start}
         AND p."PaidAt" <  ${end}
+        AND (${catFilter}::text IS NULL OR ec."CategoryName" = ${catFilter})
+        AND (${venueFilter}::int IS NULL OR s."VenueID" = ${venueFilter})
       GROUP BY ec."CategoryName"
       ORDER BY revenue DESC
     `;
@@ -1182,12 +1245,17 @@ exports.getBookingsByHour = async (req, res) => {
 
 exports.getBookingVsCapacity = async (req, res) => {
   try {
-    const { category } = req.query;
+    const { category, venueId } = req.query;
+    const { start, end } = getDateRange(req.query);
     const catFilter = category && category !== 'all' ? category : null;
+    const venueFilter = venueId && venueId !== 'all' ? parseInt(venueId) : null;
 
-    const stWhere = { StartDateTime: { lt: new Date() } };
+    const stWhere = { StartDateTime: { gte: start, lt: end } };
     if (catFilter) {
       stWhere.Event = { Category: { CategoryName: catFilter } };
+    }
+    if (venueFilter) {
+      stWhere.VenueID = venueFilter;
     }
 
     const showtimes = await prisma.showtime.findMany({
@@ -1239,6 +1307,7 @@ exports.getBookingVsCapacity = async (req, res) => {
 exports.getVenueUtilization = async (req, res) => {
   try {
     const { category } = req.query;
+    const { start, end } = getDateRange(req.query);
     const catFilter = category && category !== 'all' ? category : null;
 
     const rows = await prisma.$queryRaw`
@@ -1249,7 +1318,8 @@ exports.getVenueUtilization = async (req, res) => {
       JOIN "Venues" v ON s."VenueID" = v."VenueID"
       JOIN "Events" e ON s."EventID" = e."EventID"
       JOIN "EventCategories" ec ON e."CategoryID" = ec."CategoryID"
-      WHERE s."StartDateTime" < NOW()
+      WHERE s."StartDateTime" >= ${start}
+        AND s."StartDateTime" <  ${end}
         AND (${catFilter}::text IS NULL OR ec."CategoryName" = ${catFilter})
       GROUP BY v."VenueName", ec."CategoryName"
     `;
@@ -1277,6 +1347,7 @@ exports.getVenueUtilization = async (req, res) => {
 exports.getSeatTypeRevenue = async (req, res) => {
   try {
     const { category } = req.query;
+    const { start, end } = getDateRange(req.query);
     const catFilter = category && category !== 'all' ? category : null;
 
     const rows = await prisma.$queryRaw`
@@ -1287,10 +1358,13 @@ exports.getSeatTypeRevenue = async (req, res) => {
       JOIN "Seats" seat ON bd."SeatID" = seat."SeatID"
       JOIN "SeatTypes" st ON seat."SeatTypeID" = st."SeatTypeID"
       JOIN "Bookings" b ON bd."BookingID" = b."BookingID"
+      JOIN "Payments" p ON p."BookingID" = b."BookingID"
       JOIN "Showtimes" s ON bd."ShowtimeID" = s."ShowtimeID"
       JOIN "Events" e ON s."EventID" = e."EventID"
       JOIN "EventCategories" ec ON e."CategoryID" = ec."CategoryID"
-      WHERE b."StatusID" = 2
+      WHERE p."StatusID" = 2
+        AND p."PaidAt" >= ${start}
+        AND p."PaidAt" <  ${end}
         AND (${catFilter}::text IS NULL OR ec."CategoryName" = ${catFilter})
       GROUP BY st."TypeName"
     `;
@@ -1311,6 +1385,7 @@ exports.getSeatTypeRevenue = async (req, res) => {
 exports.getCustomerRetention = async (req, res) => {
   try {
     const { category } = req.query;
+    const { start, end } = getDateRange(req.query);
     const catFilter = category && category !== 'all' ? category : null;
 
     const rows = await prisma.$queryRaw`
@@ -1325,6 +1400,8 @@ exports.getCustomerRetention = async (req, res) => {
         JOIN "Events" e ON s."EventID" = e."EventID"
         JOIN "EventCategories" ec ON e."CategoryID" = ec."CategoryID"
         WHERE b."StatusID" = 2
+          AND b."BookingTimestamp" >= ${start}
+          AND b."BookingTimestamp" <  ${end}
           AND (${catFilter}::text IS NULL OR ec."CategoryName" = ${catFilter})
         GROUP BY b."UserID"
       ) sub
@@ -1398,6 +1475,7 @@ exports.getInterestByCategory = async (req, res) => {
 exports.getPeakShowtimeHours = async (req, res) => {
   try {
     const { category } = req.query;
+    const { start, end } = getDateRange(req.query);
     const catFilter = category && category !== 'all' ? category : null;
 
     const rows = await prisma.$queryRaw`
@@ -1409,7 +1487,9 @@ exports.getPeakShowtimeHours = async (req, res) => {
       JOIN "Showtimes" s ON bd."ShowtimeID" = s."ShowtimeID"
       JOIN "Events" e ON s."EventID" = e."EventID"
       JOIN "EventCategories" ec ON e."CategoryID" = ec."CategoryID"
-      WHERE (${catFilter}::text IS NULL OR ec."CategoryName" = ${catFilter})
+      WHERE s."StartDateTime" >= ${start}
+        AND s."StartDateTime" <  ${end}
+        AND (${catFilter}::text IS NULL OR ec."CategoryName" = ${catFilter})
       GROUP BY ec."CategoryName", EXTRACT(HOUR FROM s."StartDateTime")
       ORDER BY hour
     `;
@@ -1437,27 +1517,47 @@ exports.getPeakShowtimeHours = async (req, res) => {
 
 exports.getSeatHeatmap = async (req, res) => {
   try {
-    const { category } = req.query;
+    const { category, venueId } = req.query;
+    const { start, end } = getDateRange(req.query);
     const catFilter = category && category !== 'all' ? category : null;
+    const venueFilter = venueId && venueId !== 'all' ? parseInt(venueId) : null;
+
+    const venue = venueFilter
+      ? await prisma.venue.findUnique({ where: { VenueID: venueFilter } })
+      : await prisma.venue.findFirst({ where: { VenueName: 'Impact Arena' } });
+
+    if (!venue) {
+      return res.json({ rows: [], cols: [], data: [] });
+    }
 
     const rows = await prisma.$queryRaw`
       SELECT seat."RowLabel" as rowlabel,
              seat."SeatNumber" as seatnumber,
              COUNT(bd."DetailID")::int as bookings
       FROM "BookingDetails" bd
+      JOIN "Bookings" b ON bd."BookingID" = b."BookingID"
       JOIN "Seats" seat ON bd."SeatID" = seat."SeatID"
       JOIN "Venues" v ON seat."VenueID" = v."VenueID"
       JOIN "Showtimes" s ON bd."ShowtimeID" = s."ShowtimeID"
       JOIN "Events" e ON s."EventID" = e."EventID"
       JOIN "EventCategories" ec ON e."CategoryID" = ec."CategoryID"
-      WHERE v."VenueName" = 'Impact Arena'
+      WHERE v."VenueID" = ${venue.VenueID}
+        AND b."BookingTimestamp" >= ${start}
+        AND b."BookingTimestamp" <  ${end}
         AND (${catFilter}::text IS NULL OR ec."CategoryName" = ${catFilter})
       GROUP BY seat."RowLabel", seat."SeatNumber"
       ORDER BY seat."RowLabel", seat."SeatNumber"::int
     `;
 
-    const rowLabels = ['A','B','C','D','E','F','G'];
-    const colLabels = ['1','2','3','4','5','6','7','8','9','10','11','12'];
+    const seats = await prisma.seat.findMany({
+      where: { VenueID: venue.VenueID },
+      select: { RowLabel: true, SeatNumber: true },
+      orderBy: [{ RowLabel: 'asc' }, { SeatNumber: 'asc' }]
+    });
+
+    const rowLabels = [...new Set(seats.map(seat => seat.RowLabel))].sort();
+    const colLabels = [...new Set(seats.map(seat => String(seat.SeatNumber)))]
+      .sort((a, b) => Number(a) - Number(b));
 
     const data = rowLabels.map(row =>
       colLabels.map(col => {
@@ -1487,6 +1587,7 @@ exports.getCancellationHeatmap = async (req, res) => {
     const failedStatusId = failedStatus?.StatusID ?? 3;
 
     const { category } = req.query;
+    const { start, end } = getDateRange(req.query);
     const catFilter = category && category !== 'all' ? category : null;
 
     const rows = await prisma.$queryRaw`
@@ -1503,7 +1604,8 @@ exports.getCancellationHeatmap = async (req, res) => {
       JOIN "Showtimes" s ON bd."ShowtimeID" = s."ShowtimeID"
       JOIN "Events" e ON s."EventID" = e."EventID"
       JOIN "EventCategories" ec ON e."CategoryID" = ec."CategoryID"
-      WHERE s."StartDateTime" < NOW()
+      WHERE p."CreatedAt" >= ${start}
+        AND p."CreatedAt" <  ${end}
         AND (${catFilter}::text IS NULL OR ec."CategoryName" = ${catFilter})
       GROUP BY st."TypeName", e."Title"
     `;

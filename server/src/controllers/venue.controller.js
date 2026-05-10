@@ -1,45 +1,17 @@
-const prisma = require('../config/prisma');
+const venueService = require('../services/venue.service');
+const asyncHandler = require('../utils/asyncHandler');
 
-exports.getAllVenues = async (req, res) => {
-  try {
-    const venues = await prisma.venue.findMany();
-    res.json(venues);
-  } catch (error) {
-    console.error('Get venues error:', error);
-    res.status(500).json({ error: 'Failed to fetch venues' });
-  }
-};
+exports.getAllVenues = asyncHandler(async (req, res) => {
+  const venues = await venueService.getAllVenues();
+  res.json(venues);
+});
 
-exports.getVenueById = async (req, res) => {
-  try {
-    const venue = await prisma.venue.findUnique({
-      where: { VenueID: parseInt(req.params.id) },
-      include: {
-        Seats: {
-          include: {
-            SeatType: true
-          }
-        }
-      }
-    });
+exports.getVenueById = asyncHandler(async (req, res) => {
+  const venue = await venueService.getVenueById(parseInt(req.params.id));
+  res.json(venue);
+});
 
-    if (!venue) {
-      return res.status(404).json({ error: 'Venue not found' });
-    }
-
-    res.json(venue);
-  } catch (error) {
-    console.error('Get venue error:', error);
-    res.status(500).json({ error: 'Failed to fetch venue' });
-  }
-};
-
-exports.getAllSeatTypes = async (req, res) => {
-  try {
-    const seatTypes = await prisma.seatType.findMany();
-    res.json(seatTypes);
-  } catch (error) {
-    console.error('Get seat types error:', error);
-    res.status(500).json({ error: 'Failed to fetch seat types' });
-  }
-};
+exports.getAllSeatTypes = asyncHandler(async (req, res) => {
+  const seatTypes = await venueService.getAllSeatTypes();
+  res.json(seatTypes);
+});

@@ -179,13 +179,54 @@
   margin-bottom: 20px;
 }
 
+.payment-page .payment-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 20px;
+}
+
 .payment-page .fc-title {
   font-size: 15px;
   font-weight: 700;
-  margin-bottom: 20px;
+  margin-bottom: 4px;
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.payment-page .payment-card-subtitle {
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.payment-page .gateway-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border2);
+  color: var(--muted2);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
+}
+
+.payment-page .gateway-logo-mark {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--indigo), #14b8a6);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 900;
 }
 
 .payment-page .fc-title svg {
@@ -203,28 +244,58 @@
 
 .payment-page .method-card {
   background: var(--surface2);
-  border: 2px solid var(--border);
+  border: 1px solid var(--border);
   border-radius: 12px;
-  padding: 16px 14px;
+  padding: 18px 14px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: border-color 0.15s, background 0.15s, transform 0.15s;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
+  min-height: 124px;
 }
 
 .payment-page .method-card:hover {
   border-color: var(--border2);
+  transform: translateY(-1px);
 }
 
 .payment-page .method-card.selected {
   border-color: var(--indigo);
   background: var(--indigo-dim);
+  box-shadow: 0 0 0 3px rgba(99,102,241,0.09);
 }
 
-.payment-page .method-icon {
-  font-size: 26px;
+.payment-page .method-logo {
+  min-width: 54px;
+  height: 34px;
+  padding: 0 10px;
+  border-radius: 9px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.18);
+}
+
+.payment-page .method-logo.card {
+  background: linear-gradient(135deg, #1d4ed8, #6366f1);
+}
+
+.payment-page .method-logo.promptpay {
+  background: linear-gradient(135deg, #0f766e, #14b8a6);
+}
+
+.payment-page .method-logo.wallet {
+  background: linear-gradient(135deg, #f97316, #ef4444);
+}
+
+.payment-page .method-logo.other {
+  background: linear-gradient(135deg, #475569, #64748b);
 }
 
 .payment-page .method-name {
@@ -309,12 +380,6 @@
   gap: 12px;
 }
 
-.payment-page .contact-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px;
-}
-
 /* RIGHT — ORDER SUMMARY */
 .payment-page .summary-card {
   background: var(--surface);
@@ -397,22 +462,32 @@
 
 .payment-page .btn-pay {
   width: 100%;
-  background: var(--indigo);
+  background: linear-gradient(135deg, var(--indigo), #4f46e5);
   color: #fff;
   font-family: inherit;
-  font-size: 15.5px;
+  font-size: 14.5px;
   font-weight: 700;
   border: none;
   border-radius: 12px;
-  padding: 15px;
+  padding: 14px 16px;
   cursor: pointer;
-  transition: background 0.2s, transform 0.15s;
+  transition: filter 0.2s, transform 0.15s, box-shadow 0.2s;
   box-shadow: 0 4px 20px rgba(99, 102, 241, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.payment-page .btn-pay strong {
+  font-size: 15px;
 }
 
 .payment-page .btn-pay:hover:not(:disabled) {
-  background: #4f52e0;
+  filter: brightness(1.08);
   transform: translateY(-1px);
+  box-shadow: 0 8px 26px rgba(99, 102, 241, 0.42);
 }
 
 .payment-page .btn-pay:disabled {
@@ -436,21 +511,6 @@
   gap: 4px;
 }
 
-.input-error-flash {
-  border: 2px solid #ef4444 !important;
-  background-color: rgba(239, 68, 68, 0.08) !important;
-  animation: shake 0.3s ease;
-}
-
-@keyframes shake {
-  0%   { transform: translateX(0); }
-  25%  { transform: translateX(-6px); }
-  50%  { transform: translateX(6px); }
-  75%  { transform: translateX(-4px); }
-  100% { transform: translateX(0); }
-}
-
-
 @media (max-width: 600px) {
   .payment-page .method-grid {
     grid-template-columns: repeat(2, 1fr);
@@ -458,10 +518,6 @@
   .payment-page .cc-row {
     grid-template-columns: 1fr;
   }
-  .payment-page .contact-grid {
-    grid-template-columns: 1fr;
-  }
-
   @keyframes flashError {
     0%, 100% { 
       border-color: var(--border); 

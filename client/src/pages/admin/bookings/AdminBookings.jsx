@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { useAdminAuth } from '../../../context/AdminAuthContext';
+import TableControls from '../../../components/TableControls';
+import { getPageRows, getTotalPages, nextSortConfig, sortLabel, sortRows } from '../../../utils/tableView';
 import './AdminBookings.css';
 
 const API_URL = 'http://localhost:4000/api';
@@ -25,6 +27,9 @@ function AdminBookings() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
+  const [sortConfig, setSortConfig] = useState({ key: 'bookingId', direction: 'desc' });
+  const [pageSize, setPageSize] = useState(10);
+  const [page, setPage] = useState(1);
 
   const fetchBookings = useCallback(async () => {
     setLoading(true);
@@ -56,6 +61,28 @@ function AdminBookings() {
     const matchStatus = statusFilter === 'All' || b.status === statusFilter;
     return matchSearch && matchStatus;
   });
+  const sortAccessors = {
+    bookingId: b => b.id,
+    user: b => b.user,
+    event: b => b.events?.join(', '),
+    seats: b => b.seatCount,
+    amount: b => b.totalAmount,
+    bookingDate: b => b.bookingDate,
+    status: b => b.status,
+    payment: b => b.paymentStatus || ''
+  };
+  const sorted = sortRows(filtered, sortConfig, sortAccessors);
+  const totalPages = getTotalPages(sorted.length, pageSize);
+  const pageRows = getPageRows(sorted, Math.min(page, totalPages), pageSize);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, statusFilter, pageSize]);
+
+  const handleSort = (key) => {
+    setSortConfig(current => nextSortConfig(current, key));
+    setPage(1);
+  };
 
   return (
     <div className="bk-root">
@@ -92,18 +119,18 @@ function AdminBookings() {
             <table className="bk-table">
               <thead>
                 <tr>
-                  <th>Booking ID</th>
-                  <th>User</th>
-                  <th>Event</th>
-                  <th>Seats</th>
-                  <th>Amount (THB)</th>
-                  <th>Booking Date</th>
-                  <th>Status</th>
-                  <th>Payment</th>
+                  <th className="sortable-th"><button type="button" onClick={() => handleSort('bookingId')}>Booking ID <span className="sort-mark">{sortLabel(sortConfig, 'bookingId')}</span></button></th>
+                  <th className="sortable-th"><button type="button" onClick={() => handleSort('user')}>User <span className="sort-mark">{sortLabel(sortConfig, 'user')}</span></button></th>
+                  <th className="sortable-th"><button type="button" onClick={() => handleSort('event')}>Event <span className="sort-mark">{sortLabel(sortConfig, 'event')}</span></button></th>
+                  <th className="sortable-th"><button type="button" onClick={() => handleSort('seats')}>Seats <span className="sort-mark">{sortLabel(sortConfig, 'seats')}</span></button></th>
+                  <th className="sortable-th"><button type="button" onClick={() => handleSort('amount')}>Amount (THB) <span className="sort-mark">{sortLabel(sortConfig, 'amount')}</span></button></th>
+                  <th className="sortable-th"><button type="button" onClick={() => handleSort('bookingDate')}>Booking Date <span className="sort-mark">{sortLabel(sortConfig, 'bookingDate')}</span></button></th>
+                  <th className="sortable-th"><button type="button" onClick={() => handleSort('status')}>Status <span className="sort-mark">{sortLabel(sortConfig, 'status')}</span></button></th>
+                  <th className="sortable-th"><button type="button" onClick={() => handleSort('payment')}>Payment <span className="sort-mark">{sortLabel(sortConfig, 'payment')}</span></button></th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.map(bk => (
+                {pageRows.map(bk => (
                   <tr key={bk.id}>
                     <td className="bk-mono">#{bk.id}</td>
                     <td>
@@ -144,6 +171,16 @@ function AdminBookings() {
             </table>
           )}
         </div>
+        {!loading && filtered.length > 0 && (
+          <TableControls
+            page={Math.min(page, totalPages)}
+            pageSize={pageSize}
+            totalRows={sorted.length}
+            totalPages={totalPages}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+          />
+        )}
       </div>
     </div>
   );

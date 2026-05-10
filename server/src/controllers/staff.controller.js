@@ -5,11 +5,8 @@ const prisma = require('../config/prisma');
 exports.getAllEvents = async (req, res) => {
   try {
     const { search, categoryId } = req.query;
-    const userId = req.user.userId;
 
-    const where = {
-      CreatedByUserID: userId
-    };
+    const where = {};
 
     if (search) {
       where.Title = { contains: search, mode: 'insensitive' };
@@ -96,7 +93,6 @@ exports.getAllEvents = async (req, res) => {
 exports.getEventById = async (req, res) => {
   try {
     const eventId = parseInt(req.params.id);
-    const userId = req.user.userId;
 
     const event = await prisma.event.findUnique({
       where: { EventID: eventId },
@@ -111,11 +107,6 @@ exports.getEventById = async (req, res) => {
     });
 
     if (!event) return res.status(404).json({ error: 'Event not found' });
-    
-    // Check if staff owns this event
-    if (event.CreatedByUserID !== userId) {
-      return res.status(403).json({ error: 'You do not have permission to view this event' });
-    }
 
     const showtimes = await Promise.all(event.Showtimes.map(async s => {
       const capacity = await prisma.seat.count({ where: { VenueID: s.VenueID } });
@@ -140,7 +131,8 @@ exports.getEventById = async (req, res) => {
         basePrice: Number(s.BasePrice),
         capacity,
         booked,
-        available: capacity - booked
+        available: capacity - booked,
+        remaining: capacity - booked
       };
     }));
 
@@ -165,12 +157,13 @@ exports.createEvent = async (req, res) => {
     const { title, description, categoryId, showtimes } = req.body;
     const userId = req.user.userId;
 
-    if (!title || !categoryId) {
+    if (!title?.trim() || !categoryId) {
       return res.status(400).json({ error: 'Title and category are required' });
     }
 
+    const parsedCategoryId = parseInt(categoryId);
     const category = await prisma.eventCategory.findUnique({
-      where: { CategoryID: parseInt(categoryId) }
+      where: { CategoryID: parsedCategoryId }
     });
 
     if (!category) {
@@ -179,9 +172,9 @@ exports.createEvent = async (req, res) => {
 
     const event = await prisma.event.create({
       data: {
-        Title: title,
-        Description: description || null,
-        CategoryID: parseInt(categoryId),
+        Title: title.trim(),
+        Description: description?.trim() || '',
+        CategoryID: parsedCategoryId,
         CreatedByUserID: userId
       },
       include: {
@@ -193,6 +186,9 @@ exports.createEvent = async (req, res) => {
     // Create showtimes if provided
     if (showtimes && Array.isArray(showtimes) && showtimes.length > 0) {
       for (const showtime of showtimes) {
+        if (!showtime.venueId || !showtime.startDateTime) {
+          return res.status(400).json({ error: 'Venue and start time are required for each showtime' });
+        }
         if (parseFloat(showtime.basePrice) < 0) {
           return res.status(400).json({ error: 'Base price cannot be negative' });
         }
@@ -201,9 +197,9 @@ exports.createEvent = async (req, res) => {
         prisma.showtime.create({
           data: {
             EventID: event.EventID,
-            VenueID: showtime.venueId,
+            VenueID: parseInt(showtime.venueId),
             StartDateTime: new Date(showtime.startDateTime),
-            BasePrice: parseFloat(showtime.basePrice)
+            BasePrice: parseFloat(showtime.basePrice) || 0
           }
         })
       ));
@@ -228,10 +224,8 @@ exports.createEvent = async (req, res) => {
 exports.updateEvent = async (req, res) => {
   try {
     const eventId = parseInt(req.params.id);
-    const userId = req.user.userId;
-    const { title, description, categoryId } = req.body;
+    const { title, description, categoryId, showtimes = [], deletedShowtimeIds = [] } = req.body;
 
-    // Check ownership
     const event = await prisma.event.findUnique({
       where: { EventID: eventId }
     });
@@ -240,15 +234,19 @@ exports.updateEvent = async (req, res) => {
       return res.status(404).json({ error: 'Event not found' });
     }
 
-    if (event.CreatedByUserID !== userId) {
-      return res.status(403).json({ error: 'You do not have permission to update this event' });
+    if (title !== undefined && !title?.trim()) return res.status(400).json({ error: 'Event title is required' });
+    if (categoryId) {
+      const category = await prisma.eventCategory.findUnique({
+        where: { CategoryID: parseInt(categoryId) }
+      });
+      if (!category) return res.status(400).json({ error: 'Invalid category' });
     }
 
     const updatedEvent = await prisma.event.update({
       where: { EventID: eventId },
       data: {
-        Title: title || event.Title,
-        Description: description || event.Description,
+        Title: title?.trim() || event.Title,
+        Description: description?.trim() || event.Description,
         CategoryID: categoryId ? parseInt(categoryId) : event.CategoryID
       },
       include: {
@@ -256,6 +254,41 @@ exports.updateEvent = async (req, res) => {
         CreatedByUser: true
       }
     });
+
+    for (const stId of deletedShowtimeIds) {
+      const hasBookings = await prisma.bookingDetail.count({ where: { ShowtimeID: parseInt(stId) } });
+      if (hasBookings === 0) {
+        await prisma.showtime.delete({ where: { ShowtimeID: parseInt(stId) } });
+      }
+    }
+
+    for (const s of showtimes) {
+      if (parseFloat(s.basePrice) < 0) {
+        return res.status(400).json({ error: 'Base price cannot be negative' });
+      }
+    }
+
+    for (const s of showtimes) {
+      if (s.id) {
+        await prisma.showtime.update({
+          where: { ShowtimeID: parseInt(s.id) },
+          data: {
+            VenueID: parseInt(s.venueId),
+            StartDateTime: new Date(s.startDateTime),
+            BasePrice: parseFloat(s.basePrice) || 0
+          }
+        });
+      } else {
+        await prisma.showtime.create({
+          data: {
+            EventID: eventId,
+            VenueID: parseInt(s.venueId),
+            StartDateTime: new Date(s.startDateTime),
+            BasePrice: parseFloat(s.basePrice) || 0
+          }
+        });
+      }
+    }
 
     res.json({
       message: 'Event updated successfully',
@@ -276,7 +309,6 @@ exports.updateEvent = async (req, res) => {
 exports.deleteEvent = async (req, res) => {
   try {
     const eventId = parseInt(req.params.id);
-    const userId = req.user.userId;
 
     const event = await prisma.event.findUnique({
       where: { EventID: eventId }
@@ -284,10 +316,6 @@ exports.deleteEvent = async (req, res) => {
 
     if (!event) {
       return res.status(404).json({ error: 'Event not found' });
-    }
-
-    if (event.CreatedByUserID !== userId) {
-      return res.status(403).json({ error: 'You do not have permission to delete this event' });
     }
 
     // RESTRICT: Check if any showtimes have booking details
@@ -321,35 +349,9 @@ exports.deleteEvent = async (req, res) => {
 
 exports.getAllBookings = async (req, res) => {
   try {
-    const userId = req.user.userId;
     const { search, status } = req.query;
 
-    // Get all events created by this staff
-    const staffEvents = await prisma.event.findMany({
-      where: { CreatedByUserID: userId },
-      select: { EventID: true }
-    });
-    const staffEventIds = staffEvents.map(e => e.EventID);
-
-    if (staffEventIds.length === 0) {
-      return res.json([]);
-    }
-
-    // Find all showtimes for staff's events
-    const showtimes = await prisma.showtime.findMany({
-      where: { EventID: { in: staffEventIds } },
-      select: { ShowtimeID: true }
-    });
-    const showtimeIds = showtimes.map(s => s.ShowtimeID);
-
-    // Find bookings that have at least one BookingDetail with one of these showtimes
-    const where = {
-      BookingDetails: {
-        some: {
-          ShowtimeID: { in: showtimeIds }
-        }
-      }
-    };
+    const where = {};
 
     if (status && status !== 'All') {
       const bookingStatus = await prisma.bookingStatus.findFirst({
@@ -429,31 +431,9 @@ exports.getAllBookings = async (req, res) => {
 
 exports.getAllTransactions = async (req, res) => {
   try {
-    const userId = req.user.userId;
     const { status, search, startDate, endDate } = req.query;
 
-    // Get all events created by this staff
-    const staffEvents = await prisma.event.findMany({
-      where: { CreatedByUserID: userId },
-      select: { EventID: true }
-    });
-
-    const eventIds = staffEvents.map(e => e.EventID);
-
-    if (eventIds.length === 0) {
-      return res.json([]);
-    }
-
-    // Build where clause for transactions
-    const where = {
-      BookingDetails: {
-        some: {
-          Showtime: {
-            EventID: { in: eventIds }
-          }
-        }
-      }
-    };
+    const where = {};
 
     if (status) {
       where.Payment = {
@@ -529,15 +509,11 @@ exports.getAllTransactions = async (req, res) => {
 
 exports.getDashboard = async (req, res) => {
   try {
-    const userId = req.user.userId;
-
-    // Get staff's events
-    const staffEvents = await prisma.event.findMany({
-      where: { CreatedByUserID: userId },
+    const allEvents = await prisma.event.findMany({
       select: { EventID: true }
     });
 
-    const eventIds = staffEvents.map(e => e.EventID);
+    const eventIds = allEvents.map(e => e.EventID);
 
     // Total events created
     const totalEvents = eventIds.length;
@@ -571,9 +547,7 @@ exports.getDashboard = async (req, res) => {
 
     const totalRevenue = bookings.reduce((sum, b) => sum + Number(b.TotalAmount), 0);
 
-    // Recent events
     const recentEvents = await prisma.event.findMany({
-      where: { CreatedByUserID: userId },
       include: {
         Category: true,
         Showtimes: { include: { Venue: true } }

@@ -64,13 +64,37 @@ function MyTickets() {
     }
   };
 
+  const expireBookingFromList = async (bookingId) => {
+    setCancellingId(bookingId);
+    try {
+      await axios.post(
+        `${API_URL}/bookings/${bookingId}/expire`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      setBookings(prev =>
+        prev.map(b =>
+          b.BookingID === bookingId ? { ...b, StatusID: 3, Status: { StatusName: 'Cancelled' } } : b
+        )
+      );
+      setMessage('Payment time expired. The booking was cancelled and seats were released.');
+    } catch (error) {
+      console.error('Failed to expire booking:', error);
+      setMessage('This booking has expired. Refreshing your booking status...');
+      fetchBookings();
+    } finally {
+      setCancellingId(null);
+    }
+  };
+
   const handlePayNow = (booking) => {
     const expireTime = new Date(booking.ExpiresAt).getTime();
     const now = new Date().getTime();
 
     if (now > expireTime) {
       alert('หมดเวลาชำระเงินสำหรับรายการนี้แล้ว ระบบได้ยกเลิกการจองของคุณ');
-      handleCancel(booking.BookingID);
+      expireBookingFromList(booking.BookingID);
       return;
     }
 
@@ -165,6 +189,7 @@ function MyTickets() {
             {filteredBookings.map(booking => {
               const showtime = booking.BookingDetails?.[0]?.Showtime;
               const eventInfo = showtime?.Event || {};
+              const venueName = showtime?.Venue?.VenueName || 'Venue TBD';
               const seats = booking.BookingDetails?.map(d => `${d.Seat?.RowLabel}${d.Seat?.SeatNumber}`) || [];
               const theme = getStatusTheme(booking.StatusID, booking.Status);
               const emojiInfo = getEventEmojiInfo(eventInfo.EventID);
@@ -190,7 +215,7 @@ function MyTickets() {
                         </div>
                         <div className="ticket-meta-item">
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg> 
-                          {eventInfo.Location || 'Location TBD'}
+                          {venueName}
                         </div>
                       </div>
                       <div className="ticket-booking-row">
@@ -237,7 +262,7 @@ function MyTickets() {
                               name: eventInfo.Title,
                               emoji: emojiInfo.char,
                               date: showtime ? formatDate(showtime.StartDateTime) : '',
-                              location: eventInfo.Location,
+                              location: venueName,
                               ticketNo: ticketIdString,
                               seats: seats
                             })}

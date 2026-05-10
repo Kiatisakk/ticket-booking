@@ -58,7 +58,7 @@ const StaffEventManagement = () => {
   return (
     <div className="staff-event-management">
       <div className="event-management-header">
-        <h2>My Events</h2>
+        <h2>All Events</h2>
         <button
           className="add-event-btn"
           onClick={() => navigate('/staff/events/create')}

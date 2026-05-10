@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAdminAuth } from '../../../context/AdminAuthContext';
 import './AddEvent.css';
@@ -12,7 +12,12 @@ function newShowtime() {
 
 function AddEvent() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { adminToken } = useAdminAuth();
+  const isStaffMode = location.pathname.startsWith('/staff');
+  const authToken = isStaffMode ? localStorage.getItem('staffToken') : adminToken;
+  const basePath = isStaffMode ? '/staff/events' : '/admin/events';
+  const apiScope = isStaffMode ? 'staff' : 'admin';
 
   const [title, setTitle]             = useState('');
   const [categoryId, setCategoryId]   = useState('');
@@ -26,10 +31,10 @@ function AddEvent() {
   const [formError, setFormError] = useState('');
   const [saving, setSaving]     = useState(false);
 
-  const headers = { Authorization: `Bearer ${adminToken}` };
+  const headers = { Authorization: `Bearer ${authToken}` };
 
   useEffect(() => {
-    axios.get(`${API_URL}/admin/categories`, { headers })
+    axios.get(`${API_URL}/${apiScope}/categories`, { headers })
       .then(r => setCategories(r.data))
       .catch(() => setCategories([
         { id: 1, name: 'Movie' },
@@ -37,7 +42,7 @@ function AddEvent() {
         { id: 3, name: 'Seminar' }
       ]));
 
-    axios.get(`${API_URL}/admin/venues`, { headers })
+    axios.get(`${API_URL}/${apiScope}/venues`, { headers })
       .then(r => setVenues(r.data))
       .catch(() => setVenues([]));
   }, []);
@@ -77,7 +82,7 @@ function AddEvent() {
     setSaving(true);
     setFormError('');
     try {
-      await axios.post(`${API_URL}/admin/events`, {
+      await axios.post(`${API_URL}/${apiScope}/events`, {
         title: title.trim(),
         description: description.trim(),
         categoryId: categoryId || null,
@@ -87,7 +92,7 @@ function AddEvent() {
           basePrice:     parseFloat(s.basePrice)
         }))
       }, { headers });
-      navigate('/admin/events');
+      navigate(basePath);
     } catch (err) {
       setFormError(err.response?.data?.error || 'Failed to create event');
     } finally {
@@ -99,7 +104,7 @@ function AddEvent() {
     <div className="aev-root">
       {/* ── Topbar ── */}
       <div className="aev-topbar">
-        <button className="aev-back" onClick={() => navigate('/admin/events')}>
+        <button className="aev-back" onClick={() => navigate(basePath)}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
           Back
         </button>
@@ -268,7 +273,7 @@ function AddEvent() {
 
         {/* ── Footer actions ── */}
         <div className="aev-footer">
-          <button type="button" className="aev-btn-ghost" onClick={() => navigate('/admin/events')}>
+          <button type="button" className="aev-btn-ghost" onClick={() => navigate(basePath)}>
             Cancel
           </button>
           <button type="submit" className="aev-btn-primary" disabled={saving}>

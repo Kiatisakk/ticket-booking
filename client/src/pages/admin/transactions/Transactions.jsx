@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { useAdminAuth } from '../../../context/AdminAuthContext';
+import TableControls from '../../../components/TableControls';
+import { getPageRows, getTotalPages, nextSortConfig, sortLabel, sortRows } from '../../../utils/tableView';
 import './Transactions.css';
 
 const API_URL = 'http://localhost:4000/api';
@@ -38,6 +40,9 @@ function Transactions() {
   const [paidTarget, setPaidTarget] = useState(null);
   const [refundTarget, setRefundTarget] = useState(null);
   const [processing, setProcessing] = useState(false);
+  const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'desc' });
+  const [pageSize, setPageSize] = useState(10);
+  const [page, setPage] = useState(1);
 
   const fetchTransactions = useCallback(async () => {
     setLoading(true);
@@ -71,10 +76,29 @@ function Transactions() {
     const matchMethod = methodFilter === 'All' || t.method?.toLowerCase().includes(methodFilter.toLowerCase());
     return matchSearch && matchStatus && matchMethod;
   });
+  const sortAccessors = {
+    bookingId: t => t.bookingId,
+    transactionId: t => t.transactionId,
+    user: t => t.user,
+    method: t => t.method,
+    amount: t => t.amount,
+    date: t => t.date,
+    status: t => t.status
+  };
+  const sorted = sortRows(filtered, sortConfig, sortAccessors);
+  const totalPages = getTotalPages(sorted.length, pageSize);
+  const pageRows = getPageRows(sorted, Math.min(page, totalPages), pageSize);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, statusFilter, methodFilter, pageSize]);
+
+  const handleSort = (key) => {
+    setSortConfig(current => nextSortConfig(current, key));
+    setPage(1);
+  };
 
   // All failed transactions get a generic error reason (no errorMessage in DB)
-  const failedWithErrors = filtered.filter(t => t.status === 'Failed');
-
   const handleMarkPaid = async () => {
     if (!paidTarget) return;
     setProcessing(true);
@@ -154,18 +178,18 @@ function Transactions() {
             <table className="tx-table">
               <thead>
                 <tr>
-                  <th>Booking ID</th>
-                  <th>Transaction ID</th>
-                  <th>User</th>
-                  <th>Method</th>
-                  <th>Amount (THB)</th>
-                  <th>Date</th>
-                  <th>Status</th>
+                  <th className="sortable-th"><button type="button" onClick={() => handleSort('bookingId')}>Booking ID <span className="sort-mark">{sortLabel(sortConfig, 'bookingId')}</span></button></th>
+                  <th className="sortable-th"><button type="button" onClick={() => handleSort('transactionId')}>Transaction ID <span className="sort-mark">{sortLabel(sortConfig, 'transactionId')}</span></button></th>
+                  <th className="sortable-th"><button type="button" onClick={() => handleSort('user')}>User <span className="sort-mark">{sortLabel(sortConfig, 'user')}</span></button></th>
+                  <th className="sortable-th"><button type="button" onClick={() => handleSort('method')}>Method <span className="sort-mark">{sortLabel(sortConfig, 'method')}</span></button></th>
+                  <th className="sortable-th"><button type="button" onClick={() => handleSort('amount')}>Amount (THB) <span className="sort-mark">{sortLabel(sortConfig, 'amount')}</span></button></th>
+                  <th className="sortable-th"><button type="button" onClick={() => handleSort('date')}>Date <span className="sort-mark">{sortLabel(sortConfig, 'date')}</span></button></th>
+                  <th className="sortable-th"><button type="button" onClick={() => handleSort('status')}>Status <span className="sort-mark">{sortLabel(sortConfig, 'status')}</span></button></th>
                   <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.map(tx => (
+                {pageRows.map(tx => (
                   <tr key={tx.id}>
                     <td className="tx-mono">#{tx.bookingId}</td>
                     <td className="tx-mono">{tx.transactionId}</td>
@@ -202,26 +226,17 @@ function Transactions() {
             </table>
           )}
         </div>
+        {!loading && filtered.length > 0 && (
+          <TableControls
+            page={Math.min(page, totalPages)}
+            pageSize={pageSize}
+            totalRows={sorted.length}
+            totalPages={totalPages}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+          />
+        )}
       </div>
-
-      {/* Failed Transaction Error Log */}
-      {failedWithErrors.length > 0 && (
-        <div className="tx-error-log">
-          <div className="tx-error-log-title">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
-            </svg>
-            Failed Transaction Error Log
-          </div>
-          {failedWithErrors.map(tx => (
-            <div key={tx.id} className="tx-error-item">
-              <span className="tx-error-id">TXN #{tx.bookingId}</span>
-              <span className="tx-error-msg">{tx.errorReason || 'Payment gateway declined'}</span>
-              <span className="tx-error-amount">฿{Number(tx.amount).toLocaleString()}</span>
-            </div>
-          ))}
-        </div>
-      )}
 
       {/* Mark as Paid Modal */}
       {paidTarget && (

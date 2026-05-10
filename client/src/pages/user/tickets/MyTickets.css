@@ -80,6 +80,7 @@
 .my-tickets-page .ticket-stripe { width: 6px; }
 .my-tickets-page .stripe-upcoming { background: var(--indigo); }
 .my-tickets-page .stripe-past { background: var(--muted); }
+.my-tickets-page .ticket-card:has(.status-completed) .ticket-stripe { background: var(--green); }
 .my-tickets-page .stripe-cancelled{ background: var(--red); }
 
 /* Main content */

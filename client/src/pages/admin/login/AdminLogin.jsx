@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../../../context/AdminAuthContext';
+import { useAuth } from '../../../context/AuthContext';
 import './AdminLogin.css';
 
 function AdminLogin() {
@@ -10,6 +11,7 @@ function AdminLogin() {
   const [isLoading, setIsLoading] = useState(false);
 
   const { adminLogin } = useAdminAuth();
+  const { setAuthSession } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
@@ -20,6 +22,7 @@ function AdminLogin() {
     const result = await adminLogin(username, password);
 
     if (result.success) {
+      setAuthSession(result.user, result.token);
       navigate('/admin/events');
     } else {
       setError(result.error);

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
 import { useAdminAuth } from '../../../context/AdminAuthContext';
 import './EditEvent.css';
@@ -26,8 +26,13 @@ function Toast({ msg, type, onDone }) {
 function EditEvent() {
   const { id }     = useParams();
   const navigate   = useNavigate();
+  const location   = useLocation();
   const { adminToken } = useAdminAuth();
-  const headers    = { Authorization: `Bearer ${adminToken}` };
+  const isStaffMode = location.pathname.startsWith('/staff');
+  const authToken = isStaffMode ? localStorage.getItem('staffToken') : adminToken;
+  const basePath = isStaffMode ? '/staff/events' : '/admin/events';
+  const apiScope = isStaffMode ? 'staff' : 'admin';
+  const headers    = { Authorization: `Bearer ${authToken}` };
 
   // ── Form state ──────────────────────────────────────────────────────────────
   const [title, setTitle]             = useState('');
@@ -56,7 +61,7 @@ function EditEvent() {
 
   // ── Load lookups ─────────────────────────────────────────────────────────────
   useEffect(() => {
-    axios.get(`${API_URL}/admin/categories`, { headers })
+    axios.get(`${API_URL}/${apiScope}/categories`, { headers })
       .then(r => setCategories(r.data))
       .catch(() => setCategories([
         { id: 1, name: 'Movie' },
@@ -64,7 +69,7 @@ function EditEvent() {
         { id: 3, name: 'Seminar' }
       ]));
 
-    axios.get(`${API_URL}/admin/venues`, { headers })
+    axios.get(`${API_URL}/${apiScope}/venues`, { headers })
       .then(r => setVenues(r.data))
       .catch(() => setVenues([]));
   }, []);
@@ -73,7 +78,7 @@ function EditEvent() {
   const loadEvent = useCallback(async () => {
     setLoading(true);
     try {
-      const { data } = await axios.get(`${API_URL}/admin/events/${id}`, { headers });
+      const { data } = await axios.get(`${API_URL}/${apiScope}/events/${id}`, { headers });
 
       const sts = data.showtimes.map(s => ({
         key:           s.id,
@@ -158,7 +163,7 @@ function EditEvent() {
     setSaving(true);
     setFormError('');
     try {
-      await axios.put(`${API_URL}/admin/events/${id}`, {
+      await axios.put(`${API_URL}/${apiScope}/events/${id}`, {
         title: title.trim(),
         description: description.trim(),
         categoryId: categoryId || null,
@@ -190,8 +195,8 @@ function EditEvent() {
   const handleDelete = async () => {
     setDeleting(true);
     try {
-      await axios.delete(`${API_URL}/admin/events/${id}`, { headers });
-      navigate('/admin/events');
+      await axios.delete(`${API_URL}/${apiScope}/events/${id}`, { headers });
+      navigate(basePath);
     } catch (error) {
       showToast(error.response?.data?.error || 'Failed to delete event', 'error');
     } finally {
@@ -217,7 +222,7 @@ function EditEvent() {
 
       {/* ── Topbar ── */}
       <div className="eed-topbar">
-        <button className="eed-back" onClick={() => navigate('/admin/events')}>
+        <button className="eed-back" onClick={() => navigate(basePath)}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
           Back
         </button>
@@ -438,7 +443,7 @@ function EditEvent() {
 
         {/* ── Footer ── */}
         <div className="eed-footer">
-          <button type="button" className="eed-btn-ghost" onClick={() => navigate('/admin/events')}>
+          <button type="button" className="eed-btn-ghost" onClick={() => navigate(basePath)}>
             Cancel
           </button>
           <button type="button" className="eed-btn-ghost" onClick={handleReset}>

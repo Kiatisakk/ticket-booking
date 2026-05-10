@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { useAdminAuth } from '../../../context/AdminAuthContext';
+import TableControls from '../../../components/TableControls';
+import { getPageRows, getTotalPages, nextSortConfig, sortLabel, sortRows } from '../../../utils/tableView';
 import './UserManagement.css';
 
 const API_URL = 'http://localhost:4000/api';
@@ -19,6 +21,9 @@ function UserManagement() {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [processing, setProcessing] = useState(false);
   const [roleChanging, setRoleChanging] = useState(null);
+  const [sortConfig, setSortConfig] = useState({ key: 'id', direction: 'asc' });
+  const [pageSize, setPageSize] = useState(10);
+  const [page, setPage] = useState(1);
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
@@ -46,6 +51,26 @@ function UserManagement() {
     const matchRole = roleFilter === 'All' || u.role === roleFilter;
     return matchSearch && matchRole;
   });
+  const sortAccessors = {
+    id: u => u.id,
+    name: u => u.fullName,
+    email: u => u.email,
+    role: u => u.role,
+    bookings: u => u.bookingsCount,
+    registered: u => u.createdAt
+  };
+  const sorted = sortRows(filtered, sortConfig, sortAccessors);
+  const totalPages = getTotalPages(sorted.length, pageSize);
+  const pageRows = getPageRows(sorted, Math.min(page, totalPages), pageSize);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, roleFilter, pageSize]);
+
+  const handleSort = (key) => {
+    setSortConfig(current => nextSortConfig(current, key));
+    setPage(1);
+  };
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
@@ -118,17 +143,17 @@ function UserManagement() {
             <table className="um-table">
               <thead>
                 <tr>
-                  <th>ID</th>
-                  <th>Name</th>
-                  <th>Email</th>
-                  <th>Role</th>
-                  <th>Bookings</th>
-                  <th>Registered</th>
+                  <th className="sortable-th"><button type="button" onClick={() => handleSort('id')}>ID <span className="sort-mark">{sortLabel(sortConfig, 'id')}</span></button></th>
+                  <th className="sortable-th"><button type="button" onClick={() => handleSort('name')}>Name <span className="sort-mark">{sortLabel(sortConfig, 'name')}</span></button></th>
+                  <th className="sortable-th"><button type="button" onClick={() => handleSort('email')}>Email <span className="sort-mark">{sortLabel(sortConfig, 'email')}</span></button></th>
+                  <th className="sortable-th"><button type="button" onClick={() => handleSort('role')}>Role <span className="sort-mark">{sortLabel(sortConfig, 'role')}</span></button></th>
+                  <th className="sortable-th"><button type="button" onClick={() => handleSort('bookings')}>Bookings <span className="sort-mark">{sortLabel(sortConfig, 'bookings')}</span></button></th>
+                  <th className="sortable-th"><button type="button" onClick={() => handleSort('registered')}>Registered <span className="sort-mark">{sortLabel(sortConfig, 'registered')}</span></button></th>
                   <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.map(user => (
+                {pageRows.map(user => (
                   <tr key={user.id}>
                     <td className="um-mono">#{user.id}</td>
                     <td>
@@ -179,6 +204,16 @@ function UserManagement() {
             </table>
           )}
         </div>
+        {!loading && filtered.length > 0 && (
+          <TableControls
+            page={Math.min(page, totalPages)}
+            pageSize={pageSize}
+            totalRows={sorted.length}
+            totalPages={totalPages}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+          />
+        )}
       </div>
 
       {/* Delete Confirmation Modal */}

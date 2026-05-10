@@ -21,13 +21,10 @@ import UserManagement from './pages/admin/users/UserManagement';
 import AdminBookings from './pages/admin/bookings/AdminBookings';
 import Transactions from './pages/admin/transactions/Transactions';
 import Reports from './pages/admin/reports/Reports';
+import SystemSettings from './pages/admin/settings/SystemSettings';
 
 import StaffLogin from './pages/staff/login/StaffLogin';
 import StaffLayout from './pages/staff/layout/StaffLayout';
-import StaffDashboard from './pages/staff/dashboard/StaffDashboard';
-import StaffEventManagement from './pages/staff/events/StaffEventManagement';
-import StaffBookings from './pages/staff/bookings/StaffBookings';
-import StaffTransactions from './pages/staff/transactions/StaffTransactions';
 
 import './App.css';
 
@@ -170,7 +167,9 @@ function App() {
           <Route path="users" element={<UserManagement />} />
           <Route path="bookings" element={<AdminBookings />} />
           <Route path="transactions" element={<Transactions />} />
-          <Route path="reports" element={<Reports />} />
+          <Route path="reports" element={<Navigate to="/admin/reports/revenue-by-category" replace />} />
+          <Route path="reports/:reportId" element={<Reports />} />
+          <Route path="settings" element={<SystemSettings />} />
         </Route>
 
         {/* ── Staff Routes (no Navbar, own layout) ─────────────────────── */}
@@ -183,11 +182,14 @@ function App() {
             </StaffProtectedRoute>
           }
         >
-          <Route index element={<Navigate to="/staff/dashboard" replace />} />
-          <Route path="dashboard" element={<StaffDashboard />} />
-          <Route path="events" element={<StaffEventManagement />} />
-          <Route path="bookings" element={<StaffBookings />} />
-          <Route path="transactions" element={<StaffTransactions />} />
+          <Route index element={<Navigate to="/staff/events" replace />} />
+          <Route path="dashboard" element={<Navigate to="/staff/events" replace />} />
+          <Route path="events" element={<EventManagement />} />
+          <Route path="events/create" element={<AddEvent />} />
+          <Route path="events/:id" element={<EditEvent />} />
+          <Route path="events/:id/edit" element={<EditEvent />} />
+          <Route path="bookings" element={<Navigate to="/staff/events" replace />} />
+          <Route path="transactions" element={<Navigate to="/staff/events" replace />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

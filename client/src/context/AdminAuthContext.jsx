@@ -35,7 +35,7 @@ export function AdminAuthProvider({ children }) {
       localStorage.setItem('adminUser', JSON.stringify(user));
       localStorage.setItem('adminToken', token);
 
-      return { success: true };
+      return { success: true, user, token };
     } catch (error) {
       return {
         success: false,

@@ -12,6 +12,7 @@ const paymentController = require('../controllers/payment.controller');
 const ticketController = require('../controllers/ticket.controller');
 const adminController = require('../controllers/admin.controller');
 const staffController = require('../controllers/staff.controller');
+const seatLockController = require('../controllers/seatLock.controller');
 
 const router = express.Router();
 
@@ -39,6 +40,7 @@ router.get('/showtimes/:id/booked-seats', showtimeController.getBookedSeats);
 router.post('/bookings', authenticateToken, bookingController.createBooking);
 router.get('/bookings/my', authenticateToken, bookingController.getMyBookings);
 router.get('/bookings/:id', authenticateToken, bookingController.getBookingById);
+router.post('/bookings/:id/expire', authenticateToken, bookingController.expireBooking);
 router.post('/bookings/:id/cancel', authenticateToken, bookingController.cancelBooking);
 
 // Payment Routes
@@ -61,6 +63,8 @@ router.get('/admin/staff', authenticateAdmin, adminController.getAllStaff);
 // Admin Lookup
 router.get('/admin/categories', authenticateAdmin, adminController.getCategories);
 router.get('/admin/venues',     authenticateAdmin, adminController.getAdminVenues);
+router.get('/admin/settings', authenticateAdmin, adminController.getSystemSettings);
+router.patch('/admin/settings/payment-methods/:id', authenticateAdmin, adminController.updatePaymentMethod);
 
 // Admin Events
 router.get('/admin/events', authenticateAdmin, adminController.getAllEvents);
@@ -103,6 +107,8 @@ router.get('/admin/reports/cancellation-heatmap',  authenticateAdmin, adminContr
 router.post('/staff/auth/login', adminController.staffLogin);
 
 // Staff Events
+router.get('/staff/categories', authenticateStaff, adminController.getCategories);
+router.get('/staff/venues', authenticateStaff, adminController.getAdminVenues);
 router.get('/staff/events', authenticateStaff, staffController.getAllEvents);
 router.get('/staff/events/:id', authenticateStaff, staffController.getEventById);
 router.post('/staff/events', authenticateStaff, staffController.createEvent);
@@ -118,13 +124,8 @@ router.get('/staff/transactions', authenticateStaff, staffController.getAllTrans
 // Staff Dashboard
 router.get('/staff/dashboard', authenticateStaff, staffController.getDashboard);
 
-// Seat Lock Routes (development helpers)
-router.post('/seats/lock', (req, res) => {
-  res.status(200).json({ success: true, message: 'Seat locked successfully' });
-});
-
-router.post('/seats/unlock', (req, res) => {
-  res.status(200).json({ success: true, message: 'Seat unlocked successfully' });
-});
+// Seat Lock Routes
+router.post('/seats/lock', seatLockController.lockSeat);
+router.post('/seats/unlock', seatLockController.unlockSeats);
 
 module.exports = router;
