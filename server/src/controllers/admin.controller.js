@@ -1344,7 +1344,12 @@ exports.getBookingVsCapacity = async (req, res) => {
     const completedStatusId = completedStatus?.StatusID ?? 2;
     const successStatusId = successStatus?.StatusID ?? 2;
 
-    const stWhere = { StartDateTime: { gte: start, lt: end } };
+    const stWhere = {};
+    if (venueFilter) {
+      stWhere.StartDateTime = { gte: start };
+    } else {
+      stWhere.StartDateTime = { gte: start, lt: end };
+    }
     if (catFilter) {
       stWhere.Event = { Category: { CategoryName: catFilter } };
     }
@@ -1352,7 +1357,7 @@ exports.getBookingVsCapacity = async (req, res) => {
       stWhere.VenueID = venueFilter;
     }
 
-    const showtimes = await prisma.showtime.findMany({
+    let showtimes = await prisma.showtime.findMany({
       where: stWhere,
       include: {
         Event: { include: { Category: true } },
@@ -1363,6 +1368,38 @@ exports.getBookingVsCapacity = async (req, res) => {
       orderBy: { StartDateTime: 'desc' },
       take: 8
     });
+
+    if (!venueFilter) {
+      const venueCoverage = await prisma.venue.findMany({
+        where: {
+          Showtimes: {
+            some: catFilter ? { Event: { Category: { CategoryName: catFilter } } } : {}
+          }
+        },
+        include: {
+          Showtimes: {
+            where: catFilter ? { Event: { Category: { CategoryName: catFilter } } } : {},
+            include: {
+              Event: { include: { Category: true } },
+              Venue: { include: { Seats: true } }
+            },
+            orderBy: { StartDateTime: 'desc' },
+            take: 1
+          }
+        }
+      });
+
+      const showtimeById = new Map(showtimes.map(showtime => [showtime.ShowtimeID, showtime]));
+      for (const venue of venueCoverage) {
+        const latestShowtime = venue.Showtimes[0];
+        if (latestShowtime && !showtimeById.has(latestShowtime.ShowtimeID)) {
+          showtimeById.set(latestShowtime.ShowtimeID, latestShowtime);
+        }
+      }
+
+      showtimes = [...showtimeById.values()]
+        .sort((a, b) => new Date(b.StartDateTime) - new Date(a.StartDateTime));
+    }
 
     const result = await Promise.all(showtimes.map(async st => {
       const capacity = st.Venue?.Seats?.length ?? 0;
@@ -1379,6 +1416,14 @@ exports.getBookingVsCapacity = async (req, res) => {
           AND p."StatusID" = ${successStatusId}
       `;
       const sold = Math.min(Number(soldRows[0]?.sold ?? 0), capacity);
+      const occupancyRatePct = capacity > 0 ? Math.round((sold / capacity) * 10000) / 100 : 0;
+      const status = occupancyRatePct >= 100
+        ? 'Sold Out'
+        : occupancyRatePct >= 80
+          ? 'High Occupancy'
+          : occupancyRatePct > 0
+            ? 'Available'
+            : 'No Sales';
 
       const dateStr = st.StartDateTime
         ? new Date(st.StartDateTime).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
@@ -1388,7 +1433,10 @@ exports.getBookingVsCapacity = async (req, res) => {
         label:    `${st.Event?.Title ?? 'Unknown'} - ${dateStr}`,
         capacity,
         sold,
-        remaining: Math.max(capacity - sold, 0)
+        remaining: Math.max(capacity - sold, 0),
+        occupancyRatePct,
+        status,
+        venue: st.Venue?.VenueName || 'Unknown'
       };
     }));
 
@@ -1448,18 +1496,15 @@ exports.getSeatTypeRevenue = async (req, res) => {
     const catFilter = category && category !== 'all' ? category : null;
 
     const rows = await prisma.$queryRaw`
-      SELECT st."TypeName" as "seatType",
-             CASE
-               WHEN EXTRACT(EPOCH FROM (s."StartDateTime" - b."BookingTimestamp")) / 86400 >= 30 THEN '30+ days'
-               WHEN EXTRACT(EPOCH FROM (s."StartDateTime" - b."BookingTimestamp")) / 86400 >= 15 THEN '15-29 days'
-               WHEN EXTRACT(EPOCH FROM (s."StartDateTime" - b."BookingTimestamp")) / 86400 >= 7 THEN '7-14 days'
-               WHEN EXTRACT(EPOCH FROM (s."StartDateTime" - b."BookingTimestamp")) / 86400 >= 1 THEN '1-6 days'
-               ELSE 'Same day'
-             END as "leadBucket",
-             COUNT(bd."DetailID")::int as bookings
-      FROM "BookingDetails" bd
-      JOIN "Seats" seat ON bd."SeatID" = seat."SeatID"
-      JOIN "SeatTypes" st ON seat."SeatTypeID" = st."SeatTypeID"
+      SELECT
+        st."TypeName" as "seatType",
+        COUNT(t."TicketID")::int as "totalTicketsSold",
+        COALESCE(SUM(t."FinalPrice"), 0)::float8 as "totalRevenue",
+        ROUND(AVG(EXTRACT(EPOCH FROM (s."StartDateTime" - b."BookingTimestamp")) / 86400)::numeric, 1)::float8 as "avgDaysInAdvance"
+      FROM "SeatTypes" st
+      JOIN "Seats" seat ON st."SeatTypeID" = seat."SeatTypeID"
+      JOIN "BookingDetails" bd ON seat."SeatID" = bd."SeatID"
+      JOIN "Tickets" t ON bd."DetailID" = t."DetailID"
       JOIN "Bookings" b ON bd."BookingID" = b."BookingID"
       JOIN "Showtimes" s ON bd."ShowtimeID" = s."ShowtimeID"
       JOIN "Events" e ON s."EventID" = e."EventID"
@@ -1467,28 +1512,19 @@ exports.getSeatTypeRevenue = async (req, res) => {
       WHERE b."StatusID" = 2
         AND s."StartDateTime" >= ${start}
         AND s."StartDateTime" <  ${end}
-        AND b."BookingTimestamp" <= s."StartDateTime"
         AND (${catFilter}::text IS NULL OR ec."CategoryName" = ${catFilter})
-      GROUP BY st."TypeName", "leadBucket"
+      GROUP BY st."TypeName"
+      ORDER BY "totalRevenue" DESC
     `;
 
-    const labels = ['30+ days', '15-29 days', '7-14 days', '1-6 days', 'Same day'];
-    const seatTypes = [...new Set(rows.map(r => r.seatType))].sort();
-    const datasets = {};
-    for (const seatType of seatTypes) {
-      datasets[seatType] = labels.map(label => {
-        const found = rows.find(r => r.seatType === seatType && r.leadBucket === label);
-        return Number(found?.bookings ?? 0);
-      });
-    }
-
     res.json({
-      labels,
-      datasets,
+      labels: rows.map(r => r.seatType),
+      data: rows.map(r => Number(r.totalRevenue || 0)),
       rows: rows.map(r => ({
         seatType: r.seatType,
-        leadBucket: r.leadBucket,
-        bookings: Number(r.bookings || 0)
+        totalTicketsSold: Number(r.totalTicketsSold || 0),
+        totalRevenue: Number(r.totalRevenue || 0),
+        avgDaysInAdvance: Number(r.avgDaysInAdvance || 0)
       }))
     });
   } catch (error) {

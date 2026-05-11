@@ -144,6 +144,94 @@ function formatMoney(value) {
   return `THB ${amount.toLocaleString()}`;
 }
 
+function formatPercent(value) {
+  return `${Number(value || 0).toFixed(2)}%`;
+}
+
+function clamp(value, min = 0, max = 1) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function scaleRatio(value, minValue, maxValue) {
+  if (maxValue <= minValue) return value > 0 ? 1 : 0;
+  return clamp((value - minValue) / (maxValue - minValue));
+}
+
+function rgbFromString(rgb) {
+  return rgb.split(',').map(part => Number(part.trim()));
+}
+
+function rgbaFromTone(rgb, alpha) {
+  return `rgba(${rgb},${alpha.toFixed(2)})`;
+}
+
+const VIRIDIS_STOPS = [
+  [68, 1, 84],
+  [59, 82, 139],
+  [33, 145, 140],
+  [94, 201, 98],
+  [253, 231, 37]
+];
+
+const SEAT_HEATMAP_STOPS = [
+  [22, 163, 74],
+  [132, 204, 22],
+  [250, 204, 21],
+  [249, 115, 22],
+  [220, 38, 38],
+  [127, 29, 29]
+];
+
+function interpolateColorStops(stops, ratio) {
+  const scaled = clamp(ratio) * (stops.length - 1);
+  const index = Math.min(Math.floor(scaled), stops.length - 2);
+  const local = scaled - index;
+  const start = stops[index];
+  const end = stops[index + 1];
+  return start.map((channel, channelIndex) =>
+    Math.round(channel + (end[channelIndex] - channel) * local)
+  );
+}
+
+function interpolateViridis(ratio) {
+  const rgb = interpolateColorStops(VIRIDIS_STOPS, ratio);
+  return `rgb(${rgb.join(',')})`;
+}
+
+function seatHeatmapColor(ratio, value) {
+  if (value <= 0) {
+    return {
+      background: '#111827',
+      color: '#64748b'
+    };
+  }
+
+  const rgb = interpolateColorStops(SEAT_HEATMAP_STOPS, ratio);
+  const luminance = (0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2]) / 255;
+  return {
+    background: `rgb(${rgb.join(',')})`,
+    color: luminance > 0.58 ? '#111827' : '#f8fafc'
+  };
+}
+
+function flattenNumericValues(matrix, { includeZero = true } = {}) {
+  return (matrix || [])
+    .flat()
+    .filter(value => value !== null && value !== undefined && Number.isFinite(Number(value)))
+    .map(Number)
+    .filter(value => includeZero || value > 0);
+}
+
+function HeatmapLegend({ gradient, minLabel, maxLabel }) {
+  return (
+    <div className="rp-heatmap-legend">
+      <span>{minLabel}</span>
+      <div className="rp-heatmap-legend-bar" style={{ background: gradient }} />
+      <span>{maxLabel}</span>
+    </div>
+  );
+}
+
 function datasetEntries(datasets = {}) {
   return Object.entries(datasets).map(([label, data], index) => ({
     label,
@@ -170,10 +258,18 @@ function barDatasets(datasets = {}) {
 function SeatHeatmap({ data }) {
   if (!data?.rows?.length || !data?.cols?.length) return <NoData />;
 
-  const maxValue = Math.max(...data.data.flat(), 1);
+  const values = flattenNumericValues(data.data);
+  const minValue = values.length ? Math.min(...values) : 0;
+  const maxValue = values.length ? Math.max(...values) : 1;
+  const legendGradient = `linear-gradient(90deg, ${SEAT_HEATMAP_STOPS.map(rgb => `rgb(${rgb.join(',')})`).join(', ')})`;
 
   return (
     <div className="rp-heatmap-wrap">
+      <HeatmapLegend
+        gradient={legendGradient}
+        minLabel={`Lowest ${minValue.toLocaleString()}`}
+        maxLabel={`Highest ${maxValue.toLocaleString()}`}
+      />
       <div className="rp-heatmap-header" style={{ marginLeft: 56 }}>
         {data.cols.map(col => <div key={col} className="rp-heatmap-col">{col}</div>)}
       </div>
@@ -182,15 +278,16 @@ function SeatHeatmap({ data }) {
           <div className="rp-heatmap-row-label">{row}</div>
           {data.cols.map((col, colIndex) => {
             const value = data.data[rowIndex]?.[colIndex] || 0;
-            const opacity = Math.max(0.08, value / maxValue);
+            const ratio = scaleRatio(value, minValue, maxValue);
+            const color = seatHeatmapColor(ratio, value);
             return (
               <div
                 key={`${row}-${col}`}
                 className="rp-heatmap-cell"
-                style={{ background: `rgba(99,102,241,${opacity.toFixed(2)})` }}
+                style={color}
                 title={`${row}${col}: ${value}`}
               >
-                {value || ''}
+                {value.toLocaleString()}
               </div>
             );
           })}
@@ -211,11 +308,23 @@ function CancellationHeatmapGrid({ heatmap }) {
   if (!heatmap?.rows?.length || !heatmap?.cols?.length) return <NoData />;
 
   const tone = HEATMAP_TONES[heatmap.tone] || HEATMAP_TONES.red;
-  const maxValue = Math.max(...heatmap.data.flat(), 1);
+  const [r, g, b] = rgbFromString(tone.base);
+  const nonZeroValues = flattenNumericValues(heatmap.data, { includeZero: false });
+  const allValues = flattenNumericValues(heatmap.data);
+  const minNonZero = nonZeroValues.length ? Math.min(...nonZeroValues) : 0;
+  const maxValue = nonZeroValues.length ? Math.max(...nonZeroValues) : 0;
+  const legendMin = nonZeroValues.length ? minNonZero : (allValues.length ? Math.min(...allValues) : 0);
+  const legendMax = maxValue || (allValues.length ? Math.max(...allValues) : 0);
+  const legendGradient = `linear-gradient(90deg, rgba(${r},${g},${b},0.20), rgba(${r},${g},${b},1))`;
 
   return (
     <div className="rp-cancel-heatmap">
       <h3>{heatmap.title}</h3>
+      <HeatmapLegend
+        gradient={legendGradient}
+        minLabel={`Lowest Rate ${formatPercent(legendMin)}`}
+        maxLabel={`Highest Rate ${formatPercent(legendMax)}`}
+      />
       <div className="rp-cancel-heatmap-scroll">
         <div className="rp-cancel-heatmap-header">
           <div className="rp-cancel-axis">{heatmap.colLabel}</div>
@@ -229,16 +338,19 @@ function CancellationHeatmapGrid({ heatmap }) {
           <div key={row} className="rp-cancel-row">
             <div className="rp-cancel-row-label" title={row}>{row}</div>
             {heatmap.cols.map((col, colIndex) => {
-              const value = Number(heatmap.data[rowIndex]?.[colIndex] || 0);
-              const opacity = value ? Math.max(0.14, value / maxValue) : 0.05;
+              const rawValue = heatmap.data[rowIndex]?.[colIndex];
+              const isMissing = rawValue === null || rawValue === undefined;
+              const value = Number(rawValue || 0);
+              const ratio = value > 0 ? scaleRatio(value, minNonZero, maxValue) : 0;
+              const alpha = isMissing ? 0 : value === 0 ? 0.2 : 0.2 + ratio * 0.8;
               return (
                 <div
                   key={`${row}-${col}`}
-                  className="rp-cancel-cell"
-                  style={{ background: `rgba(${tone.base},${opacity.toFixed(2)})`, color: value ? '#fff' : tone.text }}
-                  title={`${row} / ${col}: ${value}%`}
+                  className={`rp-cancel-cell${isMissing ? ' missing' : ''}`}
+                  style={{ background: isMissing ? 'rgba(255,255,255,0.035)' : rgbaFromTone(tone.base, alpha), color: value > 0 ? '#fff' : tone.text }}
+                  title={`${row} / ${col}: ${isMissing ? 'N/A' : formatPercent(value)}`}
                 >
-                  {value ? `${value}%` : '0'}
+                  {isMissing ? '-' : formatPercent(value)}
                 </div>
               );
             })}
@@ -266,7 +378,7 @@ function datasetForSelection(datasets, selectedKey) {
   return { [selectedKey]: datasets?.[selectedKey] || [] };
 }
 
-function buildChart(report, data, selectedCategory = 'all', selectedSeatType = '') {
+function buildChart(report, data, selectedCategory = 'all') {
   if (!data) return null;
 
   if (report.id === 'revenue-by-category') {
@@ -314,11 +426,26 @@ function buildChart(report, data, selectedCategory = 'all', selectedSeatType = '
     };
   }
 
-  if (report.id === 'venue-utilization' || report.id === 'seat-type-revenue') {
+  if (report.id === 'seat-type-revenue') {
+    if (!data.rows?.length) return null;
+    const rows = data.rows;
+
+    return {
+      chartData: {
+        labels: rows.map(row => row.seatType),
+        datasets: barDatasets({
+          'Total Revenue': rows.map(row => Number(row.totalRevenue || 0))
+        })
+      },
+      options: BAR_CHART_OPTIONS,
+      plugins: [ZERO_VALUE_PLUGIN],
+      Component: Bar
+    };
+  }
+
+  if (report.id === 'venue-utilization') {
     if (!data.labels || !data.datasets) return null;
-    const datasets = report.id === 'seat-type-revenue'
-      ? datasetForSelection(data.datasets, selectedSeatType)
-      : datasetForSelection(data.datasets, selectedCategory);
+    const datasets = datasetForSelection(data.datasets, selectedCategory);
 
     return {
       chartData: {
@@ -409,7 +536,7 @@ function buildChart(report, data, selectedCategory = 'all', selectedSeatType = '
     };
   }
 
-  if (report.id === 'seat-type-revenue' || report.id === 'customer-retention') {
+  if (report.id === 'customer-retention') {
     if (!data.labels || !data.data) return null;
     return {
       chartData: {
@@ -432,6 +559,18 @@ function buildReportTable(report, data) {
   if (!data) return { columns: [], rows: [] };
 
   if (report.id === 'seat-heatmap') {
+    if (data.details?.length) {
+      return {
+        columns: ['Seat Row', 'Seat Number', 'Bookings', 'Revenue'],
+        rows: data.details.map(row => [
+          row.rowLabel,
+          row.seatNumber,
+          row.bookings,
+          formatMoney(row.revenue)
+        ])
+      };
+    }
+
     return {
       columns: ['Seat Row', ...(data.cols || [])],
       rows: (data.rows || []).map((rowLabel, rowIndex) => [
@@ -441,7 +580,7 @@ function buildReportTable(report, data) {
     };
   }
 
-  if (report.id === 'failed-payment-rate') {
+  if (report.id === 'cancellation-rate') {
     const columns = ['Venue Name', 'Seat Type', 'Event', 'Booking Year', 'Booking Month', 'Showtime', 'Total Booking', 'Cancelled Count', 'Cancel Rate Percentage'];
     return {
       columns,
@@ -483,6 +622,33 @@ function buildReportTable(report, data) {
     };
   }
 
+  if (report.id === 'booking-vs-capacity') {
+    return {
+      columns: ['Showtime', 'Venue', 'Capacity', 'Sold', 'Remaining', 'Occupancy Rate', 'Status'],
+      rows: (data || []).map(row => [
+        row.label,
+        row.venue,
+        row.capacity,
+        row.sold,
+        row.remaining,
+        formatPercent(row.occupancyRatePct),
+        row.status
+      ])
+    };
+  }
+
+  if (report.id === 'seat-type-revenue') {
+    return {
+      columns: ['Seat Type', 'Total Tickets Sold', 'Total Revenue', 'Avg Days in Advance'],
+      rows: (data.rows || []).map(row => [
+        row.seatType,
+        row.totalTicketsSold,
+        formatMoney(row.totalRevenue),
+        row.avgDaysInAdvance
+      ])
+    };
+  }
+
   if (Array.isArray(data)) {
     const columns = [...new Set(data.flatMap(row => Object.keys(row || {})))];
     return {
@@ -518,7 +684,7 @@ function ReportTable({ report, data }) {
   if (!table.columns.length || !table.rows.length) return <NoData />;
 
   return (
-    <div className={`rp-table-wrap${report.id === 'failed-payment-rate' ? ' wide' : ''}`}>
+    <div className={`rp-table-wrap${report.id === 'cancellation-rate' ? ' wide' : ''}`}>
       <table className="rp-table">
         <thead>
           <tr>
@@ -554,7 +720,6 @@ function Reports() {
   const [error, setError] = useState('');
   const [viewMode, setViewMode] = useState('table');
   const [selectedHeatmapType, setSelectedHeatmapType] = useState('venue-seat-type');
-  const [selectedSeatType, setSelectedSeatType] = useState('');
 
   const normalizedReportId = normalizeReportId(reportId);
   const selectedReport = getReportById(normalizedReportId);
@@ -564,14 +729,10 @@ function Reports() {
   const hasVenueFilter = selectedReport.filters.includes('venue');
   const isTableOnlyReport = selectedReport.chart === 'tableOnly';
   const chart = useMemo(
-    () => buildChart(selectedReport, reportData, selectedCategory, selectedSeatType),
-    [selectedReport, reportData, selectedCategory, selectedSeatType]
+    () => buildChart(selectedReport, reportData, selectedCategory),
+    [selectedReport, reportData, selectedCategory]
   );
   const ChartComponent = chart?.Component;
-  const seatTypeOptions = useMemo(
-    () => selectedReport.id === 'seat-type-revenue' ? Object.keys(reportData?.datasets || {}) : [],
-    [selectedReport.id, reportData]
-  );
   const dateRangeLabel = hasDateFilter ? `${startDate} to ${endDate}` : 'Full historical range';
   const categoryLabel = hasCategoryFilter
     ? selectedCategory === 'all' ? 'all categories' : selectedCategory
@@ -598,17 +759,6 @@ function Reports() {
         setVenues([]);
       });
   }, [hasVenueFilter, selectedReport.requireVenue, selectedVenueId]);
-
-  useEffect(() => {
-    if (selectedReport.id !== 'seat-type-revenue') {
-      setSelectedSeatType('');
-      return;
-    }
-
-    if (selectedSeatType && !seatTypeOptions.includes(selectedSeatType)) {
-      setSelectedSeatType('');
-    }
-  }, [selectedReport.id, selectedSeatType, seatTypeOptions]);
 
   useEffect(() => {
     const token = localStorage.getItem('adminToken');
@@ -758,18 +908,6 @@ function Reports() {
             <select value={selectedHeatmapType} onChange={e => setSelectedHeatmapType(e.target.value)}>
               {reportData.heatmaps.map(heatmap => (
                 <option key={heatmap.key} value={heatmap.key}>{heatmap.title}</option>
-              ))}
-            </select>
-          </label>
-        )}
-
-        {!loading && viewMode === 'visualization' && selectedReport.id === 'seat-type-revenue' && seatTypeOptions.length > 0 && (
-          <label className="rp-heatmap-select">
-            Seat Type
-            <select value={selectedSeatType} onChange={e => setSelectedSeatType(e.target.value)}>
-              <option value="">All Seat Types</option>
-              {seatTypeOptions.map(seatType => (
-                <option key={seatType} value={seatType}>{seatType}</option>
               ))}
             </select>
           </label>

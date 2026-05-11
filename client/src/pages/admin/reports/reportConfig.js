@@ -100,7 +100,7 @@ export const REPORTS = [
     filters: ['date', 'category']
   },
   {
-    id: 'failed-payment-rate',
+    id: 'cancellation-rate',
     no: 12,
     title: 'Cancellation Analysis Heatmap',
     endpoint: 'cancellation-heatmap',
@@ -112,7 +112,8 @@ export const REPORTS = [
 
 const REPORT_ID_ALIASES = {
   'boking-vs-capacity': 'booking-vs-capacity',
-  'seat-type-velocity': 'seat-type-revenue'
+  'seat-type-velocity': 'seat-type-revenue',
+  'failed-payment-rate': 'cancellation-rate'
 };
 
 export function normalizeReportId(reportId) {
