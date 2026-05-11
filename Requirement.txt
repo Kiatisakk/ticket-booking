@@ -1,0 +1,1409 @@
+CPE 241 Database 
+Term Project 
+1. Scope 
+The Ticket Booking System is a web-based application that allows users to browse events (movies, 
+concerts, seminars), select specific seats at specific showtimes, make payments, and generate tickets. 
+The system supports role-based access control with Admin, Staff, and Customer roles. 
+2. Requirement Analysis 
+2.1 User Management 
+Objective 
+Provide a secure registration and authentication system that allows users to create accounts, log in, and 
+access the ticket booking platform with appropriate role-based permissions. 
+Requirement 
+Description 
+User Registration 
+New users shall create an account by providing full name, email, and 
+password. The system shall auto-assign the "Customer" role. 
+User Login 
+Registered users shall log in using email and password. The system shall 
+validate credentials and issue a session token. 
+Password Security 
+Passwords shall be stored using hashing  to prevent plain-text storage. 
+Role-Based Access Control 
+The system shall support three roles: Admin, Staff, and Customer with 
+different permission levels. 
+Session Management 
+Sessions shall use JWT tokens with a configurable expiration period 
+(default: 7 days). 
+Email Uniqueness 
+Each email address can only be registered once to prevent duplicate 
+accounts. 
+Password Validation 
+Passwords must meet a minimum length requirement (at least 6 
+characters). 
+User Role Assignment 
+One role can be assigned to many users, but each user must have exactly 
+one role. 
+Business Rules 
+Rule 
+Description 
+Auto-assign Customer role 
+All new registrations are automatically assigned the "Customer" role. 
+Unique email 
+Each email address can only be registered once. 
+Minimum password length 
+Passwords must be at least 6 characters long. 
+ 
+User Roles and Permissions 
+Role 
+Permissions 
+Customer 
+Browse events, select seats, make bookings, process payments, view own 
+booking history, cancel pending bookings 
+Staff 
+All Customer permissions + Create and manage events 
+Admin 
+All Staff permissions + View all bookings across all users, manage system settings 
+ 
+2.2 Event Browsing and Discovery 
+Objective 
+Allow users to discover and explore available events, filter by category, search by title, and view detailed 
+event information including associated showtimes. 
+Requirement 
+Description 
+Event Listing 
+Users shall view a list of all available events with title and category. 
+Category Filtering 
+Users shall filter events by category (Movie, Concert, Seminar). 
+Search by Title 
+Users shall search events by entering keywords in the event title. 
+Event Details 
+Users shall view full event details including description and all associated 
+showtimes. 
+Event Creation 
+Admin and Staff users shall create new events with title, description, and 
+category. 
+Category Event Assignment 
+One category can contain many events, but each event must belong to 
+exactly one category. 
+Business Rules 
+Rule 
+Description 
+Category assignment 
+Every event must belong to exactly one category. 
+Event visibility 
+All events are visible to all authenticated users. 
+ 
+2.3 Showtime and Venue Management 
+Objective 
+Maintain structured data for events, schedules, and venues to support real-time querying of event 
+availability and seating information. 
+Functional Requirements 
+Requirement 
+Description 
+Showtime Scheduling 
+Admin/Staff shall create showtimes linking an event to a venue with a 
+specific date/time and base price. 
+Venue Listing 
+Users shall view all available venues with name and location. 
+Seat Definition 
+Each venue shall define its seats with row label, seat number, and seat 
+type. 
+Seat Type Pricing 
+Each seat type (VIP, Standard, Sofa Bed) shall have a price multiplier 
+applied to the showtime base price. 
+Showtime Listing 
+Users shall view all showtimes for a specific event. 
+Venue Seat Ownership 
+One venue can have many seats, but each seat must belong to exactly one 
+venue. 
+Seat Type Assignment 
+One seat type can be assigned to many seats, but each seat must have 
+exactly one seat type. 
+Event Showtime Scheduling 
+One event can have many showtimes, but each showtime must be linked 
+to exactly one event. 
+Venue Showtime Hosting 
+One venue can host many showtimes, but each showtime must be held at 
+exactly one venue. 
+Seat-Venue Consistency 
+The system shall validate, during the booking transaction, that the 
+selected seat belongs to the same venue as the referenced showtime 
+before inserting a BookingDetail. 
+Seat Type Modifier Validity 
+The price modifier for each seat type must be greater than zero to ensure 
+valid pricing calculation. 
+  
+Business Rules 
+Rule 
+Description 
+Pricing formula 
+Seat Price = Showtime Base Price × Seat Type Price Modifier 
+ 
+2.4 Booking and Group Reservations 
+Objective 
+Allow users to select multiple seats for the same showtime in a single booking, supporting group 
+reservations with several seats per transaction. 
+Functional Requirements 
+Requirement 
+Description 
+Create Booking 
+Users shall create a booking containing one or more seats for a specific 
+showtime. 
+Group Bookings 
+A single booking may include multiple seats to support group 
+reservations. 
+Booking History 
+Users shall view their own booking history ordered by most recent. 
+Booking Details 
+Each booking shall display event name, showtime, seats, total amount, 
+and status. 
+Cancel Booking 
+Users shall cancel bookings that are in "Pending" status. 
+User Booking Ownership 
+One user can have many bookings, but each booking must belong to 
+exactly one user. 
+Booking Status Assignment 
+One status can be applied to many bookings, but each booking must have 
+exactly one status at a time. 
+Booking Detail Grouping 
+One booking can contain many booking details, but each detail must 
+belong to exactly one booking. 
+Showtime Booking Detail 
+One showtime can have many booking details, but each detail must 
+reference exactly one showtime. 
+Seat Booking Detail 
+One seat can appear in many booking details across different showtimes, 
+but each detail must reference exactly one seat. 
+Booking Expiry Validity 
+The booking expiration time must be set after the booking creation time. 
+Booking Amount Validity 
+The total booking amount must be non-negative. 
+Business Rules 
+Rule 
+Description 
+Total calculation 
+Booking Total = Sum of all individual seat prices 
+Status lifecycle 
+Bookings transition from Pending → Completed (on payment) or 
+Cancelled (by user) 
+Cancellation restriction 
+Only Pending bookings can be cancelled by the user 
+Cancellation handling 
+Cancelled bookings are preserved in the database for booking history and 
+reporting. The system updates the booking status to Cancelled instead of 
+physically deleting the record. 
+ 
+2.5 Double-Booking Prevention 
+Objective 
+Ensure the same seat cannot be booked more than once for the same showtime, preventing conflicting 
+reservations. 
+Functional Requirements 
+Requirement 
+Description 
+Seat Availability Check 
+The system shall verify seat availability before creating a booking. 
+Atomic Booking Creation 
+If any requested seat is already booked, the entire booking request shall 
+fail. 
+Booked Seat Indication 
+The seat map shall visually indicate which seats are already booked. 
+Showtime Seat View 
+The system shall maintain a view of all seats per showtime, indicating 
+availability status and calculated seat price. 
+Venue consistency check 
+Before inserting booking details, the system shall validate within the same 
+transaction that the selected seat belongs to the same venue as the 
+referenced showtime (Seats.VenueID = Showtimes.VenueID). 
+  
+Business Rules 
+Rule 
+Description 
+Seat unavailable 
+A seat is considered unavailable if a BookingDetail already exists for the 
+same showtime and is linked to a Completed booking, or to a Pending 
+booking whose ExpiresAt has not passed. Cancelled bookings and expired 
+pending bookings release the seat back to available. 
+All-or-nothing 
+If any requested seat is unavailable during the transactional recheck, the 
+entire booking request shall fail. 
+Seat availability source 
+Seat availability and pricing shall be queried from the 
+ShowtimeAvailableSeats view filtered by ShowtimeID. 
+Transactional recheck 
+Before inserting booking details, the system shall recheck existing active 
+bookings for the same (ShowtimeID, SeatID) within a transaction. 
+ 
+2.6 Booking Lifecycle and Session Timeout 
+Objective 
+Bookings have a limited time window to complete payment. Unpaid bookings expire and release seats 
+back to available inventory. 
+Functional Requirements 
+Requirement 
+Description 
+Auto-set Expiry 
+All bookings shall be created with an expiration time of 15 minutes from 
+creation. 
+Expired Booking Rejection 
+The system shall reject payment attempts for expired bookings. 
+Status Transition 
+On successful payment, booking status shall change from Pending to 
+Completed. 
+Showtime-Based Booking Deadline 
+The system shall prevent users from creating a new booking if the 
+showtime's StartDateTime has already passed. 
+Expired Seat Release 
+The system shall treat expired pending bookings as inactive so their seats 
+become available again. 
+   
+Business Rules 
+Rule 
+Description 
+15-minute window 
+ExpiresAt = NOW() + 15 minutes 
+Expired pending release 
+Pending bookings whose ExpiresAt has passed are treated as inactive for 
+seat availability and cannot be paid. 
+ 
+2.7 Payment Processing 
+Objective 
+Record payment transactions with method, status, and gateway reference for each completed booking. 
+Functional Requirements 
+Requirement 
+Description 
+Payment Method Selection 
+Users shall select from available payment methods (PromptPay, Credit 
+Card, TrueMoney, ShopeePay). 
+Payment Processing 
+The system shall create a payment record with status, transaction ID, and 
+amount. 
+Transaction ID Generation 
+A unique transaction ID shall be auto-generated for each payment. 
+One Payment per Booking 
+Each booking shall have exactly one payment record. 
+Payment Timestamp 
+The system shall record the exact timestamp of successful payment. 
+Booking Payment Record 
+Each booking must have at most one payment record, and each payment 
+must be linked to exactly one booking. 
+Payment Method Assignment 
+One payment method can be used in many payments, but each payment 
+must use exactly one method. 
+Payment Status Assignment 
+One status can be applied to many payments, but each payment must 
+have exactly one status at a time. 
+Payment Amount Validity 
+The payment amount must be non-negative. 
+Active Payment Method 
+The system shall only allow payment methods that are currently active. 
+ 
+Business Rules 
+Rule 
+Description 
+Unique transaction ID 
+Each payment has a unique TransactionID 
+Owner-only payment 
+Only the booking owner can process payment 
+ 
+2.8 Ticket Generation and Verification 
+Objective 
+After successful payment, individual tickets are generated for each seat in the booking. Tickets can be 
+verified independently. 
+Functional Requirements 
+Requirement 
+Description 
+Ticket Generation 
+One ticket shall be generated per seat in a completed booking. 
+Ticket Number 
+Each ticket shall have a unique ticket number 
+Ticket Details 
+Each ticket shall display event name, venue, showtime, seat info, and 
+price. 
+Ticket Verification 
+Tickets shall be verifiable by ticket number without authentication. 
+Ticket Listing 
+Users shall view all tickets from their bookings. 
+Booking Detail Ticket 
+Each booking detail must generate exactly one ticket, and each ticket 
+must correspond to exactly one booking detail. 
+Ticket Price Validity 
+The final price of each ticket must be non-negative. 
+   
+2.9 Seat Map and Venue Layout 
+Objective 
+Display an interactive seat map showing available, booked, and selected seats for a given showtime. 
+Functional Requirements 
+Requirement 
+Description 
+Seat Map Display 
+The system shall display all seats for a venue grouped by row with seat 
+numbers. 
+Seat Type Visualization 
+Seats shall be color-coded by type (VIP, Standard, Sofa Bed). 
+Availability Indication 
+Booked seats shall be visually distinguished from available seats. 
+Seat Selection 
+Users shall click seats to select/deselect them. 
+Running Total 
+The system shall display the running total of selected seats. 
+ 
+2.10 Administrator Dashboard 
+Objective 
+Provide administrators with tools to manage master data (events, venues, seats) and view system-wide 
+statistics and booking reports. 
+Proposed Features 
+Feature 
+Description 
+Revenue by event category 
+How does the total revenue for each event category 
+change from month to month? 
+Venue Seats popularity 
+What are zones where customers consistently prefer 
+to sit? 
+Platform user growth 
+How rapidly is our platform expanding month to 
+month? 
+Monthly Revenue Trends by Venue 
+How does the total revenue for each venue change 
+from month to month? 
+Booking by Hours 
+What is the Total Bookings during each hour of the 
+day? 
+Booking vs. Capacity by Showtime 
+How does the number of sold tickets compare to the 
+total venue capacity for each showtime? 
+In period Venue Utilization by Event Category 
+How many showtimes are hosted at each venue in a 
+period? 
+Seat Type Velocity & Pricing Optimization 
+How quickly do different seat types (e.g., VIP, 
+Standard) sell out before the showtime, and how 
+much total revenue does each type generate? 
+Customer Retention & Repeat Purchase Value 
+What percentage of our total ticket revenue comes 
+from repeat buyers compared to one-time buyers? 
+Monthly Customer Interest Trend by Event Category 
+How does customer interest in various event 
+categories trend month over month? 
+Peak showtime hours for each category 
+For each month, which hour of the day has the highest 
+ticket for each category? 
+Canceled rate of booking 
+What is the key factor of the cancelation for each 
+event? 
+ 
+ 
+3. ER Diagram 
+3.1 Chen ER Diagram 
+ 
+https://kmutt.me/chen-daigram 
+ 
+ 
+3.2  
+Crow’s Foot ER Diagram 
+ 
+ 
+ 
+ 
+https://dbdiagram.io/d/698857a8bd82f5fce201d946 
+ 
+ 
+ 
+ 
+ 
+ 
+4. Relational Schema 
+ 
+ 
+https://kmutt.me/relational-schema
+5. Normalization 
+5.1 1NF (First Normal Form) 
+Table 
+Description 
+Roles 
+All attributes are atomic. PK is  RoleID. 
+Users 
+All personal information fields are atomic. PK is 
+UserID. 
+EventCategories 
+Contains singular, atomic values. PK is CategoryID. 
+Events 
+No repeating groups. PK is EventID. 
+Venues 
+Location data is broken down into atomic values. PK is 
+VenueID. 
+Showtimes 
+Date/time and price are atomic values. PK is 
+ShowtimeID. 
+SeatTypes 
+No multi-valued attributes. PK is SeatTypeID. 
+Seats 
+Seat identifiers are atomic. PK is SeatID. 
+BookingStatuses 
+Data is atomic without repeating groups. PK is 
+StatusID. 
+Bookings 
+All transaction data points are atomic. PK is 
+BookingID. 
+BookingDetails 
+Junction table resolving M:N relationship with atomic 
+values. PK is DetailID. 
+Tickets 
+Ticket information is atomic. PK is TicketID. 
+PaymentMethods 
+All fields contain atomic data. PK is MethodID. 
+PaymentStatuses 
+Data is strictly atomic. PK is StatusID. 
+Payments 
+Payment records are atomic. PK is PaymentID. 
+5.2 2NF (Second Normal Form) 
+Table 
+Description 
+Roles 
+Achieved automatically as the Primary Key is a single 
+attribute. No partial dependencies exist. 
+Users 
+Fully compliant due to the single-column Primary Key. 
+EventCategories 
+Satisfied due to the single-attribute Primary Key. 
+Events 
+Compliant as the PK consists of a single attribute. 
+Venues 
+Uses a single-attribute PK, eliminating partial 
+dependencies. 
+Showtimes 
+No partial dependencies due to the single-column PK. 
+SeatTypes 
+Compliant as it uses a single-column Primary Key. 
+Seats 
+Satisfied through the use of a single surrogate key 
+(SeatID). 
+BookingStatuses 
+Single-column Primary Key ensures no partial 
+functional dependencies. 
+Bookings 
+Fully compliant; single PK means all attributes depend 
+on the whole key. 
+BookingDetails 
+By using a surrogate key (DetailID) instead of a 
+composite key, partial dependencies are structurally 
+prevented. 
+Tickets 
+Satisfied via single-attribute Primary Key. 
+PaymentMethods 
+No composite key used; therefore, partial dependency 
+is impossible. 
+PaymentStatuses 
+Single-attribute PK automatically satisfies 2NF 
+conditions. 
+Payments 
+Single-column PK ensures 2NF compliance. 
+ 
+5.3 3NF (Third Normal Form) 
+Table 
+Description 
+Roles 
+RoleName and Description depend entirely 
+on RoleID. It acts as a standard lookup table with no 
+transitive dependencies. 
+Users 
+All non-key attributes 
+(FullName, Email, Password) and the foreign 
+key (RoleID) depend exclusively on UserID. No 
+attributes depend on one another. 
+EventCategories 
+CategoryName strictly describes 
+the CategoryID without depending on other non-
+key attributes. 
+Events 
+Title, Description, and CategoryID (FK) 
+depend entirely on the specific EventID. 
+Venues 
+VenueName and Location are fully dependent 
+on VenueID. No transitive relationships exist. 
+Showtimes 
+StartDateTime and BasePrice describe the 
+specific showtime. The event and venue associations 
+are properly handled via Foreign Keys. 
+SeatTypes 
+TypeName and PriceModifier are directly and 
+solely dependent on SeatTypeID. 
+Seats 
+RowLabel and SeatNumber uniquely describe 
+the SeatID. Foreign keys 
+(VenueID, SeatTypeID) establish direct 
+relationships without creating transitive dependencies. 
+BookingStatuses 
+StatusName is solely dependent on StatusID. 
+(Lookup table) 
+Bookings 
+TotalAmount, BookingTimeStamp, and FKs 
+(UserID, StatusID) depend entirely 
+on BookingID. TotalAmount is stored based on the 
+transaction snapshot, avoiding dependency on other 
+tables. 
+BookingDetails 
+Acts strictly to link BookingID, ShowtimeID, 
+and SeatID together. No non-key attributes dictate 
+other non-key attributes. 
+Tickets 
+TicketNo and FinalPrice are fully dependent 
+on TicketID. The 1:1 relationship 
+with BookingDetails is correctly maintained via 
+Foreign Key. 
+PaymentMethods 
+MethodName and IsActive flag depend strictly on 
+the MethodID. 
+PaymentStatuses 
+StatusName functionally depends only on the 
+Primary Key. 
+Payments 
+TransactionID, Amount, PaidAt, and relational 
+FKs depend entirely and only on PaymentID. 
+6. Database Constraints 
+This section documents all database-level constraints that enforce data integrity, referential consistency, and business 
+rule compliance. 
+6.1 Primary Key Constraints 
+· 
+Every table has a single-column auto-incrementing integer primary key. 
+Table 
+Primary Key 
+Roles 
+RoleID 
+BookingStatuses 
+StatusID 
+EventCategories 
+CategoryID 
+SeatTypes 
+SeatTypeID 
+PaymentMethods 
+MethodID 
+PaymentStatuses 
+StatusID 
+Users 
+UserID 
+Venues 
+VenueID 
+Events 
+EventID 
+Seats 
+SeatID 
+Showtimes 
+ShowtimeID 
+Bookings 
+BookingID 
+BookingDetails 
+DetailID 
+Payments 
+PaymentID 
+Tickets 
+TicketID 
+6.2 Foreign Key Constraints (NOT NULL + ON DELETE Rules) 
+All foreign keys are NOT NULL and include explicit ON DELETE behavior. 
+Table 
+FK Column 
+References 
+ON DELETE 
+Behavior 
+Users 
+RoleID 
+Roles(RoleID) 
+SET DEFAULT 
+User remains if role 
+is deleted 
+Events 
+CategoryID 
+EventCategories(CategoryID) 
+RESTRICT 
+Cannot delete 
+category with 
+existing events 
+Seats 
+VenueID 
+Venues(VenueID) 
+CASCADE 
+Deleting venue 
+removes its seats 
+Seats 
+SeatTypeID 
+SeatTypes(SeatTypeID) 
+RESTRICT 
+Can't delete type 
+with existing seats 
+Showtimes 
+EventID 
+Events(EventID) 
+CASCADE 
+Deleting event 
+removes its 
+showtimes 
+Showtimes 
+VenueID 
+Venues(VenueID) 
+RESTRICT 
+Can't delete venue 
+with showtimes 
+Bookings 
+UserID 
+Users(UserID) 
+RESTRICT 
+Cannot delete user 
+with existing 
+booking history 
+Bookings 
+StatusID 
+BookingStatuses(StatusID) 
+RESTRICT 
+Can't delete status 
+with bookings 
+BookingDetails 
+BookingID 
+Bookings(BookingID) 
+RESTRICT 
+Cannot delete 
+booking with 
+existing booking 
+details 
+BookingDetails 
+ShowtimeID 
+Showtimes(ShowtimeID) 
+RESTRICT 
+Can't delete 
+showtime with 
+bookings 
+BookingDetails 
+SeatID 
+Seats(SeatID) 
+RESTRICT 
+Can't delete seat 
+with bookings 
+Payments 
+BookingID 
+Bookings(BookingID) 
+RESTRICT 
+Cannot delete 
+booking with 
+existing payment 
+record 
+Payments 
+MethodID 
+PaymentMethods(MethodID) 
+RESTRICT 
+Can't delete method 
+with payments 
+Payments 
+StatusID 
+PaymentStatuses(StatusID) 
+RESTRICT 
+Can't delete status 
+with payments 
+Tickets 
+DetailID 
+BookingDetails(DetailID) 
+RESTRICT 
+Cannot delete 
+booking detail with 
+generated ticket 
+***Note*** Transactional data is preserved for booking history, reporting, and ticket verification. 
+Therefore, cancellation is handled by status updates rather than physical deletion. 
+  
+6.3 Unique Constraints 
+Table 
+Column(s) 
+Purpose 
+Users 
+Email 
+Prevents duplicate user accounts 
+Payments 
+BookingID 
+One payment per booking (1:1 
+relationship) 
+Payments 
+TransactionID 
+Each transaction has a unique 
+gateway reference 
+Tickets 
+TicketNo 
+Each ticket has a unique verification 
+code 
+Tickets 
+DetailID 
+One ticket per booking detail (1:1 
+relationship) 
+Seats 
+(VenueID, RowLabel, SeatNumber) 
+Prevent duplicate seat positions 
+within the same venue 
+  
+6.4 CHECK Constraints (via Raw SQL) 
+These constraints are applied via raw SQL migration since Prisma does not support CHECK constraints natively. 
+Table 
+Constraint Name 
+Rule 
+Purpose 
+Bookings 
+booking_total_positive 
+TotalAmount >= 0 
+Prevents negative 
+booking totals 
+Bookings 
+booking_expires_after_created 
+ExpiresAt > 
+BookingTimestamp 
+Ensures expiry is after 
+creation 
+Payments 
+payment_amount_positive 
+Amount >= 0 
+Prevents negative 
+payment amounts 
+Showtimes 
+showtime_base_price_positive 
+BasePrice >= 0 
+Prevents negative 
+showtime prices 
+SeatTypes 
+seat_type_modifier_positive 
+PriceModifier > 0 
+Ensures positive price 
+multiplier 
+Tickets 
+ticket_price_positive 
+FinalPrice >= 0 
+Prevents negative ticket 
+prices 
+  
+6.5 Default Value Constraints 
+Table 
+Column 
+Default Value 
+Purpose 
+All Tables 
+CreatedAt 
+NOW() 
+Records when the row 
+was created 
+All Tables 
+UpdatedAt 
+NOW() (auto-updated) 
+Records when the row 
+was last modified 
+Bookings 
+BookingTimestamp 
+NOW() 
+Defaults booking time to 
+current timestamp 
+PaymentMethods 
+IsActive 
+TRUE 
+New payment methods 
+are active by default 
+Bookings 
+StatusID 
+1(Pending) 
+Set new booking to 
+“Pending” status by 
+default. 
+Payments 
+StatusID 
+1(Pending) 
+Initialize payment records 
+in a pending state 
+Users 
+RoleID 
+3 (Customer) 
+Set new users to 
+"Customer" by default 
+and use Customer as 
+fallback role 
+  
+6.6 Required Data Columns (NOT NULL) 
+Essential data columns that cannot be null, ensuring data quality. 
+Table 
+NOT NULL Columns 
+Purpose 
+Users 
+FullName, Email, Password, RoleID 
+Every user must have identity, 
+credentials, and a role 
+Events 
+CategoryID, Title 
+Every event must belong to a 
+category and named 
+Seats 
+VenueID, SeatTypeID, RowLabel, 
+SeatNumber 
+Every seat must belong to a venue 
+and have a type 
+Showtimes 
+EventID, VenueID, StartDateTime, 
+BasePrice 
+Every showtime must have event, 
+venue, time, and price 
+Bookings 
+UserID, StatusID, ExpiresAt 
+Every booking must have an owner, 
+status, and expiry 
+BookingDetails 
+BookingID, ShowtimeID, SeatID 
+Every detail must link to booking, 
+showtime, and seat 
+Payments 
+BookingID, MethodID, StatusID 
+Every payment must have booking, 
+method, and status 
+Tickets 
+DetailID 
+Every ticket must link to a booking 
+detail 
+ 
+6.7 Views 
+This section documents database views used to simplify querying and support application-level booking logic. 
+View 
+Purpose 
+ShowtimeAvailableSeats 
+ShowtimeAvailableSeats displays all seats per showtime with availability 
+status and calculated seat price. 
+A seat is marked unavailable when it is linked to a Completed booking, or 
+to a Pending booking whose ExpiresAt has not passed. 
+The view is used for querying and seat-map display. 
+Final double-booking prevention is enforced by transactional booking 
+logic in the application layer, where the system rechecks active, non-
+expired bookings for the same (ShowtimeID, SeatID) before insert. 
+ 
+ 
+7. Data Dictionary 
+This section details the structure, data types, constraints, and descriptions for all tables in the database. Note: Every 
+table includes CreatedAt and UpdatedAt columns with a default value of NOW() to track record creation and 
+modification timestamps.  
+ 
+7.1 Table: Roles  
+Stores role-based access control information (e.g., Admin, Staff, Customer).  
+Column 
+Data Type 
+Constraints 
+Default 
+Description 
+RoleID 
+INT 
+PK, Auto-Increment 
+- 
+Primary key for the 
+role.  
+RoleName 
+VARCHAR 
+NOT NULL 
+- 
+Name of the role.  
+Description 
+TEXT 
+- 
+- 
+Description of the 
+role and its 
+permissions.  
+ 
+7.2 Table: Users  
+Stores registered user account information and credentials.  
+Column 
+Data Type 
+Constraints 
+Default 
+Description 
+UserID 
+INT 
+PK, Auto-Increment 
+- 
+Primary key for the 
+user.  
+RoleID 
+INT 
+FK, SET DEFAULT, 
+NOT NULL 
+3 (CUSTOMER) 
+References 
+Roles(RoleID).  
+FullName 
+VARCHAR 
+NOT NULL 
+- 
+Full name of the 
+user.  
+Email 
+VARCHAR 
+UNIQUE, NOT NULL 
+- 
+Email address used 
+for login.  
+Password 
+VARCHAR 
+NOT NULL 
+- 
+Hashed password.  
+ 
+7.3 Table: EventCategories  
+Stores categories for events (e.g., Movie, Concert, Seminar).  
+Column 
+Data Type 
+Constraints 
+Default 
+Description 
+CategoryID 
+INT 
+PK, Auto-Increment 
+- 
+Primary key for the 
+event category.  
+CategoryName 
+VARCHAR 
+NOT NULL 
+- 
+Name of the 
+category.  
+ 
+7.4 Table: Events  
+Stores details of the available events.  
+Column 
+Data Type 
+Constraints 
+Default 
+Description 
+EventID 
+INT 
+PK, Auto-Increment 
+- 
+Primary key for the 
+event.  
+CategoryID 
+INT 
+FK, RESTRICT, NOT 
+NULL 
+- 
+References 
+EventCategories(Cat
+egoryID).  
+Title 
+VARCHAR 
+NOT NULL 
+- 
+Title of the event.  
+Description 
+TEXT 
+- 
+- 
+Detailed description 
+of the event.  
+ 
+7.5 Table: Venues Stores information about the physical locations where events are held.  
+Column 
+Data Type 
+Constraints 
+Default 
+Description 
+VenueID 
+INT 
+PK, Auto-Increment 
+- 
+Primary key for the 
+venue.  
+VenueName 
+VARCHAR 
+NOT NULL 
+- 
+Name of the venue.  
+Location 
+TEXT 
+- 
+- 
+Physical address or 
+location details.  
+ 
+7.6 Table: Showtimes  
+Stores the schedule of events linked to specific venues.  
+Column 
+Data Type 
+Constraints 
+Default 
+Description 
+ShowtimeID 
+INT 
+PK, Auto-Increment 
+- 
+Primary key for the 
+showtime.  
+EventID 
+INT 
+FK, CASCADE, NOT 
+NULL 
+- 
+References 
+Events(EventID).  
+VenueID 
+INT 
+FK, RESTRICT, NOT 
+NULL 
+- 
+References 
+Venues(VenueID).  
+StartDateTime 
+DATETIME 
+NOT NULL 
+- 
+The date and time 
+the event starts.  
+BasePrice 
+DECIMAL 
+CHECK (>= 0), NOT 
+NULL 
+- 
+Base price for the 
+showtime.  
+ 
+7.7 Table: SeatTypes  
+Stores different types of seats and their pricing modifiers.  
+Column 
+Data Type 
+Constraints 
+Default 
+Description 
+SeatTypeID 
+INT 
+PK, Auto-Increment 
+- 
+Primary key for the 
+seat type.  
+TypeName 
+VARCHAR 
+NOT NULL 
+- 
+Name of the seat 
+type (e.g., VIP, 
+Standard).  
+PriceModifier 
+DECIMAL 
+CHECK (> 0), NOT 
+NULL 
+- 
+Multiplier applied to 
+the showtime base 
+price.  
+ 
+7.8 Table: Seats  
+Stores all available seats mapped to specific venues.  
+Column 
+Data Type 
+Constraints 
+Default 
+Description 
+SeatID 
+INT 
+PK, Auto-Increment 
+- 
+Primary key for the 
+seat.  
+VenueID 
+INT 
+FK, CASCADE, NOT 
+NULL 
+- 
+References 
+Venues(VenueID).  
+SeatTypeID 
+INT 
+FK, RESTRICT, NOT 
+NULL 
+- 
+References 
+SeatTypes(SeatTypeI
+D).  
+RowLabel 
+VARCHAR 
+NOT NULL 
+- 
+Row indicator (e.g., 
+A, B, C).  
+SeatNumber 
+VARCHAR 
+NOT NULL 
+- 
+Specific seat 
+number within the 
+row.  
+ 
+***Note***  UNIQUE (VenueID, RowLabel, SeatNumber) 
+ 
+7.9 Table: BookingStatuses  
+Stores the possible statuses for a booking lifecycle.  
+Column 
+Data Type 
+Constraints 
+Default 
+Description 
+StatusID 
+INT 
+PK, Auto-Increment 
+- 
+Primary key for the 
+status.  
+StatusName 
+VARCHAR 
+NOT NULL 
+- 
+Status name (e.g., 
+Pending, 
+Completed, 
+Cancelled).  
+ 
+7.10 Table: Bookings  
+Stores user booking transactions.  
+Column 
+Data Type 
+Constraints 
+Default 
+Description 
+BookingID 
+INT 
+PK, Auto-Increment 
+- 
+Primary key for the 
+booking.  
+UserID 
+INT 
+FK, RESTRICT, NOT 
+NULL 
+- 
+References 
+Users(UserID).  
+StatusID 
+INT 
+FK, RESTRICT, NOT 
+NULL 
+1 (Pending) 
+References 
+BookingStatuses(Sta
+tusID).  
+BookingTimestamp 
+TIMESTAMP 
+NOT NULL 
+NOW() 
+The exact time the 
+booking was 
+initiated.  
+ExpiresAt 
+TIMESTAMP 
+CHECK (> 
+BookingTimestamp), 
+NOT NULL 
+- 
+Expiration time 
+(BookingTimestamp 
++ 15 mins).  
+TotalAmount 
+DECIMAL 
+CHECK (>= 0) 
+- 
+Total cost of all seats 
+in the booking.  
+ 
+7.11 Table: BookingDetails  
+Stores the individual seats reserved within a booking (Junction Table).  
+Column 
+Data Type 
+Constraints 
+Default 
+Description 
+DetailID 
+INT 
+PK, Auto-Increment 
+- 
+Primary key for the 
+booking detail.  
+BookingID 
+INT 
+FK, RESTRICT, NOT 
+NULL 
+- 
+References 
+Bookings(BookingID)
+.  
+ShowtimeID 
+INT 
+FK, RESTRICT, NOT 
+NULL 
+- 
+References 
+Showtimes(Showtim
+eID).  
+SeatID 
+INT 
+FK, RESTRICT, NOT 
+NULL 
+- 
+References 
+Seats(SeatID).  
+ 
+***Note*** In the current design, seat-venue consistency is validated in the application layer before insert by 
+checking that the selected seat belongs to the same venue as the referenced showtime. 
+ 
+7.12 Table: Tickets  
+Stores the generated tickets for completed bookings.  
+Column 
+Data Type 
+Constraints 
+Default 
+Description 
+TicketID 
+INT 
+PK, Auto-Increment 
+- 
+Primary key for the 
+ticket.  
+TicketNo 
+VARCHAR(20) 
+UNIQUE, NOT NULL 
+- 
+Unique verification 
+code for the ticket.  
+DetailID 
+INT 
+FK, RESTRICT, 
+UNIQUE, NOT NULL 
+- 
+References 
+BookingDetails(Deta
+ilID) (1:1 
+relationship).  
+FinalPrice 
+DECIMAL(10,2) 
+CHECK (>= 0) 
+- 
+The final computed 
+price for this specific 
+ticket.  
+7.13 Table: PaymentMethods  
+Stores supported payment gateways and methods.  
+Column 
+Data Type 
+Constraints 
+Default 
+Description 
+MethodID 
+INT 
+PK, Auto-Increment 
+- 
+Primary key for the 
+payment method.  
+MethodName 
+VARCHAR 
+NOT NULL 
+- 
+Name of the 
+method (e.g., 
+PromptPay, Credit 
+Card).  
+IsActive 
+BOOLEAN 
+- 
+TRUE 
+Indicates if the 
+payment method is 
+currently available.  
+ 
+7.14 Table: PaymentStatuses  
+Stores the possible statuses for payment transactions.  
+Column 
+Data Type 
+Constraints 
+Default 
+Description 
+StatusID 
+INT 
+PK, Auto-Increment 
+- 
+Primary key for the 
+payment status.  
+StatusName 
+VARCHAR 
+NOT NULL 
+- 
+Name of the status.  
+ 
+7.15 Table: Payments  
+Stores payment transaction records linked to bookings.  
+Column 
+Data Type 
+Constraints 
+Default 
+Description 
+PaymentID 
+INT 
+PK, Auto-Increment 
+- 
+Primary key for the 
+payment.  
+BookingID 
+INT 
+FK, RESTRICT, 
+UNIQUE, NOT NULL 
+- 
+References 
+Bookings(BookingID) 
+(1:1 relationship).  
+MethodID 
+INT 
+FK, RESTRICT, NOT 
+NULL 
+- 
+References 
+PaymentMethods(M
+ethodID).  
+StatusID 
+INT 
+FK, RESTRICT, NOT 
+NULL 
+1 (Pending) 
+References 
+PaymentStatuses(St
+atusID).  
+TransactionID 
+VARCHAR 
+UNIQUE, NOT NULL 
+- 
+Auto-generated 
+unique gateway 
+reference.  
+Amount 
+DECIMAL 
+CHECK (>= 0), NOT 
+NULL 
+- 
+Total amount 
+processed in this 
+transaction.  
+PaidAt 
+TIMESTAMP 
+- 
+- 
+Exact timestamp of 
+successful payment.  
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+Uncle Joey Member 
+Kiatisak Markmeeshap 
+67070501005 
+Tithinan Sobking 
+67070501018 
+Thanaboon Tikaew 
+67070501021 
+Worawut Sereethai 
+67070501040 
+Chanon Lhumsa-ard 
+67070501059 
+Siriwan Yindeephot 
+67070501075 
+ 
