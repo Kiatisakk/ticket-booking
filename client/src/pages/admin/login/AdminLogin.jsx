@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../../../context/AdminAuthContext';
 import { useAuth } from '../../../context/AuthContext';
 import './AdminLogin.css';
@@ -13,6 +13,8 @@ function AdminLogin() {
   const { adminLogin } = useAdminAuth();
   const { setAuthSession } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const redirectPath = location.state?.from?.pathname || '/admin/events';
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -23,7 +25,7 @@ function AdminLogin() {
 
     if (result.success) {
       setAuthSession(result.user, result.token);
-      navigate('/admin/events');
+      navigate(redirectPath, { replace: true });
     } else {
       setError(result.error);
     }

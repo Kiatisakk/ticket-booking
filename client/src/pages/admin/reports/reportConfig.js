@@ -66,10 +66,10 @@ export const REPORTS = [
   {
     id: 'seat-type-revenue',
     no: 8,
-    title: 'Seat Type Revenue',
+    title: 'Seat Type Velocity',
     endpoint: 'seat-type-revenue',
-    chart: 'doughnut',
-    description: 'Revenue share by seat type.',
+    chart: 'bar',
+    description: 'Sell-out speed by seat type before showtime.',
     filters: ['date', 'category']
   },
   {
@@ -78,7 +78,7 @@ export const REPORTS = [
     title: 'Customer Retention',
     endpoint: 'customer-retention',
     chart: 'doughnut',
-    description: 'Repeat customers vs one-time customers.',
+    description: 'Revenue contribution from repeat vs one-time customers.',
     filters: ['date', 'category']
   },
   {
@@ -96,20 +96,30 @@ export const REPORTS = [
     title: 'Peak Showtime Hours',
     endpoint: 'peak-showtime-hours',
     chart: 'bar',
-    description: 'Tickets sold by showtime hour and category.',
+    description: 'Monthly peak showtime hour by category.',
     filters: ['date', 'category']
   },
   {
     id: 'failed-payment-rate',
     no: 12,
-    title: 'Failed Payment Rate Heatmap',
+    title: 'Cancellation Analysis Heatmap',
     endpoint: 'cancellation-heatmap',
-    chart: 'failureHeatmap',
-    description: 'Failed payment rate by seat type and event.',
-    filters: ['date', 'category']
+    chart: 'cancellationHeatmap',
+    description: 'Cancellation factor and rate across venue, seat type, showtime, and month.',
+    filters: ['date', 'category', 'venue']
   }
 ];
 
+const REPORT_ID_ALIASES = {
+  'boking-vs-capacity': 'booking-vs-capacity',
+  'seat-type-velocity': 'seat-type-revenue'
+};
+
+export function normalizeReportId(reportId) {
+  return REPORT_ID_ALIASES[reportId] || reportId;
+}
+
 export function getReportById(reportId) {
-  return REPORTS.find(report => report.id === reportId) || REPORTS[0];
+  const normalizedReportId = normalizeReportId(reportId);
+  return REPORTS.find(report => report.id === normalizedReportId) || REPORTS[0];
 }

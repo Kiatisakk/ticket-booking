@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
 import { useAdminAuth } from './context/AdminAuthContext';
 import Navbar from './components/Navbar';
@@ -47,8 +47,11 @@ function ProtectedRoute({ children }) {
 }
 
 function AdminProtectedRoute({ children }) {
-  const adminToken = localStorage.getItem('adminToken');
-  if (!adminToken) return <Navigate to="/admin/login" replace />;
+  const { adminToken, loading } = useAdminAuth();
+  const location = useLocation();
+
+  if (loading) return <div style={{ padding: '40px', textAlign: 'center' }}>Loading Admin...</div>;
+  if (!adminToken) return <Navigate to="/admin/login" replace state={{ from: location }} />;
   return children;
 }
 
@@ -170,6 +173,7 @@ function App() {
           <Route path="bookings" element={<AdminBookings />} />
           <Route path="transactions" element={<Transactions />} />
           <Route path="reports" element={<Navigate to="/admin/reports/revenue-by-category" replace />} />
+          <Route path="reports/boking-vs-capacity" element={<Navigate to="/admin/reports/booking-vs-capacity" replace />} />
           <Route path="reports/:reportId" element={<Reports />} />
           <Route path="settings" element={<SystemSettings />} />
         </Route>

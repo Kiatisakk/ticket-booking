@@ -603,11 +603,12 @@ async function main() {
 
   const BS_COMPLETED = bookingStatusByName['Completed'];
   const BS_PENDING   = bookingStatusByName['Pending'];
+  const BS_CANCELLED = bookingStatusByName['Cancelled'];
   const PS_SUCCESS   = paymentStatusByName['Success'];
   const PS_FAILED    = paymentStatusByName['Failed'];
   const PS_PENDING   = paymentStatusByName['Pending'];
 
-  console.log(`Status IDs — BS_Completed=${BS_COMPLETED} BS_Pending=${BS_PENDING} PS_Success=${PS_SUCCESS} PS_Failed=${PS_FAILED} PS_Pending=${PS_PENDING}\n`);
+  console.log(`Status IDs — BS_Completed=${BS_COMPLETED} BS_Pending=${BS_PENDING} BS_Cancelled=${BS_CANCELLED} PS_Success=${PS_SUCCESS} PS_Failed=${PS_FAILED} PS_Pending=${PS_PENDING}\n`);
 
   // ── 11. Helper to create ghost booking (no seats — Pending or Failed only) ──
   async function createGhostBooking({ userID, bookingTimestamp, totalAmount, bookingStatusID, paymentMethodID, paymentStatusID }) {
@@ -649,9 +650,10 @@ async function main() {
 
   console.log('=== Filling Capacity (Sold-Out Mode) ===');
 
-  let methodIdx        = 0;
-  let totalBookings    = 0;
+  let methodIdx = 0;
+  let totalBookings = 0;
   let totalFailedAttempts = 0;
+  let totalCancelledBookings = 0;
 
   for (const eventTitle of Object.keys(showtimeIndex)) {
     const stList = showtimeIndex[eventTitle];
@@ -692,6 +694,33 @@ async function main() {
       }
 
       // ── (b) Successful bookings for EVERY seat (sold out)
+      const cancelledCount = Math.max(2, Math.floor(venueSeats.length * 0.14));
+      const seatsForCancelled = shuffle([...venueSeats])
+        .filter(seat => !seatsForFailed.some(failedSeat => failedSeat.SeatID === seat.SeatID))
+        .slice(0, cancelledCount);
+
+      for (const seat of seatsForCancelled) {
+        const userID = histUserIDs[(bIdx * 5 + 1) % histUserIDs.length];
+        const method = methodRotation[methodIdx % methodRotation.length];
+        methodIdx++;
+
+        const daysBefore = 5 + (bIdx % 18);
+        const bookingTs = subtractDays(startDT, daysBefore);
+
+        const bid = await createHistoricalBooking({
+          userID,
+          showtimeID,
+          seats: [seat],
+          basePrice,
+          bookingTimestamp: bookingTs,
+          bookingStatusID: BS_CANCELLED,
+          paymentMethodID: method,
+          paymentStatusID: PS_PENDING
+        });
+        if (bid) totalCancelledBookings++;
+        bIdx++;
+      }
+
       const shuffledForSuccess = shuffle([...venueSeats]);
       let seatIdx = 0;
 
@@ -743,6 +772,7 @@ async function main() {
   console.log(`\n=== Historical Seed Complete ===`);
   console.log(`  Successful bookings: ${totalBookings}`);
   console.log(`  Failed attempts:     ${totalFailedAttempts}`);
+  console.log(`  Cancelled bookings:  ${totalCancelledBookings}`);
 }
 
 main()

@@ -13,6 +13,7 @@
     "db:cleanup-strict": "prisma db execute --schema prisma/schema.prisma --file prisma/migrations/strict_requirement_cleanup.sql",
     "db:seed": "node prisma/seed.js",
     "db:seed-historical": "node src/seed-historical.js",
+    "db:seed-retention": "node src/seed-retention-mock.js",
     "test": "node --test \"test/**/*.test.js\""
   },
   "keywords": [],
