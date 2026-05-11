@@ -611,6 +611,89 @@ async function main() {
   console.log(`Status IDs — BS_Completed=${BS_COMPLETED} BS_Pending=${BS_PENDING} BS_Cancelled=${BS_CANCELLED} PS_Success=${PS_SUCCESS} PS_Failed=${PS_FAILED} PS_Pending=${PS_PENDING}\n`);
 
   // ── 11. Helper to create ghost booking (no seats — Pending or Failed only) ──
+  async function ensureRetentionCustomer(email, fullName) {
+    const user = await prisma.user.upsert({
+      where: { Email: email },
+      create: {
+        Email: email,
+        FullName: fullName,
+        Password: passwordHash,
+        RoleID: 3,
+        CreatedAt: new Date('2025-05-01T09:00:00Z'),
+        UpdatedAt: new Date('2025-05-01T09:00:00Z')
+      },
+      update: {}
+    });
+    return user.UserID;
+  }
+
+  async function createRetentionBooking({ userID, stInfo, seatOffset, bookingDate, paymentMethodID, suffix }) {
+    const transactionID = `TXN-RETENTION-${suffix}`;
+    const existing = await prisma.booking.findFirst({
+      where: {
+        UserID: userID,
+        Payment: { TransactionID: transactionID }
+      }
+    });
+    if (existing) return false;
+
+    const venueSeats = allSeats[stInfo.venueKey] || [];
+    const seat = venueSeats[seatOffset % venueSeats.length];
+    if (!seat) return false;
+
+    const finalPrice = stInfo.basePrice * Number(seat.SeatType.PriceModifier);
+    const booking = await prisma.booking.create({
+      data: {
+        UserID: userID,
+        StatusID: BS_COMPLETED,
+        BookingTimestamp: bookingDate,
+        ExpiresAt: addMinutes(bookingDate, 15),
+        TotalAmount: finalPrice,
+        CreatedAt: bookingDate,
+        UpdatedAt: bookingDate
+      }
+    });
+
+    const detail = await prisma.bookingDetail.create({
+      data: {
+        BookingID: booking.BookingID,
+        ShowtimeID: stInfo.showtimeID,
+        SeatID: seat.SeatID,
+        CreatedAt: bookingDate,
+        UpdatedAt: bookingDate
+      }
+    });
+
+    await prisma.payment.create({
+      data: {
+        BookingID: booking.BookingID,
+        MethodID: paymentMethodID,
+        StatusID: PS_SUCCESS,
+        TransactionID: transactionID,
+        Amount: finalPrice,
+        PaidAt: addMinutes(bookingDate, 4),
+        CreatedAt: bookingDate,
+        UpdatedAt: bookingDate
+      }
+    });
+
+    try {
+      await prisma.ticket.create({
+        data: {
+          TicketNo: `TH${detail.DetailID}`,
+          DetailID: detail.DetailID,
+          FinalPrice: finalPrice,
+          CreatedAt: bookingDate,
+          UpdatedAt: bookingDate
+        }
+      });
+    } catch (err) {
+      console.warn(`  Skipped retention ticket for detail ${detail.DetailID}: ${err.message}`);
+    }
+
+    return true;
+  }
+
   async function createGhostBooking({ userID, bookingTimestamp, totalAmount, bookingStatusID, paymentMethodID, paymentStatusID }) {
     txnCounter++;
     const transactionID = `TXN-HIST-${txnCounter}-${Math.floor(1000 + Math.random() * 9000)}`;
@@ -773,6 +856,71 @@ async function main() {
   console.log(`  Successful bookings: ${totalBookings}`);
   console.log(`  Failed attempts:     ${totalFailedAttempts}`);
   console.log(`  Cancelled bookings:  ${totalCancelledBookings}`);
+
+  console.log('\n=== Seeding Customer Retention Mock Revenue ===');
+
+  const retentionShowtimes = Object.values(showtimeIndex).flat()
+    .sort((a, b) => a.startDT - b.startDT);
+  const oneTimeSpecs = [
+    { email: 'retention.one.01@example.com', name: 'Retention One 01', showtimeIndex: 0, date: '2025-05-08T10:00:00Z' },
+    { email: 'retention.one.02@example.com', name: 'Retention One 02', showtimeIndex: 2, date: '2025-06-10T11:00:00Z' },
+    { email: 'retention.one.03@example.com', name: 'Retention One 03', showtimeIndex: 4, date: '2025-08-02T12:00:00Z' },
+    { email: 'retention.one.04@example.com', name: 'Retention One 04', showtimeIndex: 6, date: '2025-09-20T13:00:00Z' },
+    { email: 'retention.one.05@example.com', name: 'Retention One 05', showtimeIndex: 8, date: '2025-11-18T14:00:00Z' },
+    { email: 'retention.one.06@example.com', name: 'Retention One 06', showtimeIndex: 10, date: '2026-01-10T15:00:00Z' },
+    { email: 'retention.one.07@example.com', name: 'Retention One 07', showtimeIndex: 11, date: '2025-06-21T09:30:00Z' },
+    { email: 'retention.one.08@example.com', name: 'Retention One 08', showtimeIndex: 12, date: '2025-07-14T10:45:00Z' },
+    { email: 'retention.one.09@example.com', name: 'Retention One 09', showtimeIndex: 13, date: '2025-08-23T11:15:00Z' },
+    { email: 'retention.one.10@example.com', name: 'Retention One 10', showtimeIndex: 14, date: '2025-09-16T12:20:00Z' },
+    { email: 'retention.one.11@example.com', name: 'Retention One 11', showtimeIndex: 15, date: '2025-10-12T13:10:00Z' },
+    { email: 'retention.one.12@example.com', name: 'Retention One 12', showtimeIndex: 16, date: '2025-11-04T14:05:00Z' },
+    { email: 'retention.one.13@example.com', name: 'Retention One 13', showtimeIndex: 17, date: '2025-12-02T15:35:00Z' },
+    { email: 'retention.one.14@example.com', name: 'Retention One 14', showtimeIndex: 18, date: '2026-01-19T16:00:00Z' },
+    { email: 'retention.one.15@example.com', name: 'Retention One 15', showtimeIndex: 19, date: '2026-02-07T09:50:00Z' },
+    { email: 'retention.one.16@example.com', name: 'Retention One 16', showtimeIndex: 20, date: '2026-03-11T10:25:00Z' }
+  ];
+
+  const repeatSpecs = [
+    { email: 'retention.repeat.01@example.com', name: 'Retention Repeat 01', showtimeIndexes: [0, 4, 11], date: '2025-05-09T10:00:00Z' },
+    { email: 'retention.repeat.02@example.com', name: 'Retention Repeat 02', showtimeIndexes: [1, 5, 9], date: '2025-06-11T11:00:00Z' },
+    { email: 'retention.repeat.03@example.com', name: 'Retention Repeat 03', showtimeIndexes: [3, 7, 12], date: '2025-07-05T12:00:00Z' },
+    { email: 'retention.repeat.04@example.com', name: 'Retention Repeat 04', showtimeIndexes: [2, 6, 10], date: '2025-08-15T13:00:00Z' },
+    { email: 'retention.repeat.05@example.com', name: 'Retention Repeat 05', showtimeIndexes: [11, 12, 15, 18], date: '2025-09-03T10:30:00Z' },
+    { email: 'retention.repeat.06@example.com', name: 'Retention Repeat 06', showtimeIndexes: [8, 13, 16, 20], date: '2025-10-07T11:20:00Z' },
+    { email: 'retention.repeat.07@example.com', name: 'Retention Repeat 07', showtimeIndexes: [4, 9, 14, 19], date: '2025-11-13T12:10:00Z' },
+    { email: 'retention.repeat.08@example.com', name: 'Retention Repeat 08', showtimeIndexes: [5, 10, 17, 21], date: '2025-12-05T13:40:00Z' }
+  ];
+
+  let retentionBookingsCreated = 0;
+  for (const [index, spec] of oneTimeSpecs.entries()) {
+    const userID = await ensureRetentionCustomer(spec.email, spec.name);
+    const didCreate = await createRetentionBooking({
+      userID,
+      stInfo: retentionShowtimes[spec.showtimeIndex % retentionShowtimes.length],
+      seatOffset: index,
+      bookingDate: new Date(spec.date),
+      paymentMethodID: methodRotation[index % methodRotation.length],
+      suffix: `ONE-${index + 1}`
+    });
+    if (didCreate) retentionBookingsCreated++;
+  }
+
+  for (const [repeatIndex, spec] of repeatSpecs.entries()) {
+    const userID = await ensureRetentionCustomer(spec.email, spec.name);
+    for (const [bookingIndex, showtimeIndex] of spec.showtimeIndexes.entries()) {
+      const didCreate = await createRetentionBooking({
+        userID,
+        stInfo: retentionShowtimes[showtimeIndex % retentionShowtimes.length],
+        seatOffset: repeatIndex + bookingIndex + 2,
+        bookingDate: addMinutes(new Date(spec.date), bookingIndex * 1440),
+        paymentMethodID: methodRotation[(repeatIndex + bookingIndex) % methodRotation.length],
+        suffix: `REPEAT-${repeatIndex + 1}-${bookingIndex + 1}`
+      });
+      if (didCreate) retentionBookingsCreated++;
+    }
+  }
+
+  console.log(`  Retention mock bookings created: ${retentionBookingsCreated}`);
 }
 
 main()
