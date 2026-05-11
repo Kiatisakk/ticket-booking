@@ -21,10 +21,10 @@ export function AdminAuthProvider({ children }) {
     setLoading(false);
   }, []);
 
-  const adminLogin = async (username, password) => {
+  const adminLogin = async (email, password) => {
     try {
       const response = await axios.post(`${API_URL}/admin/auth/login`, {
-        username,
+        email: email.trim().toLowerCase(),
         password
       });
 

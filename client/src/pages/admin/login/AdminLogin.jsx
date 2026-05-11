@@ -5,7 +5,7 @@ import { useAuth } from '../../../context/AuthContext';
 import './AdminLogin.css';
 
 function AdminLogin() {
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -19,7 +19,7 @@ function AdminLogin() {
     setError('');
     setIsLoading(true);
 
-    const result = await adminLogin(username, password);
+    const result = await adminLogin(email, password);
 
     if (result.success) {
       setAuthSession(result.user, result.token);
@@ -49,17 +49,17 @@ function AdminLogin() {
 
         <form onSubmit={handleSubmit}>
           <div className="admin-login-field">
-            <label className="admin-login-label" htmlFor="username">Username</label>
+            <label className="admin-login-label" htmlFor="email">Email Address</label>
             <input
               className="admin-login-input"
-              id="username"
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               placeholder="admin@example.com"
               required
               disabled={isLoading}
-              autoComplete="username"
+              autoComplete="email"
             />
           </div>
 

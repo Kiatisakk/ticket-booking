@@ -57,6 +57,19 @@ function SeatSelection() {
 
       const bookedResponse = await axios.get(`${API_URL}/showtimes/${id}/booked-seats`);
       setBookedSeatIds(bookedResponse.data.bookedSeatIds || []);
+      if (bookedResponse.data.seats?.length) {
+        setSeats(bookedResponse.data.seats.map(seat => ({
+          SeatID: seat.seatId,
+          RowLabel: seat.rowLabel,
+          SeatNumber: seat.seatNumber,
+          calculatedPrice: seat.calculatedPrice,
+          SeatType: {
+            SeatTypeID: seat.seatTypeId,
+            TypeName: seat.seatTypeName,
+            PriceModifier: seat.priceModifier
+          }
+        })));
+      }
     } catch (error) {
       console.error('Failed to fetch showtime:', error);
     } finally {

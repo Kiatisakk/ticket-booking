@@ -93,7 +93,6 @@ function MyTickets() {
     const now = new Date().getTime();
 
     if (now > expireTime) {
-      alert('หมดเวลาชำระเงินสำหรับรายการนี้แล้ว ระบบได้ยกเลิกการจองของคุณ');
       expireBookingFromList(booking.BookingID);
       return;
     }
@@ -248,28 +247,29 @@ function MyTickets() {
                     </div>
                   </div>
                   <div className="ticket-qr-panel">
-                    {theme.css !== 'cancelled' ? (
+                    {theme.isPending ? (
+                      <div style={{ color: '#f59e0b', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', textAlign: 'center', padding: '12px' }}>
+                        Payment Required
+                      </div>
+                    ) : theme.css !== 'cancelled' ? (
                       <>
-                        <div className="qr-mini" style={{ background: '#fff', padding: '4px', borderRadius: '4px', display: 'inline-block', opacity: theme.isPending ? 0.3 : 1 }}>
+                        <div className="qr-mini" style={{ background: '#fff', padding: '4px', borderRadius: '4px', display: 'inline-block' }}>
                           <QRCodeSVG value={ticketIdString} size={72} />
                         </div>
                         <div className="qr-ticket-id">{ticketIdString}</div>
-                        {theme.isPending && <div style={{ fontSize: '11px', color: '#f59e0b', marginTop: '4px' }}>Payment Required</div>}
-                        {!theme.isPending && (
-                          <button 
-                            className="btn-view" 
-                            onClick={() => setSelectedTicket({
-                              name: eventInfo.Title,
-                              emoji: emojiInfo.char,
-                              date: showtime ? formatDate(showtime.StartDateTime) : '',
-                              location: venueName,
-                              ticketNo: ticketIdString,
-                              seats: seats
-                            })}
-                          >
-                            View Ticket
-                          </button>
-                        )}
+                        <button
+                          className="btn-view"
+                          onClick={() => setSelectedTicket({
+                            name: eventInfo.Title,
+                            emoji: emojiInfo.char,
+                            date: showtime ? formatDate(showtime.StartDateTime) : '',
+                            location: venueName,
+                            ticketNo: ticketIdString,
+                            seats: seats
+                          })}
+                        >
+                          View Ticket
+                        </button>
                       </>
                     ) : (
                       <div style={{ color: '#ef4444', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>

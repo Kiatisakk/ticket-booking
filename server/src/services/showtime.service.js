@@ -20,8 +20,29 @@ function createShowtimeService({ showtimes = showtimeRepository } = {}) {
     },
 
     async getBookedSeats(showtimeId) {
+      if (showtimes.findSeatAvailability) {
+        const availability = await showtimes.findSeatAvailability(showtimeId);
+        const seats = availability.map(row => ({
+          showtimeId: Number(row.ShowtimeID),
+          seatId: Number(row.SeatID),
+          rowLabel: row.RowLabel,
+          seatNumber: row.SeatNumber,
+          seatTypeId: Number(row.SeatTypeID),
+          seatTypeName: row.SeatTypeName,
+          basePrice: Number(row.BasePrice),
+          priceModifier: Number(row.PriceModifier),
+          calculatedPrice: Number(row.CalculatedPrice),
+          isAvailable: Boolean(row.IsAvailable)
+        }));
+
+        return {
+          bookedSeatIds: seats.filter(seat => !seat.isAvailable).map(seat => seat.seatId),
+          seats
+        };
+      }
+
       const bookedDetails = await showtimes.findBookedSeatIds(showtimeId);
-      return { bookedSeatIds: bookedDetails.map(detail => detail.SeatID) };
+      return { bookedSeatIds: bookedDetails.map(detail => detail.SeatID), seats: [] };
     }
   };
 }

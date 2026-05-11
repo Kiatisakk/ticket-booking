@@ -17,6 +17,17 @@ const NAV_ITEMS = [
     )
   },
   {
+    to: '/admin/master-data',
+    label: 'Master Data',
+    icon: (
+      <svg className="admin-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M4 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16" />
+        <path d="M8 7h6M8 11h6M8 15h2" />
+        <path d="M3 21h18" />
+      </svg>
+    )
+  },
+  {
     to: '/admin/users',
     label: 'User Management',
     icon: (
@@ -81,6 +92,7 @@ function getPageTitle(pathname) {
   if (pathname.includes('/events/add')) return 'Add Event';
   if (pathname.includes('/events') && pathname.includes('/edit')) return 'Edit Event';
   if (pathname.includes('/events')) return 'Event Management';
+  if (pathname.includes('/master-data')) return 'Master Data';
   if (pathname.includes('/users')) return 'User Management';
   if (pathname.includes('/bookings')) return 'Bookings';
   if (pathname.includes('/transactions')) return 'Transactions';

@@ -23,7 +23,7 @@ const StaffLogin = () => {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          username: email,
+          email: email.trim().toLowerCase(),
           password: password
         })
       });

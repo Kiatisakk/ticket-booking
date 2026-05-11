@@ -13,6 +13,10 @@ function toPublicUser(user) {
   };
 }
 
+function normalizeEmail(email) {
+  return String(email || '').trim().toLowerCase();
+}
+
 function createAuthService({
   users = userRepository,
   roles = roleRepository,
@@ -25,11 +29,13 @@ function createAuthService({
         throw new HttpError(400, 'Full name, email, and password are required');
       }
 
+      const normalizedEmail = normalizeEmail(email);
+
       if (password.length < 6) {
         throw new HttpError(400, 'Password must be at least 6 characters long');
       }
 
-      const existingUser = await users.findByEmail(email);
+      const existingUser = await users.findByEmail(normalizedEmail);
       if (existingUser) {
         throw new HttpError(400, 'User already exists');
       }
@@ -41,8 +47,8 @@ function createAuthService({
 
       const hashedPassword = await passwordHasher.hash(password, 10);
       const user = await users.createCustomer({
-        fullName,
-        email,
+        fullName: fullName.trim(),
+        email: normalizedEmail,
         hashedPassword,
         roleId: customerRole.RoleID
       });
@@ -55,7 +61,7 @@ function createAuthService({
     },
 
     async login({ email, password }) {
-      const user = await users.findByEmail(email);
+      const user = await users.findByEmail(normalizeEmail(email));
       if (!user) {
         throw new HttpError(401, 'Invalid credentials');
       }

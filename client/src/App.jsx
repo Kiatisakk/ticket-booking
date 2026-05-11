@@ -22,6 +22,7 @@ import AdminBookings from './pages/admin/bookings/AdminBookings';
 import Transactions from './pages/admin/transactions/Transactions';
 import Reports from './pages/admin/reports/Reports';
 import SystemSettings from './pages/admin/settings/SystemSettings';
+import MasterData from './pages/admin/masterData/MasterData';
 
 import StaffLogin from './pages/staff/login/StaffLogin';
 import StaffLayout from './pages/staff/layout/StaffLayout';
@@ -164,6 +165,7 @@ function App() {
           <Route path="events" element={<EventManagement />} />
           <Route path="events/add" element={<AddEvent />} />
           <Route path="events/:id/edit" element={<EditEvent />} />
+          <Route path="master-data" element={<MasterData />} />
           <Route path="users" element={<UserManagement />} />
           <Route path="bookings" element={<AdminBookings />} />
           <Route path="transactions" element={<Transactions />} />

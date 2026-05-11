@@ -12,9 +12,14 @@ test('register creates a customer and returns a token without touching the datab
 
   const service = createAuthService({
     users: {
-      findByEmail: async () => null,
+      findByEmail: async (email) => {
+        assert.equal(email, 'jane@example.com');
+        return null;
+      },
       createCustomer: async (data) => {
         assert.equal(data.roleId, 3);
+        assert.equal(data.fullName, 'Jane Doe');
+        assert.equal(data.email, 'jane@example.com');
         assert.equal(data.hashedPassword, 'hashed-password');
         return createdUser;
       }
@@ -32,8 +37,8 @@ test('register creates a customer and returns a token without touching the datab
   });
 
   const result = await service.register({
-    fullName: 'Jane Doe',
-    email: 'jane@example.com',
+    fullName: ' Jane Doe ',
+    email: 'Jane@Example.COM',
     password: 'secret1'
   });
 
@@ -44,6 +49,34 @@ test('register creates a customer and returns a token without touching the datab
     email: 'jane@example.com',
     roleId: 3
   });
+});
+
+test('login normalizes email before lookup', async () => {
+  const service = createAuthService({
+    users: {
+      findByEmail: async (email) => {
+        assert.equal(email, 'jane@example.com');
+        return {
+          UserID: 7,
+          FullName: 'Jane Doe',
+          Email: 'jane@example.com',
+          Password: 'hashed-password',
+          RoleID: 3
+        };
+      }
+    },
+    passwordHasher: {
+      compare: async () => true
+    },
+    tokenSigner: () => 'signed-token'
+  });
+
+  const result = await service.login({
+    email: ' Jane@Example.COM ',
+    password: 'secret1'
+  });
+
+  assert.equal(result.token, 'signed-token');
 });
 
 test('login rejects invalid credentials', async () => {

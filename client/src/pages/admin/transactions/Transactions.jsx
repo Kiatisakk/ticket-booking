@@ -7,45 +7,43 @@ import './Transactions.css';
 
 const API_URL = 'http://localhost:4000/api';
 
-const MOCK_TRANSACTIONS = [
-  { id: 1, bookingId: 1001, transactionId: 'TXN-9f3a21', method: 'Credit Card', amount: 2500, date: '2025-04-12T10:22:00Z', status: 'Success', user: 'Alice Johnson' },
-  { id: 2, bookingId: 1002, transactionId: 'TXN-b2e88c', method: 'PromptPay',   amount:  700, date: '2025-04-11T14:05:00Z', status: 'Failed',  user: 'Bob Smith' },
-  { id: 3, bookingId: 1004, transactionId: 'TXN-a1b2c3', method: 'Credit Card', amount:  350, date: '2025-04-09T16:45:00Z', status: 'Pending', user: 'Dan Lee' },
-  { id: 4, bookingId: 1005, transactionId: 'TXN-d4e5f6', method: 'PromptPay',   amount:  900, date: '2025-04-08T11:15:00Z', status: 'Failed',  user: 'Eve Martinez' }
-];
-
 function getStatusClass(status) {
   switch (status?.toLowerCase()) {
-    case 'success':   return 'tx-badge tx-badge-completed';
-    case 'failed':    return 'tx-badge tx-badge-failed';
-    case 'pending':   return 'tx-badge tx-badge-pending';
+    case 'success': return 'tx-badge tx-badge-completed';
+    case 'failed': return 'tx-badge tx-badge-failed';
+    case 'pending': return 'tx-badge tx-badge-pending';
     case 'completed': return 'tx-badge tx-badge-completed';
-    case 'refunded':  return 'tx-badge tx-badge-refunded';
-    default:          return 'tx-badge tx-badge-pending';
+    case 'refunded': return 'tx-badge tx-badge-refunded';
+    default: return 'tx-badge tx-badge-pending';
   }
 }
 
 function formatDate(dt) {
   if (!dt) return '-';
-  return new Date(dt).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  return new Date(dt).toLocaleString('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
 }
 
 function Transactions() {
   const { adminToken } = useAdminAuth();
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [methodFilter, setMethodFilter] = useState('All');
-  const [paidTarget, setPaidTarget] = useState(null);
-  const [refundTarget, setRefundTarget] = useState(null);
-  const [processing, setProcessing] = useState(false);
   const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'desc' });
   const [pageSize, setPageSize] = useState(10);
   const [page, setPage] = useState(1);
 
   const fetchTransactions = useCallback(async () => {
     setLoading(true);
+    setError('');
     try {
       const params = {};
       if (statusFilter !== 'All') params.status = statusFilter;
@@ -56,8 +54,9 @@ function Transactions() {
         params
       });
       setTransactions(res.data);
-    } catch {
-      setTransactions(MOCK_TRANSACTIONS);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to load transactions');
+      setTransactions([]);
     } finally {
       setLoading(false);
     }
@@ -68,14 +67,16 @@ function Transactions() {
   }, [fetchTransactions]);
 
   const filtered = transactions.filter(t => {
-    const matchSearch = !search ||
-      t.bookingId?.toString().includes(search) ||
-      t.transactionId?.includes(search) ||
-      t.user?.toLowerCase().includes(search.toLowerCase());
+    const needle = search.toLowerCase();
+    const matchSearch = !needle ||
+      t.bookingId?.toString().includes(needle) ||
+      t.transactionId?.toLowerCase().includes(needle) ||
+      t.user?.toLowerCase().includes(needle);
     const matchStatus = statusFilter === 'All' || t.status === statusFilter;
     const matchMethod = methodFilter === 'All' || t.method?.toLowerCase().includes(methodFilter.toLowerCase());
     return matchSearch && matchStatus && matchMethod;
   });
+
   const sortAccessors = {
     bookingId: t => t.bookingId,
     transactionId: t => t.transactionId,
@@ -98,51 +99,16 @@ function Transactions() {
     setPage(1);
   };
 
-  // All failed transactions get a generic error reason (no errorMessage in DB)
-  const handleMarkPaid = async () => {
-    if (!paidTarget) return;
-    setProcessing(true);
-    try {
-      await axios.patch(`${API_URL}/admin/transactions/${paidTarget.id}/mark-paid`, {}, {
-        headers: { Authorization: `Bearer ${adminToken}` }
-      });
-      setTransactions(prev => prev.map(t =>
-        t.id === paidTarget.id ? { ...t, status: 'Completed' } : t
-      ));
-    } catch (error) {
-      alert(error.response?.data?.error || 'Failed to mark as paid');
-    } finally {
-      setProcessing(false);
-      setPaidTarget(null);
-    }
-  };
-
-  const handleRefund = async () => {
-    if (!refundTarget) return;
-    setProcessing(true);
-    try {
-      await axios.patch(`${API_URL}/admin/transactions/${refundTarget.id}/refund`, {}, {
-        headers: { Authorization: `Bearer ${adminToken}` }
-      });
-      setTransactions(prev => prev.map(t =>
-        t.id === refundTarget.id ? { ...t, status: 'Refunded' } : t
-      ));
-    } catch (error) {
-      alert(error.response?.data?.error || 'Failed to refund transaction');
-    } finally {
-      setProcessing(false);
-      setRefundTarget(null);
-    }
-  };
-
   return (
     <div className="tx-root">
       <div className="tx-header">
         <div>
           <div className="tx-title">Transactions</div>
-          <div className="tx-subtitle">{filtered.length} transactions</div>
+          <div className="tx-subtitle">{filtered.length} read-only payment records</div>
         </div>
       </div>
+
+      {error && <div className="tx-empty">{error}</div>}
 
       <div className="tx-filters">
         <input
@@ -185,7 +151,7 @@ function Transactions() {
                   <th className="sortable-th"><button type="button" onClick={() => handleSort('amount')}>Amount (THB) <span className="sort-mark">{sortLabel(sortConfig, 'amount')}</span></button></th>
                   <th className="sortable-th"><button type="button" onClick={() => handleSort('date')}>Date <span className="sort-mark">{sortLabel(sortConfig, 'date')}</span></button></th>
                   <th className="sortable-th"><button type="button" onClick={() => handleSort('status')}>Status <span className="sort-mark">{sortLabel(sortConfig, 'status')}</span></button></th>
-                  <th>Actions</th>
+                  <th>Mode</th>
                 </tr>
               </thead>
               <tbody>
@@ -202,24 +168,10 @@ function Transactions() {
                       </div>
                     </td>
                     <td>{tx.method}</td>
-                    <td className="tx-amount">฿{Number(tx.amount).toLocaleString()}</td>
+                    <td className="tx-amount">THB {Number(tx.amount).toLocaleString()}</td>
                     <td style={{ color: '#94a3b8', fontSize: '12px' }}>{formatDate(tx.date)}</td>
-                    <td>
-                      <span className={getStatusClass(tx.status)}>{tx.status}</span>
-                    </td>
-                    <td>
-                      {tx.status === 'Failed' ? (
-                        <button className="tx-mark-paid-btn" onClick={() => setPaidTarget(tx)}>
-                          Mark as Paid
-                        </button>
-                      ) : tx.status === 'Success' ? (
-                        <button className="tx-refund-btn" onClick={() => setRefundTarget(tx)}>
-                          Refund
-                        </button>
-                      ) : (
-                        <span className="tx-dash">—</span>
-                      )}
-                    </td>
+                    <td><span className={getStatusClass(tx.status)}>{tx.status}</span></td>
+                    <td><span className="tx-dash">Read only</span></td>
                   </tr>
                 ))}
               </tbody>
@@ -237,90 +189,6 @@ function Transactions() {
           />
         )}
       </div>
-
-      {/* Mark as Paid Modal */}
-      {paidTarget && (
-        <div className="tx-modal-overlay" onClick={() => setPaidTarget(null)}>
-          <div className="tx-modal" onClick={e => e.stopPropagation()}>
-            <div className="tx-modal-icon paid">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-                <polyline points="22 4 12 14.01 9 11.01" />
-              </svg>
-            </div>
-            <div className="tx-modal-title">Mark as Paid</div>
-            <div className="tx-modal-booking-info">
-              <div className="tx-modal-booking-row">
-                <span>Booking ID</span>
-                <strong>#{paidTarget.bookingId}</strong>
-              </div>
-              <div className="tx-modal-booking-row">
-                <span>Transaction</span>
-                <strong>{paidTarget.transactionId}</strong>
-              </div>
-              <div className="tx-modal-booking-row">
-                <span>Customer</span>
-                <strong>{paidTarget.user}</strong>
-              </div>
-              <div className="tx-modal-booking-row">
-                <span>Amount</span>
-                <strong style={{ color: '#22c55e' }}>฿{Number(paidTarget.amount).toLocaleString()}</strong>
-              </div>
-            </div>
-            <div className="tx-modal-warning" style={{ background: 'rgba(34,197,94,0.08)', borderColor: 'rgba(34,197,94,0.2)', color: '#4ade80' }}>
-              This will mark the failed transaction as successfully completed and generate tickets.
-            </div>
-            <div className="tx-modal-actions">
-              <button className="tx-modal-cancel" onClick={() => setPaidTarget(null)}>Cancel</button>
-              <button className="tx-modal-confirm-paid" onClick={handleMarkPaid} disabled={processing}>
-                {processing ? 'Processing...' : 'Confirm Mark as Paid'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Refund Modal */}
-      {refundTarget && (
-        <div className="tx-modal-overlay" onClick={() => setRefundTarget(null)}>
-          <div className="tx-modal" onClick={e => e.stopPropagation()}>
-            <div className="tx-modal-icon refund">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="1 4 1 10 7 10" />
-                <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
-              </svg>
-            </div>
-            <div className="tx-modal-title">Refund Transaction</div>
-            <div className="tx-modal-booking-info">
-              <div className="tx-modal-booking-row">
-                <span>Booking ID</span>
-                <strong>#{refundTarget.bookingId}</strong>
-              </div>
-              <div className="tx-modal-booking-row">
-                <span>Transaction</span>
-                <strong>{refundTarget.transactionId}</strong>
-              </div>
-              <div className="tx-modal-booking-row">
-                <span>Customer</span>
-                <strong>{refundTarget.user}</strong>
-              </div>
-              <div className="tx-modal-booking-row">
-                <span>Refund Amount</span>
-                <strong style={{ color: '#f59e0b' }}>฿{Number(refundTarget.amount).toLocaleString()}</strong>
-              </div>
-            </div>
-            <div className="tx-modal-warning">
-              This will refund the payment, cancel the booking, and revoke all associated tickets. This action cannot be undone.
-            </div>
-            <div className="tx-modal-actions">
-              <button className="tx-modal-cancel" onClick={() => setRefundTarget(null)}>Cancel</button>
-              <button className="tx-modal-confirm-refund" onClick={handleRefund} disabled={processing}>
-                {processing ? 'Processing...' : 'Confirm Refund'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

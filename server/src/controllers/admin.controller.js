@@ -1,27 +1,40 @@
 const bcrypt = require('bcrypt');
-const jwt = require('jsonwebtoken');
 const prisma = require('../config/prisma');
-const { JWT_SECRET } = require('../middleware/auth.middleware');
+const { signAuthToken } = require('../utils/token');
+
+function normalizeEmail(email = '') {
+  return email.trim().toLowerCase();
+}
+
+function publicUser(user) {
+  return {
+    id: user.UserID,
+    fullName: user.FullName,
+    email: user.Email,
+    role: user.Role.RoleName,
+    roleId: user.RoleID
+  };
+}
+
+async function findUserByEmail(email) {
+  return prisma.user.findFirst({
+    where: { Email: { equals: normalizeEmail(email), mode: 'insensitive' } },
+    include: { Role: true }
+  });
+}
 
 // ─── Admin Auth ───────────────────────────────────────────────────────────────
 
 exports.adminLogin = async (req, res) => {
   try {
-    const { username, password } = req.body;
+    const { email, password } = req.body;
+    const normalizedEmail = normalizeEmail(email);
 
-    if (!username || !password) {
-      return res.status(400).json({ error: 'Username and password are required' });
+    if (!normalizedEmail || !password) {
+      return res.status(400).json({ error: 'Email and password are required' });
     }
 
-    const user = await prisma.user.findFirst({
-      where: {
-        OR: [
-          { Email: username },
-          { FullName: username }
-        ]
-      },
-      include: { Role: true }
-    });
+    const user = await findUserByEmail(normalizedEmail);
 
     if (!user) {
       return res.status(401).json({ error: 'Invalid credentials' });
@@ -36,22 +49,12 @@ exports.adminLogin = async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    const token = jwt.sign(
-      { userId: user.UserID, email: user.Email, role: user.RoleID },
-      JWT_SECRET,
-      { expiresIn: '8h' }
-    );
+    const token = signAuthToken(user);
 
     res.json({
       message: 'Admin login successful',
       token,
-      user: {
-        id: user.UserID,
-        fullName: user.FullName,
-        email: user.Email,
-        role: user.Role.RoleName,
-        roleId: user.RoleID
-      }
+      user: publicUser(user)
     });
   } catch (error) {
     console.error('Admin login error:', error);
@@ -63,21 +66,14 @@ exports.adminLogin = async (req, res) => {
 
 exports.staffLogin = async (req, res) => {
   try {
-    const { username, password } = req.body;
+    const { email, password } = req.body;
+    const normalizedEmail = normalizeEmail(email);
 
-    if (!username || !password) {
-      return res.status(400).json({ error: 'Username and password are required' });
+    if (!normalizedEmail || !password) {
+      return res.status(400).json({ error: 'Email and password are required' });
     }
 
-    const user = await prisma.user.findFirst({
-      where: {
-        OR: [
-          { Email: username },
-          { FullName: username }
-        ]
-      },
-      include: { Role: true }
-    });
+    const user = await findUserByEmail(normalizedEmail);
 
     if (!user) {
       return res.status(401).json({ error: 'Invalid credentials' });
@@ -92,22 +88,12 @@ exports.staffLogin = async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    const token = jwt.sign(
-      { userId: user.UserID, email: user.Email, role: user.RoleID },
-      JWT_SECRET,
-      { expiresIn: '8h' }
-    );
+    const token = signAuthToken(user);
 
     res.json({
       message: 'Staff login successful',
       token,
-      user: {
-        id: user.UserID,
-        fullName: user.FullName,
-        email: user.Email,
-        role: user.Role.RoleName,
-        roleId: user.RoleID
-      }
+      user: publicUser(user)
     });
   } catch (error) {
     console.error('Staff login error:', error);
@@ -120,8 +106,9 @@ exports.staffLogin = async (req, res) => {
 exports.addStaffUser = async (req, res) => {
   try {
     const { fullName, email, password } = req.body;
+    const normalizedEmail = normalizeEmail(email);
 
-    if (!fullName || !email || !password) {
+    if (!fullName || !normalizedEmail || !password) {
       return res.status(400).json({ error: 'Full name, email, and password are required' });
     }
 
@@ -129,7 +116,7 @@ exports.addStaffUser = async (req, res) => {
       return res.status(400).json({ error: 'Password must be at least 6 characters long' });
     }
 
-    const existingUser = await prisma.user.findUnique({ where: { Email: email } });
+    const existingUser = await findUserByEmail(normalizedEmail);
     if (existingUser) {
       return res.status(400).json({ error: 'User already exists' });
     }
@@ -142,8 +129,8 @@ exports.addStaffUser = async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
     const staffUser = await prisma.user.create({
       data: {
-        FullName: fullName,
-        Email: email,
+        FullName: fullName.trim(),
+        Email: normalizedEmail,
         Password: hashedPassword,
         RoleID: staffRole.RoleID
       }
@@ -551,132 +538,6 @@ exports.getAllTransactions = async (req, res) => {
   }
 };
 
-exports.refundTransaction = async (req, res) => {
-  try {
-    const paymentId = parseInt(req.params.id);
-
-    const payment = await prisma.payment.findUnique({
-      where:   { PaymentID: paymentId },
-      include: { Status: true }
-    });
-
-    if (!payment) {
-      return res.status(404).json({ error: 'Payment not found' });
-    }
-    if (payment.Status?.StatusName !== 'Success') {
-      return res.status(400).json({ error: 'Only successful payments can be refunded' });
-    }
-
-    // Look up Refunded StatusID
-    const refundedStatus = await prisma.paymentStatus.findFirst({
-      where: { StatusName: 'Refunded' }
-    });
-    if (!refundedStatus) {
-      return res.status(500).json({ error: 'Refunded status not found in DB' });
-    }
-
-    // Look up Cancelled BookingStatusID
-    const cancelledStatus = await prisma.bookingStatus.findFirst({
-      where: { StatusName: 'Cancelled' }
-    });
-
-    await prisma.payment.update({
-      where: { PaymentID: paymentId },
-      data:  { StatusID: refundedStatus.StatusID }
-    });
-
-    if (cancelledStatus) {
-      await prisma.booking.update({
-        where: { BookingID: payment.BookingID },
-        data:  { StatusID: cancelledStatus.StatusID }
-      });
-    }
-
-    // Delete tickets for the refunded booking so they no longer pass verification
-    await prisma.ticket.deleteMany({
-      where: { Detail: { BookingID: payment.BookingID } }
-    });
-
-    res.json({ message: 'Payment refunded successfully' });
-  } catch (error) {
-    console.error('Admin refundTransaction error:', error);
-    res.status(500).json({ error: 'Failed to refund payment' });
-  }
-};
-
-exports.markAsPaid = async (req, res) => {
-  try {
-    const paymentId = parseInt(req.params.id);
-
-    const payment = await prisma.payment.findUnique({ where: { PaymentID: paymentId } });
-    if (!payment) {
-      return res.status(404).json({ error: 'Payment not found' });
-    }
-
-    // Look up Success StatusID
-    const successStatus = await prisma.paymentStatus.findFirst({
-      where: { StatusName: 'Success' }
-    });
-    if (!successStatus) {
-      return res.status(500).json({ error: 'Success status not found in DB' });
-    }
-
-    // Look up Completed BookingStatusID
-    const completedStatus = await prisma.bookingStatus.findFirst({
-      where: { StatusName: 'Completed' }
-    });
-
-    await prisma.payment.update({
-      where: { PaymentID: paymentId },
-      data:  { StatusID: successStatus.StatusID, PaidAt: new Date() }
-    });
-
-    if (completedStatus) {
-      await prisma.booking.update({
-        where: { BookingID: payment.BookingID },
-        data:  { StatusID: completedStatus.StatusID }
-      });
-    }
-
-    // Generate tickets for each seat in the booking (one ticket per BookingDetail)
-    const booking = await prisma.booking.findUnique({
-      where: { BookingID: payment.BookingID },
-      include: {
-        BookingDetails: {
-          include: {
-            Showtime: true,
-            Seat: { include: { SeatType: true } },
-            Ticket: true
-          }
-        }
-      }
-    });
-
-    if (booking) {
-      for (const detail of booking.BookingDetails) {
-        if (!detail.Ticket) {
-          const finalPrice = Number(detail.Showtime.BasePrice) * Number(detail.Seat.SeatType.PriceModifier);
-          const timestamp = Date.now().toString(36).toUpperCase();
-          const random = Math.random().toString(36).slice(2, 7).toUpperCase();
-          const ticketNo = `TKT${timestamp}${random}`.slice(0, 20);
-          await prisma.ticket.create({
-            data: {
-              TicketNo: ticketNo,
-              DetailID: detail.DetailID,
-              FinalPrice: finalPrice
-            }
-          });
-        }
-      }
-    }
-
-    res.json({ message: 'Payment marked as paid successfully' });
-  } catch (error) {
-    console.error('Admin markAsPaid error:', error);
-    res.status(500).json({ error: 'Failed to mark payment as paid' });
-  }
-};
-
 // ─── Admin Booking Management ────────────────────────────────────────────────
 
 exports.getAllBookings = async (req, res) => {
@@ -892,6 +753,214 @@ exports.getAdminVenues = async (req, res) => {
   } catch (error) {
     console.error('Admin getAdminVenues error:', error);
     res.status(500).json({ error: 'Failed to fetch venues' });
+  }
+};
+
+exports.createVenue = async (req, res) => {
+  try {
+    const { name, location } = req.body;
+    const venueName = String(name || '').trim();
+
+    if (!venueName) {
+      return res.status(400).json({ error: 'Venue name is required' });
+    }
+
+    const venue = await prisma.venue.create({
+      data: {
+        VenueName: venueName,
+        Location: String(location || '').trim() || null
+      }
+    });
+
+    res.status(201).json({
+      id: venue.VenueID,
+      name: venue.VenueName,
+      location: venue.Location || '',
+      capacity: 0
+    });
+  } catch (error) {
+    console.error('Admin createVenue error:', error);
+    res.status(500).json({ error: 'Failed to create venue' });
+  }
+};
+
+exports.updateVenue = async (req, res) => {
+  try {
+    const venueId = parseInt(req.params.id);
+    const { name, location } = req.body;
+    const venueName = String(name || '').trim();
+
+    if (!venueId || !venueName) {
+      return res.status(400).json({ error: 'Valid venue and name are required' });
+    }
+
+    const venue = await prisma.venue.update({
+      where: { VenueID: venueId },
+      data: {
+        VenueName: venueName,
+        Location: String(location || '').trim() || null
+      }
+    });
+    const capacity = await prisma.seat.count({ where: { VenueID: venueId } });
+
+    res.json({
+      id: venue.VenueID,
+      name: venue.VenueName,
+      location: venue.Location || '',
+      capacity
+    });
+  } catch (error) {
+    console.error('Admin updateVenue error:', error);
+    res.status(500).json({ error: 'Failed to update venue' });
+  }
+};
+
+exports.deleteVenue = async (req, res) => {
+  try {
+    const venueId = parseInt(req.params.id);
+
+    const showtimeCount = await prisma.showtime.count({ where: { VenueID: venueId } });
+    if (showtimeCount > 0) {
+      return res.status(400).json({ error: 'Cannot delete venue with existing showtimes' });
+    }
+
+    await prisma.venue.delete({ where: { VenueID: venueId } });
+    res.json({ message: 'Venue deleted successfully' });
+  } catch (error) {
+    console.error('Admin deleteVenue error:', error);
+    res.status(500).json({ error: 'Failed to delete venue' });
+  }
+};
+
+exports.getVenueSeats = async (req, res) => {
+  try {
+    const venueId = parseInt(req.params.venueId);
+    const seats = await prisma.seat.findMany({
+      where: { VenueID: venueId },
+      include: { SeatType: true },
+      orderBy: [{ RowLabel: 'asc' }, { SeatNumber: 'asc' }]
+    });
+
+    const detailCounts = await prisma.bookingDetail.groupBy({
+      by: ['SeatID'],
+      where: { SeatID: { in: seats.map(seat => seat.SeatID) } },
+      _count: { SeatID: true }
+    });
+    const bookedMap = new Map(detailCounts.map(item => [item.SeatID, item._count.SeatID]));
+
+    res.json(seats.map(seat => ({
+      id: seat.SeatID,
+      venueId: seat.VenueID,
+      seatTypeId: seat.SeatTypeID,
+      seatTypeName: seat.SeatType?.TypeName || 'Unknown',
+      rowLabel: seat.RowLabel,
+      seatNumber: seat.SeatNumber,
+      bookingCount: bookedMap.get(seat.SeatID) || 0
+    })));
+  } catch (error) {
+    console.error('Admin getVenueSeats error:', error);
+    res.status(500).json({ error: 'Failed to fetch seats' });
+  }
+};
+
+exports.createSeat = async (req, res) => {
+  try {
+    const { venueId, seatTypeId, rowLabel, seatNumber } = req.body;
+    const parsedVenueId = parseInt(venueId);
+    const parsedSeatTypeId = parseInt(seatTypeId);
+    const row = String(rowLabel || '').trim().toUpperCase();
+    const number = String(seatNumber || '').trim();
+
+    if (!parsedVenueId || !parsedSeatTypeId || !row || !number) {
+      return res.status(400).json({ error: 'Venue, seat type, row, and seat number are required' });
+    }
+
+    const seat = await prisma.seat.create({
+      data: {
+        VenueID: parsedVenueId,
+        SeatTypeID: parsedSeatTypeId,
+        RowLabel: row,
+        SeatNumber: number
+      },
+      include: { SeatType: true }
+    });
+
+    res.status(201).json({
+      id: seat.SeatID,
+      venueId: seat.VenueID,
+      seatTypeId: seat.SeatTypeID,
+      seatTypeName: seat.SeatType?.TypeName || 'Unknown',
+      rowLabel: seat.RowLabel,
+      seatNumber: seat.SeatNumber,
+      bookingCount: 0
+    });
+  } catch (error) {
+    console.error('Admin createSeat error:', error);
+    const message = error.code === 'P2002'
+      ? 'Seat row and number already exist for this venue'
+      : 'Failed to create seat';
+    res.status(error.code === 'P2002' ? 400 : 500).json({ error: message });
+  }
+};
+
+exports.updateSeat = async (req, res) => {
+  try {
+    const seatId = parseInt(req.params.id);
+    const { seatTypeId, rowLabel, seatNumber } = req.body;
+    const parsedSeatTypeId = parseInt(seatTypeId);
+    const row = String(rowLabel || '').trim().toUpperCase();
+    const number = String(seatNumber || '').trim();
+
+    if (!seatId || !parsedSeatTypeId || !row || !number) {
+      return res.status(400).json({ error: 'Seat type, row, and seat number are required' });
+    }
+
+    const bookingCount = await prisma.bookingDetail.count({ where: { SeatID: seatId } });
+    if (bookingCount > 0) {
+      return res.status(400).json({ error: 'Cannot edit a seat that has booking history' });
+    }
+
+    const seat = await prisma.seat.update({
+      where: { SeatID: seatId },
+      data: {
+        SeatTypeID: parsedSeatTypeId,
+        RowLabel: row,
+        SeatNumber: number
+      },
+      include: { SeatType: true }
+    });
+
+    res.json({
+      id: seat.SeatID,
+      venueId: seat.VenueID,
+      seatTypeId: seat.SeatTypeID,
+      seatTypeName: seat.SeatType?.TypeName || 'Unknown',
+      rowLabel: seat.RowLabel,
+      seatNumber: seat.SeatNumber,
+      bookingCount: 0
+    });
+  } catch (error) {
+    console.error('Admin updateSeat error:', error);
+    const message = error.code === 'P2002'
+      ? 'Seat row and number already exist for this venue'
+      : 'Failed to update seat';
+    res.status(error.code === 'P2002' ? 400 : 500).json({ error: message });
+  }
+};
+
+exports.deleteSeat = async (req, res) => {
+  try {
+    const seatId = parseInt(req.params.id);
+    const bookingCount = await prisma.bookingDetail.count({ where: { SeatID: seatId } });
+    if (bookingCount > 0) {
+      return res.status(400).json({ error: 'Cannot delete a seat that has booking history' });
+    }
+
+    await prisma.seat.delete({ where: { SeatID: seatId } });
+    res.json({ message: 'Seat deleted successfully' });
+  } catch (error) {
+    console.error('Admin deleteSeat error:', error);
+    res.status(500).json({ error: 'Failed to delete seat' });
   }
 };
 

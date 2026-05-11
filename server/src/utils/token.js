@@ -1,7 +1,9 @@
 const jwt = require('jsonwebtoken');
 const { JWT_SECRET } = require('../middleware/auth.middleware');
 
-function signAuthToken(user, expiresIn = '7d') {
+const DEFAULT_JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
+
+function signAuthToken(user, expiresIn = DEFAULT_JWT_EXPIRES_IN) {
   return jwt.sign(
     { userId: user.UserID, email: user.Email, role: user.RoleID },
     JWT_SECRET,
@@ -9,4 +11,4 @@ function signAuthToken(user, expiresIn = '7d') {
   );
 }
 
-module.exports = { signAuthToken };
+module.exports = { signAuthToken, DEFAULT_JWT_EXPIRES_IN };

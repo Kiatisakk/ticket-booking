@@ -55,6 +55,7 @@ router.get('/tickets/verify/:ticketNo', ticketController.verifyTicket);
 
 // Admin Auth (no middleware — public)
 router.post('/admin/auth/login', adminController.adminLogin);
+router.post('/admin/login', adminController.adminLogin);
 
 // Admin Staff Management
 router.post('/admin/staff/add', authenticateAdmin, adminController.addStaffUser);
@@ -63,6 +64,13 @@ router.get('/admin/staff', authenticateAdmin, adminController.getAllStaff);
 // Admin Lookup
 router.get('/admin/categories', authenticateAdmin, adminController.getCategories);
 router.get('/admin/venues',     authenticateAdmin, adminController.getAdminVenues);
+router.post('/admin/venues', authenticateAdmin, adminController.createVenue);
+router.put('/admin/venues/:id', authenticateAdmin, adminController.updateVenue);
+router.delete('/admin/venues/:id', authenticateAdmin, adminController.deleteVenue);
+router.get('/admin/venues/:venueId/seats', authenticateAdmin, adminController.getVenueSeats);
+router.post('/admin/seats', authenticateAdmin, adminController.createSeat);
+router.put('/admin/seats/:id', authenticateAdmin, adminController.updateSeat);
+router.delete('/admin/seats/:id', authenticateAdmin, adminController.deleteSeat);
 router.get('/admin/settings', authenticateAdmin, adminController.getSystemSettings);
 router.patch('/admin/settings/payment-methods/:id', authenticateAdmin, adminController.updatePaymentMethod);
 
@@ -83,8 +91,6 @@ router.get('/admin/bookings', authenticateAdmin, adminController.getAllBookings)
 
 // Admin Transactions
 router.get('/admin/transactions', authenticateAdmin, adminController.getAllTransactions);
-router.patch('/admin/transactions/:id/refund', authenticateAdmin, adminController.refundTransaction);
-router.patch('/admin/transactions/:id/mark-paid', authenticateAdmin, adminController.markAsPaid);
 
 // Admin Reports
 router.get('/admin/reports/kpi',                  authenticateAdmin, adminController.getReportKpi);
@@ -105,6 +111,7 @@ router.get('/admin/reports/cancellation-heatmap',  authenticateAdmin, adminContr
 
 // Staff Auth (no middleware — public)
 router.post('/staff/auth/login', adminController.staffLogin);
+router.post('/staff/login', adminController.staffLogin);
 
 // Staff Events
 router.get('/staff/categories', authenticateStaff, adminController.getCategories);
