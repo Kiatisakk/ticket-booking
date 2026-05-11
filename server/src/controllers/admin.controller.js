@@ -1,7 +1,7 @@
 const bcrypt = require('bcrypt');
 const prisma = require('../config/prisma');
 const { signAuthToken } = require('../utils/token');
-const { getEventList } = require('../services/eventListMetrics.service');
+const { getEventList, invalidateEventListCache } = require('../services/eventListMetrics.service');
 
 function normalizeEmail(email = '') {
   return email.trim().toLowerCase();
@@ -320,6 +320,7 @@ exports.createEvent = async (req, res) => {
       });
     }
 
+    invalidateEventListCache();
     res.status(201).json({ message: 'Event created successfully', id: event.EventID });
   } catch (error) {
     console.error('Admin createEvent error:', error);
@@ -386,6 +387,7 @@ exports.updateEvent = async (req, res) => {
       }
     }
 
+    invalidateEventListCache();
     res.json({ message: 'Event updated successfully', id: eventId });
   } catch (error) {
     console.error('Admin updateEvent error:', error);
@@ -416,6 +418,7 @@ exports.deleteEvent = async (req, res) => {
     // Safe to delete: Event -> Showtimes will CASCADE, no booking details exist
     await prisma.event.delete({ where: { EventID: eventId } });
 
+    invalidateEventListCache();
     res.json({ message: 'Event deleted successfully' });
   } catch (error) {
     console.error('Admin deleteEvent error:', error);

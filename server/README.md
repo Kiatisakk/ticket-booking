@@ -63,6 +63,11 @@ server/
 - `npm run db:generate` - Generate Prisma client
 - `npm run db:push` - Push schema to database (dev only)
 - `npm run db:seed` - Seed database with sample data
+- `npm run db:seed-big` - Seed deterministic synthetic big data for performance testing
+- `npm run db:optimize-indexes` - Apply performance indexes
+- `npm run db:drop-indexes` - Drop performance indexes for A/B testing
+- `npm run db:benchmark` - Run the current database benchmark
+- `npm run db:benchmark:ab` - Run no-index vs indexed A/B benchmark
 
 ## 🔐 Authentication
 

@@ -1,101 +1,184 @@
-async function getEventList(db, { search, categoryId, now = new Date() } = {}) {
-  const where = {};
+const EVENT_LIST_CACHE_TTL_MS = Number(process.env.EVENT_LIST_CACHE_TTL_MS || 5000);
+const eventListCache = new Map();
 
-  if (search) {
-    where.Title = { contains: search, mode: 'insensitive' };
-  }
-  if (categoryId) {
-    where.CategoryID = parseInt(categoryId);
-  }
-
-  const events = await db.event.findMany({
-    where,
-    include: {
-      Category: true,
-      Showtimes: {
-        include: { Venue: true },
-        orderBy: { StartDateTime: 'asc' }
-      }
-    },
-    orderBy: { EventID: 'desc' }
-  });
-
-  const venueIds = [...new Set(events.flatMap(event =>
-    event.Showtimes.map(showtime => showtime.VenueID).filter(Boolean)
-  ))];
-  const allShowtimeIds = events.flatMap(event => event.Showtimes.map(showtime => showtime.ShowtimeID));
-  const firstShowtimeIds = events
-    .map(event => event.Showtimes?.[0]?.ShowtimeID)
-    .filter(Boolean);
-
-  const [capacityRows, activeBookedRows, totalBookingRows] = await Promise.all([
-    venueIds.length
-      ? db.seat.groupBy({
-          by: ['VenueID'],
-          where: { VenueID: { in: venueIds } },
-          _count: { SeatID: true }
-        })
-      : [],
-    firstShowtimeIds.length
-      ? db.bookingDetail.groupBy({
-          by: ['ShowtimeID'],
-          where: {
-            ShowtimeID: { in: firstShowtimeIds },
-            Booking: {
-              OR: [
-                { Status: { StatusName: 'Completed' } },
-                { Status: { StatusName: 'Pending' }, ExpiresAt: { gt: now } }
-              ]
-            }
-          },
-          _count: { SeatID: true }
-        })
-      : [],
-    allShowtimeIds.length
-      ? db.bookingDetail.groupBy({
-          by: ['ShowtimeID'],
-          where: { ShowtimeID: { in: allShowtimeIds } },
-          _count: { DetailID: true }
-        })
-      : []
-  ]);
-
-  const capacityByVenue = new Map(capacityRows.map(row => [row.VenueID, row._count.SeatID]));
-  const activeBookedByShowtime = new Map(activeBookedRows.map(row => [row.ShowtimeID, row._count.SeatID]));
-  const totalBookingsByShowtime = new Map(totalBookingRows.map(row => [row.ShowtimeID, row._count.DetailID]));
-
-  return events.map(event => {
-    const showtime = event.Showtimes?.[0] ?? null;
-    const venueId = showtime?.VenueID ?? null;
-    const totalSeats = venueId ? capacityByVenue.get(venueId) || 0 : 0;
-    const bookedCount = showtime ? activeBookedByShowtime.get(showtime.ShowtimeID) || 0 : 0;
-    const totalBookings = event.Showtimes.reduce((sum, item) =>
-      sum + (totalBookingsByShowtime.get(item.ShowtimeID) || 0), 0);
-    const latestShowtime = event.Showtimes?.length > 0
-      ? event.Showtimes.reduce((latest, item) =>
-          new Date(item.StartDateTime) > new Date(latest.StartDateTime) ? item : latest,
-        event.Showtimes[0])
-      : null;
-    const isPast = latestShowtime ? new Date(latestShowtime.StartDateTime) < now : false;
-
-    return {
-      id: event.EventID,
-      title: event.Title,
-      description: event.Description,
-      category: event.Category?.CategoryName || 'Uncategorized',
-      categoryId: event.CategoryID,
-      basePrice: Number(showtime?.BasePrice ?? 0),
-      venue: showtime?.Venue?.VenueName ?? '-',
-      venueId,
-      totalSeats,
-      seatsRemaining: totalSeats - bookedCount,
-      startDateTime: showtime?.StartDateTime ?? null,
-      showtimeId: showtime?.ShowtimeID ?? null,
-      isPast,
-      hasBookings: totalBookings > 0,
-      latestShowtime: latestShowtime?.StartDateTime ?? null
-    };
+function getCacheKey({ search, categoryId }) {
+  return JSON.stringify({
+    search: search || '',
+    categoryId: categoryId || ''
   });
 }
 
-module.exports = { getEventList };
+function invalidateEventListCache() {
+  eventListCache.clear();
+}
+
+function buildEventListWhere({ search, categoryId }) {
+  const clauses = [];
+  const params = [];
+
+  if (search) {
+    params.push(`%${search}%`);
+    clauses.push(`e."Title" ILIKE $${params.length}`);
+  }
+
+  if (categoryId) {
+    params.push(parseInt(categoryId, 10));
+    clauses.push(`e."CategoryID" = $${params.length}`);
+  }
+
+  return {
+    whereSql: clauses.length ? `WHERE ${clauses.join(' AND ')}` : '',
+    params
+  };
+}
+
+function mapEventListRows(rows) {
+  return rows.map(row => ({
+    id: Number(row.id),
+    title: row.title,
+    description: row.description,
+    category: row.category || 'Uncategorized',
+    categoryId: Number(row.categoryId),
+    basePrice: Number(row.basePrice ?? 0),
+    venue: row.venue || '-',
+    venueId: row.venueId === null ? null : Number(row.venueId),
+    totalSeats: Number(row.totalSeats ?? 0),
+    seatsRemaining: Number(row.seatsRemaining ?? 0),
+    startDateTime: row.startDateTime ?? null,
+    showtimeId: row.showtimeId === null ? null : Number(row.showtimeId),
+    isPast: Boolean(row.isPast),
+    hasBookings: Boolean(row.hasBookings),
+    latestShowtime: row.latestShowtime ?? null
+  }));
+}
+
+async function getEventList(db, options = {}) {
+  const { search, categoryId } = options;
+  const now = options.now || new Date();
+  const canUseCache = !Object.prototype.hasOwnProperty.call(options, 'now') && EVENT_LIST_CACHE_TTL_MS > 0;
+  const cacheKey = getCacheKey({ search, categoryId });
+
+  if (canUseCache) {
+    const cached = eventListCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.value;
+    }
+  }
+
+  const { whereSql, params } = buildEventListWhere({ search, categoryId });
+  const nowParamIndex = params.length + 1;
+  const sql = `
+    WITH filtered_events AS MATERIALIZED (
+      SELECT
+        e."EventID",
+        e."Title",
+        e."Description",
+        e."CategoryID",
+        c."CategoryName"
+      FROM "Events" e
+      LEFT JOIN "EventCategories" c ON c."CategoryID" = e."CategoryID"
+      ${whereSql}
+    ),
+    first_showtime AS (
+      SELECT DISTINCT ON (s."EventID")
+        s."EventID",
+        s."ShowtimeID",
+        s."VenueID",
+        s."BasePrice",
+        s."StartDateTime",
+        v."VenueName"
+      FROM "Showtimes" s
+      JOIN filtered_events fe ON fe."EventID" = s."EventID"
+      JOIN "Venues" v ON v."VenueID" = s."VenueID"
+      ORDER BY s."EventID", s."StartDateTime" ASC
+    ),
+    showtime_rollup AS (
+      SELECT
+        s."EventID",
+        MAX(s."StartDateTime") AS "LatestShowtime"
+      FROM "Showtimes" s
+      JOIN filtered_events fe ON fe."EventID" = s."EventID"
+      GROUP BY s."EventID"
+    ),
+    booking_event_flags AS (
+      SELECT DISTINCT
+        s."EventID"
+      FROM "Showtimes" s
+      JOIN filtered_events fe ON fe."EventID" = s."EventID"
+      JOIN "BookingDetails" bd ON bd."ShowtimeID" = s."ShowtimeID"
+    ),
+    venue_capacity AS (
+      SELECT
+        s."VenueID",
+        COUNT(s."SeatID")::int AS "TotalSeats"
+      FROM "Seats" s
+      JOIN (
+        SELECT DISTINCT "VenueID"
+        FROM first_showtime
+        WHERE "VenueID" IS NOT NULL
+      ) fv ON fv."VenueID" = s."VenueID"
+      GROUP BY s."VenueID"
+    ),
+    active_booked_first_showtime AS (
+      SELECT
+        bd."ShowtimeID",
+        COUNT(bd."SeatID")::int AS "BookedCount"
+      FROM "BookingDetails" bd
+      JOIN first_showtime fs ON fs."ShowtimeID" = bd."ShowtimeID"
+      JOIN "Bookings" b ON b."BookingID" = bd."BookingID"
+      JOIN "BookingStatuses" bs ON bs."StatusID" = b."StatusID"
+      WHERE
+        bs."StatusName" = 'Completed'
+        OR (
+          bs."StatusName" = 'Pending'
+          AND b."ExpiresAt" > $${nowParamIndex}
+        )
+      GROUP BY bd."ShowtimeID"
+    )
+    SELECT
+      fe."EventID" AS "id",
+      fe."Title" AS "title",
+      fe."Description" AS "description",
+      COALESCE(fe."CategoryName", 'Uncategorized') AS "category",
+      fe."CategoryID" AS "categoryId",
+      COALESCE(fs."BasePrice", 0) AS "basePrice",
+      COALESCE(fs."VenueName", '-') AS "venue",
+      fs."VenueID" AS "venueId",
+      COALESCE(vc."TotalSeats", 0) AS "totalSeats",
+      COALESCE(vc."TotalSeats", 0) - COALESCE(ab."BookedCount", 0) AS "seatsRemaining",
+      fs."StartDateTime" AS "startDateTime",
+      fs."ShowtimeID" AS "showtimeId",
+      CASE
+        WHEN sr."LatestShowtime" IS NULL THEN false
+        ELSE sr."LatestShowtime" < $${nowParamIndex}
+      END AS "isPast",
+      bef."EventID" IS NOT NULL AS "hasBookings",
+      sr."LatestShowtime" AS "latestShowtime"
+    FROM filtered_events fe
+    LEFT JOIN first_showtime fs ON fs."EventID" = fe."EventID"
+    LEFT JOIN showtime_rollup sr ON sr."EventID" = fe."EventID"
+    LEFT JOIN booking_event_flags bef ON bef."EventID" = fe."EventID"
+    LEFT JOIN venue_capacity vc ON vc."VenueID" = fs."VenueID"
+    LEFT JOIN active_booked_first_showtime ab ON ab."ShowtimeID" = fs."ShowtimeID"
+    ORDER BY fe."EventID" DESC
+  `;
+
+  const rows = await db.$queryRawUnsafe(sql, ...params, now);
+  const result = mapEventListRows(rows);
+
+  if (canUseCache) {
+    eventListCache.set(cacheKey, {
+      value: result,
+      expiresAt: Date.now() + EVENT_LIST_CACHE_TTL_MS
+    });
+  }
+
+  return result;
+}
+
+module.exports = {
+  getEventList,
+  buildEventListWhere,
+  invalidateEventListCache,
+  mapEventListRows
+};

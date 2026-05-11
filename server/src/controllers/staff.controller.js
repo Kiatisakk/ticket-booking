@@ -1,5 +1,5 @@
 const prisma = require('../config/prisma');
-const { getEventList } = require('../services/eventListMetrics.service');
+const { getEventList, invalidateEventListCache } = require('../services/eventListMetrics.service');
 
 exports.getAllEvents = async (req, res) => {
   try {
@@ -119,6 +119,7 @@ exports.createEvent = async (req, res) => {
       ));
     }
 
+    invalidateEventListCache();
     res.status(201).json({
       message: 'Event created successfully',
       event: {
@@ -197,6 +198,7 @@ exports.updateEvent = async (req, res) => {
       }
     }
 
+    invalidateEventListCache();
     res.json({
       message: 'Event updated successfully',
       event: {
@@ -237,6 +239,7 @@ exports.deleteEvent = async (req, res) => {
     }
 
     await prisma.event.delete({ where: { EventID: eventId } });
+    invalidateEventListCache();
     res.json({ message: 'Event deleted successfully' });
   } catch (error) {
     console.error('Staff deleteEvent error:', error);
