@@ -1,0 +1,5 @@
+DROP MATERIALIZED VIEW IF EXISTS "ReportCancellationSummary";
+DROP MATERIALIZED VIEW IF EXISTS "ReportHourlyBookingSummary";
+DROP MATERIALIZED VIEW IF EXISTS "ReportSeatTypeRevenueSummary";
+DROP MATERIALIZED VIEW IF EXISTS "ReportVenueRevenueSummary";
+DROP MATERIALIZED VIEW IF EXISTS "ReportMonthlyRevenueSummary";

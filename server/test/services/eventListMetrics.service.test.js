@@ -57,7 +57,7 @@ test('mapEventListRows normalizes raw SQL row values for controllers', () => {
   });
 });
 
-test('getEventList uses one SQL aggregate query instead of per-event queries', async () => {
+test('getEventList reads event list metrics from the materialized view', async () => {
   invalidateEventListCache();
   const now = new Date('2029-01-01T00:00:00Z');
   const calls = [];
@@ -89,19 +89,37 @@ test('getEventList uses one SQL aggregate query instead of per-event queries', a
   const result = await getEventList(db, { search: 'con', categoryId: '2', now });
 
   assert.equal(calls.length, 1);
-  assert.match(calls[0].sql, /WITH filtered_events AS MATERIALIZED/);
-  assert.match(calls[0].sql, /first_showtime AS/);
-  assert.match(calls[0].sql, /showtime_rollup AS/);
-  assert.match(calls[0].sql, /booking_event_flags AS/);
-  assert.match(calls[0].sql, /venue_capacity AS/);
-  assert.match(calls[0].sql, /active_booked_first_showtime AS/);
-  assert.match(calls[0].sql, /SELECT DISTINCT\s+s\."EventID"/);
-  assert.match(calls[0].sql, /COUNT\(s\."SeatID"\)::int AS "TotalSeats"/);
-  assert.match(calls[0].sql, /COUNT\(bd\."SeatID"\)::int AS "BookedCount"/);
-  assert.match(calls[0].sql, /ORDER BY fe\."EventID" DESC/);
+  assert.match(calls[0].sql, /FROM "EventListMetrics" elm/);
+  assert.match(calls[0].sql, /elm\."Title" ILIKE \$1/);
+  assert.match(calls[0].sql, /elm\."CategoryID" = \$2/);
+  assert.match(calls[0].sql, /ORDER BY elm\."EventID" DESC/);
   assert.deepEqual(calls[0].params, ['%con%', 2, now]);
   assert.equal(result[0].seatsRemaining, 65);
   assert.equal(result[0].hasBookings, true);
+});
+
+test('getEventList falls back to aggregate SQL when the materialized view is missing', async () => {
+  invalidateEventListCache();
+  const now = new Date('2029-01-01T00:00:00Z');
+  const calls = [];
+  const db = {
+    $queryRawUnsafe: async (sql, ...params) => {
+      calls.push({ sql, params });
+      if (calls.length === 1) {
+        const error = new Error('relation "EventListMetrics" does not exist 42P01');
+        error.code = 'P2010';
+        throw error;
+      }
+      return [];
+    }
+  };
+
+  await getEventList(db, { now });
+
+  assert.equal(calls.length, 2);
+  assert.match(calls[0].sql, /FROM "EventListMetrics" elm/);
+  assert.match(calls[1].sql, /WITH filtered_events AS MATERIALIZED/);
+  assert.match(calls[1].sql, /active_booked_first_showtime AS/);
 });
 
 test('getEventList does not cache normal list calls', async () => {
@@ -163,7 +181,7 @@ test('getEventList returns offset pagination payload when requested', async () =
 
   assert.equal(calls.length, 3);
   assert.match(calls[0].sql, /LIMIT \$2 OFFSET \$3/);
-  assert.match(calls[0].sql, /COALESCE\(eb\."LatestShowtime" >= \$1, true\)/);
+  assert.match(calls[0].sql, /COALESCE\(elm\."LatestShowtime" >= \$1, true\)/);
   assert.deepEqual(calls[0].params, [new Date('2029-01-01T00:00:00Z'), 10, 10]);
   assert.deepEqual(calls[2].params, [new Date('2029-01-01T00:00:00Z')]);
   assert.equal(payload.pagination.type, 'offset');

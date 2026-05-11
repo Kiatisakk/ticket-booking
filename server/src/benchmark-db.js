@@ -5,7 +5,12 @@ const { execFileSync } = require('child_process');
 const prisma = require('./config/prisma');
 const adminController = require('./controllers/admin.controller');
 const staffController = require('./controllers/staff.controller');
+const eventController = require('./controllers/event.controller');
+const venueController = require('./controllers/venue.controller');
+const showtimeController = require('./controllers/showtime.controller');
 const bookingController = require('./controllers/booking.controller');
+const paymentController = require('./controllers/payment.controller');
+const ticketController = require('./controllers/ticket.controller');
 const showtimeRepository = require('./repositories/showtime.repository');
 const bookingRepository = require('./repositories/booking.repository');
 
@@ -80,14 +85,14 @@ function invokeController(handler, { query = {}, params = {}, user = {} } = {}) 
 }
 
 async function getFixtures() {
-  const [booking, showtime, statuses, venue] = await Promise.all([
+  const [booking, showtime, statuses, venue, event, ticket] = await Promise.all([
     prisma.booking.findFirst({
       orderBy: { BookingID: 'desc' },
       select: { BookingID: true, UserID: true }
     }),
     prisma.showtime.findFirst({
       orderBy: { ShowtimeID: 'desc' },
-      select: { ShowtimeID: true, VenueID: true }
+      select: { ShowtimeID: true, VenueID: true, EventID: true }
     }),
     prisma.bookingStatus.findMany({
       where: { StatusName: { in: ['Pending', 'Completed'] } },
@@ -96,11 +101,27 @@ async function getFixtures() {
     prisma.venue.findFirst({
       orderBy: { VenueID: 'asc' },
       select: { VenueID: true }
+    }),
+    prisma.event.findFirst({
+      orderBy: { EventID: 'desc' },
+      select: { EventID: true }
+    }),
+    prisma.ticket.findFirst({
+      orderBy: { TicketID: 'desc' },
+      select: {
+        TicketNo: true,
+        Detail: {
+          select: {
+            BookingID: true,
+            Booking: { select: { UserID: true } }
+          }
+        }
+      }
     })
   ]);
 
-  if (!booking || !showtime || !venue) {
-    throw new Error('Benchmark needs seeded bookings, showtimes, and venues. Run db:seed-historical first.');
+  if (!booking || !showtime || !venue || !event || !ticket) {
+    throw new Error('Benchmark needs seeded bookings, showtimes, venues, events, and tickets. Run db:seed-historical first.');
   }
 
   const seats = await prisma.seat.findMany({
@@ -117,8 +138,13 @@ async function getFixtures() {
 
   return {
     userId: booking.UserID,
+    bookingId: booking.BookingID,
     showtimeId: showtime.ShowtimeID,
+    eventId: event.EventID || showtime.EventID,
     venueId: venue.VenueID,
+    ticketNo: ticket.TicketNo,
+    ticketBookingId: ticket.Detail.BookingID,
+    ticketUserId: ticket.Detail.Booking.UserID,
     seatIds: seats.map(seat => seat.SeatID),
     pendingStatusId: pendingStatus.StatusID,
     completedStatusId: completedStatus.StatusID
@@ -142,7 +168,38 @@ async function runBenchmarks() {
     sortBy: 'startDateTime',
     sortOrder: 'asc'
   };
+  const reportTasks = [
+    ['Reports KPI', adminController.getReportKpi],
+    ['Report revenue by category', adminController.getRevenueByCategory],
+    ['Report user growth', adminController.getUserGrowth],
+    ['Report revenue by venue', adminController.getRevenueByVenue],
+    ['Report bookings by hour', adminController.getBookingsByHour],
+    ['Report booking vs capacity', adminController.getBookingVsCapacity],
+    ['Report venue utilization', adminController.getVenueUtilization],
+    ['Report seat type revenue', adminController.getSeatTypeRevenue],
+    ['Report customer retention', adminController.getCustomerRetention],
+    ['Report interest by category', adminController.getInterestByCategory],
+    ['Report peak showtime hours', adminController.getPeakShowtimeHours],
+    ['Report seat heatmap', adminController.getSeatHeatmap],
+    ['Report cancellation heatmap', adminController.getCancellationHeatmap]
+  ].map(([name, handler]) => ({
+    name,
+    run: () => invokeController(handler, { query: {} })
+  }));
+
   const tasks = [
+    {
+      name: 'Customer event list',
+      run: () => invokeController(eventController.getAllEvents, {
+        query: { pagination: 'cursor', page: '1', pageSize: '20', sortBy: 'eventId', sortOrder: 'desc' }
+      })
+    },
+    {
+      name: 'Customer event detail',
+      run: () => invokeController(eventController.getEventById, {
+        params: { id: String(fixtures.eventId) }
+      })
+    },
     {
       name: 'Admin event list (ID sort)',
       run: () => invokeController(adminController.getAllEvents, { query: eventListDefaultQuery })
@@ -156,10 +213,29 @@ async function runBenchmarks() {
       run: () => invokeController(staffController.getAllEvents, { query: eventListDefaultQuery })
     },
     {
+      name: 'Admin event detail',
+      run: () => invokeController(adminController.getEventById, {
+        params: { id: String(fixtures.eventId) }
+      })
+    },
+    {
+      name: 'Staff event detail',
+      run: () => invokeController(staffController.getEventById, {
+        params: { id: String(fixtures.eventId) }
+      })
+    },
+    {
       name: 'My bookings page',
       run: () => invokeController(bookingController.getMyBookings, {
         query: { pagination: 'cursor', page: '1', pageSize: '20', status: 'all' },
         user: { userId: fixtures.userId }
+      })
+    },
+    {
+      name: 'My booking detail',
+      run: () => invokeController(bookingController.getBookingById, {
+        params: { id: String(fixtures.bookingId) },
+        user: { userId: fixtures.userId, role: 3 }
       })
     },
     {
@@ -181,6 +257,16 @@ async function runBenchmarks() {
       })
     },
     {
+      name: 'Admin staff page',
+      run: () => invokeController(adminController.getAllStaff, {
+        query: { pagination: 'cursor', page: '1', pageSize: '20' }
+      })
+    },
+    {
+      name: 'Admin categories lookup',
+      run: () => invokeController(adminController.getCategories)
+    },
+    {
       name: 'Admin venues page',
       run: () => invokeController(adminController.getAdminVenues, {
         query: { pagination: 'offset', page: '1', pageSize: '12' }
@@ -191,6 +277,50 @@ async function runBenchmarks() {
       run: () => invokeController(adminController.getVenueSeats, {
         params: { venueId: String(fixtures.venueId) },
         query: { pagination: 'offset', page: '1', pageSize: '100' }
+      })
+    },
+    {
+      name: 'Admin system settings',
+      run: () => invokeController(adminController.getSystemSettings)
+    },
+    {
+      name: 'Customer venues list',
+      run: () => invokeController(venueController.getAllVenues)
+    },
+    {
+      name: 'Customer venue detail',
+      run: () => invokeController(venueController.getVenueById, {
+        params: { id: String(fixtures.venueId) }
+      })
+    },
+    {
+      name: 'Seat types lookup',
+      run: () => invokeController(venueController.getAllSeatTypes)
+    },
+    {
+      name: 'Payment methods lookup',
+      run: () => invokeController(paymentController.getPaymentMethods)
+    },
+    {
+      name: 'Showtimes list',
+      run: () => invokeController(showtimeController.getAllShowtimes)
+    },
+    {
+      name: 'Showtimes by event',
+      run: () => invokeController(showtimeController.getShowtimesByEvent, {
+        params: { eventId: String(fixtures.eventId) }
+      })
+    },
+    {
+      name: 'Showtime detail',
+      run: () => invokeController(showtimeController.getShowtimeById, {
+        params: { id: String(fixtures.showtimeId) }
+      })
+    },
+    {
+      name: 'Showtime booked seats endpoint',
+      run: () => invokeController(showtimeController.getBookedSeats, {
+        params: { id: String(fixtures.showtimeId) }
       })
     },
     {
@@ -210,13 +340,19 @@ async function runBenchmarks() {
       )
     },
     {
-      name: 'Reports KPI',
-      run: () => invokeController(adminController.getReportKpi, { query: {} })
+      name: 'Tickets by booking',
+      run: () => invokeController(ticketController.getTicketsByBooking, {
+        params: { bookingId: String(fixtures.ticketBookingId) },
+        user: { userId: fixtures.ticketUserId }
+      })
     },
     {
-      name: 'Revenue by category report',
-      run: () => invokeController(adminController.getRevenueByCategory, { query: {} })
-    }
+      name: 'Ticket verify',
+      run: () => invokeController(ticketController.verifyTicket, {
+        params: { ticketNo: fixtures.ticketNo }
+      })
+    },
+    ...reportTasks
   ];
 
   const results = {};
@@ -313,18 +449,24 @@ function compareRows(beforeResults, afterResults) {
 
 async function runAbBenchmark() {
   console.log('=== A/B DB Benchmark ===');
-  console.log('Step 1/6: dropping report materialized views...');
+  console.log('Step 1/6: dropping materialized views...');
+  runNpmScript('db:drop-event-list-view');
+  runNpmScript('db:drop-report-summaries');
   runNpmScript('db:drop-report-views');
 
   console.log('Step 2/6: dropping performance indexes...');
   runNpmScript('db:drop-indexes');
+  runNpmScript('db:restore-seat-availability-view');
 
   console.log('Step 3/6: running no-index/no-report-view benchmark...');
   const noIndex = await runBenchmarks();
 
-  console.log('Step 4/6: applying performance indexes and report materialized views...');
+  console.log('Step 4/6: applying performance indexes and materialized views...');
   runNpmScript('db:optimize-indexes');
+  runNpmScript('db:optimize-event-list');
+  runNpmScript('db:optimize-seat-availability');
   runNpmScript('db:optimize-reports');
+  runNpmScript('db:optimize-report-summaries');
 
   console.log('Step 5/6: running indexed/report-view benchmark...');
   const indexed = await runBenchmarks();

@@ -50,12 +50,22 @@ async function getReportFactSources() {
   const [row] = await prisma.$queryRaw`
     SELECT
       to_regclass('"ReportPaymentDetailFacts"') IS NOT NULL AS "hasPaymentFacts",
-      to_regclass('"ReportBookingDetailFacts"') IS NOT NULL AS "hasBookingFacts"
+      to_regclass('"ReportBookingDetailFacts"') IS NOT NULL AS "hasBookingFacts",
+      to_regclass('"ReportMonthlyRevenueSummary"') IS NOT NULL AS "hasMonthlyRevenueSummary",
+      to_regclass('"ReportVenueRevenueSummary"') IS NOT NULL AS "hasVenueRevenueSummary",
+      to_regclass('"ReportSeatTypeRevenueSummary"') IS NOT NULL AS "hasSeatTypeRevenueSummary",
+      to_regclass('"ReportHourlyBookingSummary"') IS NOT NULL AS "hasHourlyBookingSummary",
+      to_regclass('"ReportCancellationSummary"') IS NOT NULL AS "hasCancellationSummary"
   `;
 
   return {
     hasPaymentFacts: Boolean(row?.hasPaymentFacts),
-    hasBookingFacts: Boolean(row?.hasBookingFacts)
+    hasBookingFacts: Boolean(row?.hasBookingFacts),
+    hasMonthlyRevenueSummary: Boolean(row?.hasMonthlyRevenueSummary),
+    hasVenueRevenueSummary: Boolean(row?.hasVenueRevenueSummary),
+    hasSeatTypeRevenueSummary: Boolean(row?.hasSeatTypeRevenueSummary),
+    hasHourlyBookingSummary: Boolean(row?.hasHourlyBookingSummary),
+    hasCancellationSummary: Boolean(row?.hasCancellationSummary)
   };
 }
 
@@ -68,7 +78,16 @@ exports.getReportKpi = asyncHandler(async (req, res) => {
     const venueFilter = venueId && venueId !== 'all' ? parseInt(venueId) : null;
     const factSources = await getReportFactSources();
 
-    const revenueResult = factSources.hasPaymentFacts
+    const revenueResult = factSources.hasMonthlyRevenueSummary
+      ? await prisma.$queryRaw`
+          SELECT COALESCE(SUM(r."Revenue"), 0)::float8 as revenue
+          FROM "ReportMonthlyRevenueSummary" r
+          WHERE r."PaidDate" >= ${start}
+            AND r."PaidDate" <  ${end}
+            AND (${catFilter}::text IS NULL OR r."CategoryName" = ${catFilter})
+            AND (${venueFilter}::int IS NULL OR r."VenueID" = ${venueFilter})
+        `
+      : factSources.hasPaymentFacts
       ? await prisma.$queryRaw`
           SELECT COALESCE(SUM(sub.amount), 0)::float8 as revenue
           FROM (
@@ -99,7 +118,16 @@ exports.getReportKpi = asyncHandler(async (req, res) => {
         `;
     const totalRevenue = Number(revenueResult[0]?.revenue ?? 0);
 
-    const bookingsResult = factSources.hasBookingFacts
+    const bookingsResult = factSources.hasMonthlyRevenueSummary
+      ? await prisma.$queryRaw`
+          SELECT COALESCE(SUM(r."TicketCount"), 0)::int as count
+          FROM "ReportMonthlyRevenueSummary" r
+          WHERE r."PaidDate" >= ${start}
+            AND r."PaidDate" <  ${end}
+            AND (${catFilter}::text IS NULL OR r."CategoryName" = ${catFilter})
+            AND (${venueFilter}::int IS NULL OR r."VenueID" = ${venueFilter})
+        `
+      : factSources.hasBookingFacts
       ? await prisma.$queryRaw`
           SELECT COUNT(f."DetailID")::int as count
           FROM "ReportBookingDetailFacts" f
@@ -125,7 +153,22 @@ exports.getReportKpi = asyncHandler(async (req, res) => {
     const totalBookings = Number(bookingsResult[0]?.count ?? 0);
 
     // Per-category analysis (always return all categories for dropdown)
-    const categoryAnalysis = factSources.hasPaymentFacts
+    const categoryAnalysis = factSources.hasMonthlyRevenueSummary
+      ? await prisma.$queryRaw`
+          SELECT
+            r."CategoryName" as category,
+            COALESCE(SUM(r."Revenue"), 0)::float8 as revenue,
+            COALESCE(SUM(r."PaymentCount"), 0)::int as bookings,
+            COALESCE(SUM(r."TicketCount"), 0)::int as tickets
+          FROM "ReportMonthlyRevenueSummary" r
+          WHERE r."PaidDate" >= ${start}
+            AND r."PaidDate" <  ${end}
+            AND (${catFilter}::text IS NULL OR r."CategoryName" = ${catFilter})
+            AND (${venueFilter}::int IS NULL OR r."VenueID" = ${venueFilter})
+          GROUP BY r."CategoryName"
+          ORDER BY revenue DESC
+        `
+      : factSources.hasPaymentFacts
       ? await prisma.$queryRaw`
           SELECT
             f."CategoryName" as category,
@@ -181,7 +224,21 @@ exports.getRevenueByCategory = asyncHandler(async (req, res) => {
     const catFilter = category && category !== 'all' ? category : null;
     const factSources = await getReportFactSources();
 
-    const rows = factSources.hasPaymentFacts
+    const rows = factSources.hasMonthlyRevenueSummary
+      ? await prisma.$queryRaw`
+          SELECT
+            r."CategoryName" as category,
+            r."PaidYear" as yr,
+            r."PaidMonth" as month,
+            COALESCE(SUM(r."Revenue"), 0)::float8 as revenue
+          FROM "ReportMonthlyRevenueSummary" r
+          WHERE r."PaidDate" >= ${start}
+            AND r."PaidDate" <  ${end}
+            AND (${catFilter}::text IS NULL OR r."CategoryName" = ${catFilter})
+          GROUP BY r."CategoryName", r."PaidYear", r."PaidMonth"
+          ORDER BY yr, month
+        `
+      : factSources.hasPaymentFacts
       ? await prisma.$queryRaw`
           SELECT
             f."CategoryName" as category,
@@ -262,7 +319,21 @@ exports.getRevenueByVenue = asyncHandler(async (req, res) => {
     const catFilter = category && category !== 'all' ? category : null;
     const factSources = await getReportFactSources();
 
-    const rows = factSources.hasPaymentFacts
+    const rows = factSources.hasVenueRevenueSummary
+      ? await prisma.$queryRaw`
+          SELECT
+            r."VenueName" as venue,
+            r."PaidYear" as yr,
+            r."PaidMonth" as month,
+            COALESCE(SUM(r."Revenue"), 0)::float8 as revenue
+          FROM "ReportVenueRevenueSummary" r
+          WHERE r."PaidDate" >= ${start}
+            AND r."PaidDate" <  ${end}
+            AND (${catFilter}::text IS NULL OR r."CategoryName" = ${catFilter})
+          GROUP BY r."VenueName", r."PaidYear", r."PaidMonth"
+          ORDER BY yr, month
+        `
+      : factSources.hasPaymentFacts
       ? await prisma.$queryRaw`
           SELECT
             f."VenueName" as venue,
@@ -324,7 +395,19 @@ const getBookingsByMonth = asyncHandler(async (req, res) => {
     const catFilter = category && category !== 'all' ? category : null;
     const factSources = await getReportFactSources();
 
-    const rows = factSources.hasPaymentFacts
+    const rows = factSources.hasMonthlyRevenueSummary
+      ? await prisma.$queryRaw`
+          SELECT r."PaidYear" as yr,
+                 r."PaidMonth" as month,
+                 COALESCE(SUM(r."PaymentCount"), 0)::int as count
+          FROM "ReportMonthlyRevenueSummary" r
+          WHERE r."PaidDate" >= ${start}
+            AND r."PaidDate" <  ${end}
+            AND (${catFilter}::text IS NULL OR r."CategoryName" = ${catFilter})
+          GROUP BY yr, month
+          ORDER BY yr, month
+        `
+      : factSources.hasPaymentFacts
       ? await prisma.$queryRaw`
           SELECT f."PaidYear" as yr,
                  f."PaidMonth" as month,
@@ -545,28 +628,43 @@ exports.getSeatTypeRevenue = asyncHandler(async (req, res) => {
     const { category } = req.query;
     const { start, end } = getDateRange(req.query);
     const catFilter = category && category !== 'all' ? category : null;
+    const factSources = await getReportFactSources();
 
-    const rows = await prisma.$queryRaw`
-      SELECT
-        st."TypeName" as "seatType",
-        COUNT(t."TicketID")::int as "totalTicketsSold",
-        COALESCE(SUM(t."FinalPrice"), 0)::float8 as "totalRevenue",
-        ROUND(AVG(EXTRACT(EPOCH FROM (s."StartDateTime" - b."BookingTimestamp")) / 86400)::numeric, 1)::float8 as "avgDaysInAdvance"
-      FROM "SeatTypes" st
-      JOIN "Seats" seat ON st."SeatTypeID" = seat."SeatTypeID"
-      JOIN "BookingDetails" bd ON seat."SeatID" = bd."SeatID"
-      JOIN "Tickets" t ON bd."DetailID" = t."DetailID"
-      JOIN "Bookings" b ON bd."BookingID" = b."BookingID"
-      JOIN "Showtimes" s ON bd."ShowtimeID" = s."ShowtimeID"
-      JOIN "Events" e ON s."EventID" = e."EventID"
-      JOIN "EventCategories" ec ON e."CategoryID" = ec."CategoryID"
-      WHERE b."StatusID" = 2
-        AND s."StartDateTime" >= ${start}
-        AND s."StartDateTime" <  ${end}
-        AND (${catFilter}::text IS NULL OR ec."CategoryName" = ${catFilter})
-      GROUP BY st."TypeName"
-      ORDER BY "totalRevenue" DESC
-    `;
+    const rows = factSources.hasSeatTypeRevenueSummary
+      ? await prisma.$queryRaw`
+          SELECT
+            r."SeatType" as "seatType",
+            COALESCE(SUM(r."TotalTicketsSold"), 0)::int as "totalTicketsSold",
+            COALESCE(SUM(r."TotalRevenue"), 0)::float8 as "totalRevenue",
+            ROUND((COALESCE(SUM(r."TotalDaysInAdvance"), 0) / NULLIF(SUM(r."TotalTicketsSold"), 0))::numeric, 1)::float8 as "avgDaysInAdvance"
+          FROM "ReportSeatTypeRevenueSummary" r
+          WHERE r."ShowtimeDate" >= ${start}
+            AND r."ShowtimeDate" <  ${end}
+            AND (${catFilter}::text IS NULL OR r."CategoryName" = ${catFilter})
+          GROUP BY r."SeatType"
+          ORDER BY "totalRevenue" DESC
+        `
+      : await prisma.$queryRaw`
+          SELECT
+            st."TypeName" as "seatType",
+            COUNT(t."TicketID")::int as "totalTicketsSold",
+            COALESCE(SUM(t."FinalPrice"), 0)::float8 as "totalRevenue",
+            ROUND(AVG(EXTRACT(EPOCH FROM (s."StartDateTime" - b."BookingTimestamp")) / 86400)::numeric, 1)::float8 as "avgDaysInAdvance"
+          FROM "SeatTypes" st
+          JOIN "Seats" seat ON st."SeatTypeID" = seat."SeatTypeID"
+          JOIN "BookingDetails" bd ON seat."SeatID" = bd."SeatID"
+          JOIN "Tickets" t ON bd."DetailID" = t."DetailID"
+          JOIN "Bookings" b ON bd."BookingID" = b."BookingID"
+          JOIN "Showtimes" s ON bd."ShowtimeID" = s."ShowtimeID"
+          JOIN "Events" e ON s."EventID" = e."EventID"
+          JOIN "EventCategories" ec ON e."CategoryID" = ec."CategoryID"
+          WHERE b."StatusID" = 2
+            AND s."StartDateTime" >= ${start}
+            AND s."StartDateTime" <  ${end}
+            AND (${catFilter}::text IS NULL OR ec."CategoryName" = ${catFilter})
+          GROUP BY st."TypeName"
+          ORDER BY "totalRevenue" DESC
+        `;
 
     res.json({
       labels: rows.map(r => r.seatType),
@@ -721,22 +819,35 @@ exports.getPeakShowtimeHours = asyncHandler(async (req, res) => {
     const { category } = req.query;
     const { start, end } = getDateRange(req.query);
     const catFilter = category && category !== 'all' ? category : null;
+    const factSources = await getReportFactSources();
 
-    const rows = await prisma.$queryRaw`
-      SELECT ec."CategoryName" as category,
-             EXTRACT(HOUR FROM s."StartDateTime")::int as hour,
-             COUNT(t."TicketID")::int as tickets
-      FROM "Tickets" t
-      JOIN "BookingDetails" bd ON t."DetailID" = bd."DetailID"
-      JOIN "Showtimes" s ON bd."ShowtimeID" = s."ShowtimeID"
-      JOIN "Events" e ON s."EventID" = e."EventID"
-      JOIN "EventCategories" ec ON e."CategoryID" = ec."CategoryID"
-      WHERE s."StartDateTime" >= ${start}
-        AND s."StartDateTime" <  ${end}
-        AND (${catFilter}::text IS NULL OR ec."CategoryName" = ${catFilter})
-      GROUP BY ec."CategoryName", EXTRACT(HOUR FROM s."StartDateTime")
-      ORDER BY hour
-    `;
+    const rows = factSources.hasHourlyBookingSummary
+      ? await prisma.$queryRaw`
+          SELECT r."CategoryName" as category,
+                 r."ShowtimeHour"::int as hour,
+                 COALESCE(SUM(r."Tickets"), 0)::int as tickets
+          FROM "ReportHourlyBookingSummary" r
+          WHERE r."ShowtimeDate" >= ${start}
+            AND r."ShowtimeDate" <  ${end}
+            AND (${catFilter}::text IS NULL OR r."CategoryName" = ${catFilter})
+          GROUP BY r."CategoryName", r."ShowtimeHour"
+          ORDER BY hour
+        `
+      : await prisma.$queryRaw`
+          SELECT ec."CategoryName" as category,
+                 EXTRACT(HOUR FROM s."StartDateTime")::int as hour,
+                 COUNT(t."TicketID")::int as tickets
+          FROM "Tickets" t
+          JOIN "BookingDetails" bd ON t."DetailID" = bd."DetailID"
+          JOIN "Showtimes" s ON bd."ShowtimeID" = s."ShowtimeID"
+          JOIN "Events" e ON s."EventID" = e."EventID"
+          JOIN "EventCategories" ec ON e."CategoryID" = ec."CategoryID"
+          WHERE s."StartDateTime" >= ${start}
+            AND s."StartDateTime" <  ${end}
+            AND (${catFilter}::text IS NULL OR ec."CategoryName" = ${catFilter})
+          GROUP BY ec."CategoryName", EXTRACT(HOUR FROM s."StartDateTime")
+          ORDER BY hour
+        `;
 
     const activeHours = [...new Set(rows.map(row => Number(row.hour)))]
       .filter(hour => Number.isFinite(hour))
@@ -821,14 +932,97 @@ exports.getSeatHeatmap = asyncHandler(async (req, res) => {
 // ─── Report 12: Cancelled Booking Rate ────────────────────────────────────────
 
 function buildCancelRateMatrix(rows, rowKey, colKey, rowLabels, colLabels) {
+  const totalsByCell = new Map();
+
+  for (const row of rows) {
+    const key = `${row[rowKey]}::${row[colKey]}`;
+    const current = totalsByCell.get(key) || { totalBooking: 0, cancelledCount: 0 };
+    current.totalBooking += Number(row.totalBooking || 0);
+    current.cancelledCount += Number(row.cancelledCount || 0);
+    totalsByCell.set(key, current);
+  }
+
   return rowLabels.map(rowLabel =>
     colLabels.map(colLabel => {
-      const matchingRows = rows.filter(row => row[rowKey] === rowLabel && row[colKey] === colLabel);
-      const totalBooking = matchingRows.reduce((sum, row) => sum + Number(row.totalBooking || 0), 0);
-      const cancelledCount = matchingRows.reduce((sum, row) => sum + Number(row.cancelledCount || 0), 0);
+      const cell = totalsByCell.get(`${rowLabel}::${colLabel}`);
+      const totalBooking = cell?.totalBooking || 0;
+      const cancelledCount = cell?.cancelledCount || 0;
       return totalBooking ? Math.round((cancelledCount / totalBooking) * 10000) / 100 : 0;
     })
   );
+}
+
+function buildCancellationHeatmapPayload(rows) {
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const normalizedRows = rows.map(row => ({
+    venueName: row.venueName,
+    seatType: row.seatType,
+    eventTitle: row.eventTitle,
+    bookingYear: Number(row.bookingYear),
+    bookingMonth: Number(row.bookingMonth),
+    monthLabel: `${monthNames[Number(row.bookingMonth) - 1]}'${String(Number(row.bookingYear)).slice(-2)}`,
+    showtimeHour: Number(row.showtimeHour),
+    showtimeLabel: `${String(row.showtimeHour).padStart(2, '0')}:00`,
+    totalBooking: Number(row.totalBooking || 0),
+    cancelledCount: Number(row.cancelledCount || 0),
+    cancelRatePercentage: Number(row.cancelRatePercentage || 0)
+  }));
+
+  const venues = [...new Set(normalizedRows.map(row => row.venueName))].sort();
+  const seatTypes = [...new Set(normalizedRows.map(row => row.seatType))].sort();
+  const showtimeLabels = [...new Set(normalizedRows.map(row => row.showtimeLabel))]
+    .sort((a, b) => Number(a.slice(0, 2)) - Number(b.slice(0, 2)));
+  const monthLabels = [...new Map(
+    normalizedRows
+      .sort((a, b) => (a.bookingYear - b.bookingYear) || (a.bookingMonth - b.bookingMonth))
+      .map(row => [`${row.bookingYear}-${row.bookingMonth}`, row.monthLabel])
+  ).values()];
+
+  return {
+    rows: normalizedRows,
+    heatmaps: [
+      {
+        title: 'Cancellation Rate: Venue vs Seat Type',
+        key: 'venue-seat-type',
+        rows: seatTypes,
+        cols: venues,
+        rowLabel: 'Seat Type',
+        colLabel: 'Venue',
+        tone: 'red',
+        data: buildCancelRateMatrix(normalizedRows, 'seatType', 'venueName', seatTypes, venues)
+      },
+      {
+        title: 'Cancellation Rate: Showtime vs Month',
+        key: 'showtime-month',
+        rows: showtimeLabels,
+        cols: monthLabels,
+        rowLabel: 'Showtime',
+        colLabel: 'Month',
+        tone: 'orange',
+        data: buildCancelRateMatrix(normalizedRows, 'showtimeLabel', 'monthLabel', showtimeLabels, monthLabels)
+      },
+      {
+        title: 'Cancellation Rate: Venue vs Month',
+        key: 'venue-month',
+        rows: monthLabels,
+        cols: venues,
+        rowLabel: 'Month',
+        colLabel: 'Venue',
+        tone: 'green',
+        data: buildCancelRateMatrix(normalizedRows, 'monthLabel', 'venueName', monthLabels, venues)
+      },
+      {
+        title: 'Cancellation Rate: Venue vs Showtime',
+        key: 'venue-showtime',
+        rows: showtimeLabels,
+        cols: venues,
+        rowLabel: 'Showtime',
+        colLabel: 'Venue',
+        tone: 'purple',
+        data: buildCancelRateMatrix(normalizedRows, 'showtimeLabel', 'venueName', showtimeLabels, venues)
+      }
+    ]
+  };
 }
 
 exports.getCancellationHeatmap = asyncHandler(async (req, res) => {
@@ -836,111 +1030,67 @@ exports.getCancellationHeatmap = asyncHandler(async (req, res) => {
     const { start, end } = getDateRange(req.query);
     const catFilter = category && category !== 'all' ? category : null;
     const venueFilter = venueId && venueId !== 'all' ? parseInt(venueId) : null;
+    const factSources = await getReportFactSources();
 
-    const rows = await prisma.$queryRaw`
-      SELECT
-        v."VenueName" as "venueName",
-        st."TypeName" as "seatType",
-        e."Title" as "eventTitle",
-        EXTRACT(YEAR FROM b."BookingTimestamp")::int as "bookingYear",
-        EXTRACT(MONTH FROM b."BookingTimestamp")::int as "bookingMonth",
-        EXTRACT(HOUR FROM s."StartDateTime")::int as "showtimeHour",
-        COUNT(bd."DetailID")::int as "totalBooking",
-        SUM(CASE WHEN bs."StatusName" = 'Cancelled' THEN 1 ELSE 0 END)::int as "cancelledCount",
-        ROUND(
-          (SUM(CASE WHEN bs."StatusName" = 'Cancelled' THEN 1 ELSE 0 END)::numeric
-            / NULLIF(COUNT(bd."DetailID"), 0) * 100),
-          2
-        )::float8 as "cancelRatePercentage"
-      FROM "BookingDetails" bd
-      JOIN "Bookings" b ON bd."BookingID" = b."BookingID"
-      JOIN "BookingStatuses" bs ON b."StatusID" = bs."StatusID"
-      JOIN "Seats" seat ON bd."SeatID" = seat."SeatID"
-      JOIN "SeatTypes" st ON seat."SeatTypeID" = st."SeatTypeID"
-      JOIN "Showtimes" s ON bd."ShowtimeID" = s."ShowtimeID"
-      JOIN "Venues" v ON s."VenueID" = v."VenueID"
-      JOIN "Events" e ON s."EventID" = e."EventID"
-      JOIN "EventCategories" ec ON e."CategoryID" = ec."CategoryID"
-      WHERE b."BookingTimestamp" >= ${start}
-        AND b."BookingTimestamp" <  ${end}
-        AND (${catFilter}::text IS NULL OR ec."CategoryName" = ${catFilter})
-        AND (${venueFilter}::int IS NULL OR v."VenueID" = ${venueFilter})
-      GROUP BY v."VenueName", st."TypeName", e."Title",
-        EXTRACT(YEAR FROM b."BookingTimestamp"),
-        EXTRACT(MONTH FROM b."BookingTimestamp"),
-        EXTRACT(HOUR FROM s."StartDateTime")
-      ORDER BY "cancelRatePercentage" DESC, v."VenueName", st."TypeName", "bookingYear", "bookingMonth"
-    `;
+    const rows = factSources.hasCancellationSummary
+      ? await prisma.$queryRaw`
+          SELECT
+            r."VenueName" as "venueName",
+            r."SeatType" as "seatType",
+            r."EventTitle" as "eventTitle",
+            r."BookingYear" as "bookingYear",
+            r."BookingMonth" as "bookingMonth",
+            r."ShowtimeHour" as "showtimeHour",
+            COALESCE(SUM(r."TotalBooking"), 0)::int as "totalBooking",
+            COALESCE(SUM(r."CancelledCount"), 0)::int as "cancelledCount",
+            ROUND((COALESCE(SUM(r."CancelledCount"), 0)::numeric / NULLIF(SUM(r."TotalBooking"), 0) * 100), 2)::float8 as "cancelRatePercentage"
+          FROM "ReportCancellationSummary" r
+          WHERE r."BookingDate" >= ${start}
+            AND r."BookingDate" <  ${end}
+            AND (${catFilter}::text IS NULL OR r."CategoryName" = ${catFilter})
+            AND (${venueFilter}::int IS NULL OR r."VenueID" = ${venueFilter})
+          GROUP BY r."VenueName", r."SeatType", r."EventTitle", r."BookingYear", r."BookingMonth", r."ShowtimeHour"
+          ORDER BY "cancelRatePercentage" DESC, r."VenueName", r."SeatType", "bookingYear", "bookingMonth"
+        `
+      : await prisma.$queryRaw`
+          SELECT
+            v."VenueName" as "venueName",
+            st."TypeName" as "seatType",
+            e."Title" as "eventTitle",
+            EXTRACT(YEAR FROM b."BookingTimestamp")::int as "bookingYear",
+            EXTRACT(MONTH FROM b."BookingTimestamp")::int as "bookingMonth",
+            EXTRACT(HOUR FROM s."StartDateTime")::int as "showtimeHour",
+            COUNT(bd."DetailID")::int as "totalBooking",
+            SUM(CASE WHEN bs."StatusName" = 'Cancelled' THEN 1 ELSE 0 END)::int as "cancelledCount",
+            ROUND(
+              (SUM(CASE WHEN bs."StatusName" = 'Cancelled' THEN 1 ELSE 0 END)::numeric
+                / NULLIF(COUNT(bd."DetailID"), 0) * 100),
+              2
+            )::float8 as "cancelRatePercentage"
+          FROM "BookingDetails" bd
+          JOIN "Bookings" b ON bd."BookingID" = b."BookingID"
+          JOIN "BookingStatuses" bs ON b."StatusID" = bs."StatusID"
+          JOIN "Seats" seat ON bd."SeatID" = seat."SeatID"
+          JOIN "SeatTypes" st ON seat."SeatTypeID" = st."SeatTypeID"
+          JOIN "Showtimes" s ON bd."ShowtimeID" = s."ShowtimeID"
+          JOIN "Venues" v ON s."VenueID" = v."VenueID"
+          JOIN "Events" e ON s."EventID" = e."EventID"
+          JOIN "EventCategories" ec ON e."CategoryID" = ec."CategoryID"
+          WHERE b."BookingTimestamp" >= ${start}
+            AND b."BookingTimestamp" <  ${end}
+            AND (${catFilter}::text IS NULL OR ec."CategoryName" = ${catFilter})
+            AND (${venueFilter}::int IS NULL OR v."VenueID" = ${venueFilter})
+          GROUP BY v."VenueName", st."TypeName", e."Title",
+            EXTRACT(YEAR FROM b."BookingTimestamp"),
+            EXTRACT(MONTH FROM b."BookingTimestamp"),
+            EXTRACT(HOUR FROM s."StartDateTime")
+          ORDER BY "cancelRatePercentage" DESC, v."VenueName", st."TypeName", "bookingYear", "bookingMonth"
+        `;
 
-    const normalizedRows = rows.map(row => ({
-      venueName: row.venueName,
-      seatType: row.seatType,
-      eventTitle: row.eventTitle,
-      bookingYear: Number(row.bookingYear),
-      bookingMonth: Number(row.bookingMonth),
-      monthLabel: new Date(Number(row.bookingYear), Number(row.bookingMonth) - 1, 1)
-        .toLocaleString('en-US', { month: 'short', year: '2-digit' })
-        .replace(' ', "'"),
-      showtimeHour: Number(row.showtimeHour),
-      showtimeLabel: `${String(row.showtimeHour).padStart(2, '0')}:00`,
-      totalBooking: Number(row.totalBooking || 0),
-      cancelledCount: Number(row.cancelledCount || 0),
-      cancelRatePercentage: Number(row.cancelRatePercentage || 0)
-    }));
-
-    const venues = [...new Set(normalizedRows.map(row => row.venueName))].sort();
-    const seatTypes = [...new Set(normalizedRows.map(row => row.seatType))].sort();
-    const showtimeLabels = [...new Set(normalizedRows.map(row => row.showtimeLabel))]
-      .sort((a, b) => Number(a.slice(0, 2)) - Number(b.slice(0, 2)));
-    const monthLabels = [...new Map(
-      normalizedRows
-        .sort((a, b) => (a.bookingYear - b.bookingYear) || (a.bookingMonth - b.bookingMonth))
-        .map(row => [`${row.bookingYear}-${row.bookingMonth}`, row.monthLabel])
-    ).values()];
-
-    res.json({
-      rows: normalizedRows,
-      heatmaps: [
-        {
-          title: 'Cancellation Rate: Venue vs Seat Type',
-          key: 'venue-seat-type',
-          rows: seatTypes,
-          cols: venues,
-          rowLabel: 'Seat Type',
-          colLabel: 'Venue',
-          tone: 'red',
-          data: buildCancelRateMatrix(normalizedRows, 'seatType', 'venueName', seatTypes, venues)
-        },
-        {
-          title: 'Cancellation Rate: Showtime vs Month',
-          key: 'showtime-month',
-          rows: showtimeLabels,
-          cols: monthLabels,
-          rowLabel: 'Showtime',
-          colLabel: 'Month',
-          tone: 'orange',
-          data: buildCancelRateMatrix(normalizedRows, 'showtimeLabel', 'monthLabel', showtimeLabels, monthLabels)
-        },
-        {
-          title: 'Cancellation Rate: Venue vs Month',
-          key: 'venue-month',
-          rows: monthLabels,
-          cols: venues,
-          rowLabel: 'Month',
-          colLabel: 'Venue',
-          tone: 'green',
-          data: buildCancelRateMatrix(normalizedRows, 'monthLabel', 'venueName', monthLabels, venues)
-        },
-        {
-          title: 'Cancellation Rate: Venue vs Showtime',
-          key: 'venue-showtime',
-          rows: showtimeLabels,
-          cols: venues,
-          rowLabel: 'Showtime',
-          colLabel: 'Venue',
-          tone: 'purple',
-          data: buildCancelRateMatrix(normalizedRows, 'showtimeLabel', 'venueName', showtimeLabels, venues)
-        }
-      ]
-    });
+    res.json(buildCancellationHeatmapPayload(rows));
 });
+
+exports._private = {
+  buildCancelRateMatrix,
+  buildCancellationHeatmapPayload
+};

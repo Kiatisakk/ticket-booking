@@ -27,6 +27,26 @@ function buildEventListWhere({ search, category, categoryId }) {
   };
 }
 
+function buildEventMetricsWhere({ search, category, categoryId }, alias = 'elm') {
+  const clauses = [];
+  const params = [];
+
+  if (search) {
+    params.push(`%${search}%`);
+    clauses.push(`${alias}."Title" ILIKE $${params.length}`);
+  }
+
+  if (categoryId) {
+    params.push(parseInt(categoryId, 10));
+    clauses.push(`${alias}."CategoryID" = $${params.length}`);
+  } else if (category && category !== 'all') {
+    params.push(category);
+    clauses.push(`${alias}."CategoryName" = $${params.length}`);
+  }
+
+  return { clauses, params };
+}
+
 function normalizeSort({ sortBy = 'eventId', sortOrder = 'desc' } = {}, alias = 'pe') {
   const direction = String(sortOrder).toLowerCase() === 'asc' ? 'ASC' : 'DESC';
   const sortMap = {
@@ -46,6 +66,25 @@ function normalizeSort({ sortBy = 'eventId', sortOrder = 'desc' } = {}, alias = 
   };
 }
 
+function normalizeMetricSort({ sortBy = 'eventId', sortOrder = 'desc' } = {}, alias = 'elm', nowParamIndex = 1) {
+  const direction = String(sortOrder).toLowerCase() === 'asc' ? 'ASC' : 'DESC';
+  const sortMap = {
+    eventId: `${alias}."EventID"`,
+    title: `${alias}."Title"`,
+    startDateTime: `${alias}."FirstShowtime"`,
+    category: `${alias}."CategoryName"`,
+    venue: `${alias}."VenueName"`,
+    basePrice: `${alias}."BasePrice"`,
+    status: `(CASE WHEN ${alias}."LatestShowtime" IS NULL THEN false ELSE ${alias}."LatestShowtime" < $${nowParamIndex} END)`
+  };
+
+  return {
+    sortBy: sortMap[sortBy] ? sortBy : 'eventId',
+    sortSql: sortMap[sortBy] || sortMap.eventId,
+    direction
+  };
+}
+
 function statusClause(status) {
   if (status === 'upcoming') {
     return 'COALESCE(eb."LatestShowtime" >= $NOW_PARAM, true)';
@@ -54,6 +93,20 @@ function statusClause(status) {
     return 'eb."LatestShowtime" < $NOW_PARAM';
   }
   return '';
+}
+
+function metricStatusClause(status, nowParamIndex, alias = 'elm') {
+  if (status === 'upcoming') {
+    return `COALESCE(${alias}."LatestShowtime" >= $${nowParamIndex}, true)`;
+  }
+  if (status === 'past') {
+    return `${alias}."LatestShowtime" < $${nowParamIndex}`;
+  }
+  return '';
+}
+
+function whereFromClauses(clauses) {
+  return clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
 }
 
 function cursorClause({ cursor, direction, sortOrder, alias = 'pe' }) {
@@ -65,6 +118,89 @@ function cursorClause({ cursor, direction, sortOrder, alias = 'pe' }) {
   const isPrev = direction === 'prev';
   const moveForward = isPrev ? !isAsc : isAsc;
   return `${alias}."EventID" ${moveForward ? '>' : '<'} ${id}`;
+}
+
+function buildEventListMetricsSql({
+  clauses,
+  nowParamIndex,
+  status,
+  sortBy,
+  sortOrder,
+  limitParamIndex,
+  offsetParamIndex,
+  cursor,
+  direction,
+  includePage = false,
+  countOnly = false
+}) {
+  const normalizedSort = normalizeMetricSort({ sortBy, sortOrder }, 'elm', nowParamIndex);
+  const filters = [...clauses];
+  const statusSql = metricStatusClause(status, nowParamIndex);
+  if (statusSql) filters.push(statusSql);
+  if (includePage && normalizedSort.sortBy === 'eventId' && cursor) {
+    const clause = cursorClause({ cursor, direction, sortOrder, alias: 'elm' });
+    if (clause) filters.push(clause);
+  }
+  const whereSql = whereFromClauses(filters);
+
+  if (countOnly) {
+    const countFilters = [`$${nowParamIndex}::timestamp IS NOT NULL`, ...filters];
+    return `
+      SELECT COUNT(*)::int AS "total"
+      FROM "EventListMetrics" elm
+      ${whereFromClauses(countFilters)}
+    `;
+  }
+
+  const pageSql = includePage
+    ? `LIMIT $${limitParamIndex} OFFSET $${offsetParamIndex}`
+    : '';
+
+  return `
+    SELECT
+      elm."EventID" AS "id",
+      elm."Title" AS "title",
+      elm."Description" AS "description",
+      COALESCE(elm."CategoryName", 'Uncategorized') AS "category",
+      elm."CategoryID" AS "categoryId",
+      COALESCE(elm."BasePrice", 0) AS "basePrice",
+      COALESCE(elm."VenueName", '-') AS "venue",
+      elm."VenueID" AS "venueId",
+      COALESCE(elm."TotalSeats", 0) AS "totalSeats",
+      COALESCE(elm."SeatsRemaining", 0) AS "seatsRemaining",
+      elm."FirstShowtime" AS "startDateTime",
+      elm."FirstShowtimeID" AS "showtimeId",
+      CASE
+        WHEN elm."LatestShowtime" IS NULL THEN false
+        ELSE elm."LatestShowtime" < $${nowParamIndex}
+      END AS "isPast",
+      COALESCE(elm."HasBookings", false) AS "hasBookings",
+      elm."LatestShowtime" AS "latestShowtime"
+    FROM "EventListMetrics" elm
+    ${whereSql}
+    ORDER BY ${normalizedSort.sortSql} ${normalizedSort.direction}, elm."EventID" ${normalizedSort.direction}
+    ${pageSql}
+  `;
+}
+
+function buildEventSummaryMetricsSql({ clauses, nowParamIndex }) {
+  return `
+    SELECT
+      COUNT(*)::int AS "total",
+      COUNT(*) FILTER (
+        WHERE COALESCE(elm."LatestShowtime" >= $${nowParamIndex}, true)
+      )::int AS "upcoming",
+      COUNT(*) FILTER (
+        WHERE elm."LatestShowtime" < $${nowParamIndex}
+      )::int AS "past"
+    FROM "EventListMetrics" elm
+    ${whereFromClauses(clauses)}
+  `;
+}
+
+function isMissingEventListMetrics(error) {
+  const text = `${error?.code || ''} ${error?.message || ''}`;
+  return text.includes('EventListMetrics') && (text.includes('42P01') || text.includes('does not exist'));
 }
 
 function buildEventListSql({
@@ -295,7 +431,115 @@ function mapEventListRows(rows) {
   }));
 }
 
+async function getEventListFromMaterializedView(db, options = {}) {
+  const { search, category, categoryId, status, sortBy = 'eventId', sortOrder = 'desc' } = options;
+  const now = options.now || new Date();
+  const page = parsePagination(options, { defaultPageSize: 12 });
+  const { clauses, params } = buildEventMetricsWhere({ search, category, categoryId });
+  const nowParamIndex = params.length + 1;
+
+  if (page.enabled) {
+    const wantsCursor = page.requestedMode === 'cursor';
+    const canUseCursor = wantsCursor && normalizeMetricSort({ sortBy, sortOrder }, 'elm', nowParamIndex).sortBy === 'eventId';
+    const pageSize = page.pageSize;
+    const offset = canUseCursor ? 0 : page.skip;
+    const limitParamIndex = nowParamIndex + 1;
+    const offsetParamIndex = nowParamIndex + 2;
+
+    const [rows, countRows, summaryRows] = await Promise.all([
+      db.$queryRawUnsafe(
+        buildEventListMetricsSql({
+          clauses,
+          nowParamIndex,
+          status,
+          sortBy,
+          sortOrder,
+          limitParamIndex,
+          offsetParamIndex,
+          cursor: canUseCursor ? page.cursor : null,
+          direction: page.direction,
+          includePage: true
+        }),
+        ...params,
+        now,
+        pageSize + (canUseCursor ? 1 : 0),
+        offset
+      ),
+      db.$queryRawUnsafe(
+        buildEventListMetricsSql({
+          clauses,
+          nowParamIndex,
+          status,
+          sortBy,
+          sortOrder,
+          countOnly: true
+        }),
+        ...params,
+        now
+      ),
+      db.$queryRawUnsafe(
+        buildEventSummaryMetricsSql({ clauses, nowParamIndex }),
+        ...params,
+        now
+      )
+    ]);
+
+    const total = Number(countRows[0]?.total || 0);
+    const summary = mapEventSummary(summaryRows[0]);
+    const mappedRows = mapEventListRows(rows);
+
+    if (canUseCursor) {
+      const pageRows = mappedRows.slice(0, pageSize);
+      const data = page.direction === 'prev' ? pageRows.reverse() : pageRows;
+      const first = data[0];
+      const last = data[data.length - 1];
+      const hasMore = mappedRows.length > pageSize;
+      return {
+        data,
+        pageSize,
+        total,
+        summary,
+        pagination: {
+          type: 'cursor',
+          nextCursor: last ? encodeCursor({ id: last.id, value: last.id }) : null,
+          prevCursor: first ? encodeCursor({ id: first.id, value: first.id }) : null,
+          hasNextPage: page.direction === 'prev' ? Boolean(page.cursor) : hasMore,
+          hasPrevPage: page.direction === 'prev' ? hasMore : Boolean(page.cursor)
+        }
+      };
+    }
+
+    return {
+      ...offsetPayload(mappedRows, total, page.page, pageSize, wantsCursor
+        ? { fallbackFrom: 'cursor', reason: 'Requested event sort requires offset pagination' }
+        : {}),
+      summary
+    };
+  }
+
+  const rows = await db.$queryRawUnsafe(
+    buildEventListMetricsSql({
+      clauses,
+      nowParamIndex,
+      status,
+      sortBy: 'eventId',
+      sortOrder: 'desc'
+    }),
+    ...params,
+    now
+  );
+  return mapEventListRows(rows);
+}
+
 async function getEventList(db, options = {}) {
+  if (options.useMaterializedView !== false) {
+    try {
+      return await getEventListFromMaterializedView(db, options);
+    } catch (error) {
+      if (!isMissingEventListMetrics(error)) throw error;
+    }
+  }
+
   const { search, category, categoryId, status, sortBy = 'eventId', sortOrder = 'desc' } = options;
   const now = options.now || new Date();
   const page = parsePagination(options, { defaultPageSize: 12 });
