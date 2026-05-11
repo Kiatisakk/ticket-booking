@@ -13,6 +13,17 @@ function isEventPast(event) {
   return event.Showtimes.every(s => new Date(s.StartDateTime) < now);
 }
 
+function getNextShowtime(event, isPast) {
+  if (!event.Showtimes || event.Showtimes.length === 0) return null;
+  const now = new Date();
+  const sorted = event.Showtimes
+    .slice()
+    .sort((a, b) => new Date(a.StartDateTime) - new Date(b.StartDateTime));
+
+  if (isPast) return sorted[sorted.length - 1];
+  return sorted.find(showtime => new Date(showtime.StartDateTime) >= now) || sorted[0];
+}
+
 function Events() {
   const { token } = useAuth();
   const [events, setEvents] = useState([]);
@@ -88,12 +99,10 @@ function Events() {
       </p>
 
       {event.Showtimes?.length > 0 && (() => {
-        const nearest = event.Showtimes
-          .slice()
-          .sort((a, b) => new Date(a.StartDateTime) - new Date(b.StartDateTime))[0];
+        const nearest = getNextShowtime(event, isPast);
         return (
           <div className={`event-booking-deadline${isPast ? ' event-deadline-past' : ''}`}>
-            {isPast ? '📅 Was on:' : '⏰ Book by:'}{' '}
+            {isPast ? 'Last showtime:' : 'Next showtime:'}{' '}
             <span className="deadline-item">
               {new Date(nearest.StartDateTime).toLocaleString('en-US', {
                 month: 'short',
