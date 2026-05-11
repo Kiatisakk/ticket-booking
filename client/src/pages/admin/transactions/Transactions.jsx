@@ -210,6 +210,7 @@ function Transactions() {
             }}
             onPageSizeChange={(size) => {
               setPageSize(size);
+              setPage(1);
               setCursor(null);
               setCursorDirection('next');
             }}

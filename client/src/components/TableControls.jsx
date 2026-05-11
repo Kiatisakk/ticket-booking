@@ -38,7 +38,7 @@ function TableControls({
           <button className="table-page-btn" onClick={onPrev} disabled={!hasPrevPage}>
             Prev
           </button>
-          <span className="table-page-status">Cursor</span>
+          <span className="table-page-status">{page} / {totalPages}</span>
           <button className="table-page-btn" onClick={onNext} disabled={!hasNextPage}>
             Next
           </button>

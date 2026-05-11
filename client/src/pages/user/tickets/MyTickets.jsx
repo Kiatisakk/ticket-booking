@@ -3,6 +3,8 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../context/AuthContext';
 import axios from 'axios';
 import { QRCodeSVG } from 'qrcode.react';
+import TableControls from '../../../components/TableControls';
+import { normalizePaginatedPayload } from '../../../utils/tableView';
 import './MyTickets.css';
 
 const API_URL = 'http://localhost:4000/api';
@@ -21,17 +23,39 @@ function MyTickets() {
   const [activeTab, setActiveTab] = useState('all');
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [activeTicketIndex, setActiveTicketIndex] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [totalRows, setTotalRows] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [cursor, setCursor] = useState(null);
+  const [cursorDirection, setCursorDirection] = useState('next');
+  const [cursorMeta, setCursorMeta] = useState({ hasNextPage: false, hasPrevPage: false, nextCursor: null, prevCursor: null });
 
   useEffect(() => {
     fetchBookings();
-  }, []);
+  }, [activeTab, page, pageSize, cursor, cursorDirection]);
 
   const fetchBookings = async () => {
+    setLoading(true);
     try {
       const response = await axios.get(`${API_URL}/bookings/my`, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
+        params: {
+          pagination: 'cursor',
+          page,
+          pageSize,
+          cursor: cursor || undefined,
+          direction: cursorDirection,
+          status: activeTab === 'all' ? undefined : activeTab === 'upcoming' ? 'pending' : activeTab
+        }
       });
-      setBookings(response.data);
+      const payload = normalizePaginatedPayload(response.data);
+      setBookings(payload.rows);
+      setTotalRows(payload.totalRows);
+      setTotalPages(payload.totalPages);
+      setCursorMeta(payload.pagination?.type === 'cursor'
+        ? payload.pagination
+        : { hasNextPage: false, hasPrevPage: false, nextCursor: null, prevCursor: null });
     } catch (error) {
       console.error('Failed to fetch bookings:', error);
     } finally {
@@ -160,14 +184,7 @@ function MyTickets() {
     });
   });
 
-  const filteredBookings = bookings.filter(b => {
-    if (activeTab === 'all') return true;
-    const theme = getStatusTheme(b.StatusID, b.Status);
-    if (activeTab === 'upcoming' && theme.isPending) return true;
-    if (activeTab === 'completed' && theme.css === 'completed') return true;
-    if (activeTab === 'cancelled' && theme.css === 'cancelled') return true;
-    return false;
-  });
+  const filteredBookings = bookings;
 
   const totalTicketsCount = bookings.reduce((sum, b) => sum + (b.BookingDetails?.length || 0), 0);
 
@@ -191,10 +208,10 @@ function MyTickets() {
         </div>
 
         <div className="filter-tabs">
-          <button className={`ftab ${activeTab === 'all' ? 'active' : ''}`} onClick={() => setActiveTab('all')}>All Bookings</button>
-          <button className={`ftab ${activeTab === 'upcoming' ? 'active' : ''}`} onClick={() => setActiveTab('upcoming')}>Pending</button>
-          <button className={`ftab ${activeTab === 'completed' ? 'active' : ''}`} onClick={() => setActiveTab('completed')}>Completed</button>
-          <button className={`ftab ${activeTab === 'cancelled' ? 'active' : ''}`} onClick={() => setActiveTab('cancelled')}>Cancelled</button>
+          <button className={`ftab ${activeTab === 'all' ? 'active' : ''}`} onClick={() => { setActiveTab('all'); setPage(1); setCursor(null); setCursorDirection('next'); }}>All Bookings</button>
+          <button className={`ftab ${activeTab === 'upcoming' ? 'active' : ''}`} onClick={() => { setActiveTab('upcoming'); setPage(1); setCursor(null); setCursorDirection('next'); }}>Pending</button>
+          <button className={`ftab ${activeTab === 'completed' ? 'active' : ''}`} onClick={() => { setActiveTab('completed'); setPage(1); setCursor(null); setCursorDirection('next'); }}>Completed</button>
+          <button className={`ftab ${activeTab === 'cancelled' ? 'active' : ''}`} onClick={() => { setActiveTab('cancelled'); setPage(1); setCursor(null); setCursorDirection('next'); }}>Cancelled</button>
         </div>
 
         {filteredBookings.length === 0 ? (
@@ -338,6 +355,37 @@ function MyTickets() {
             })}
           </div>
         )}
+
+        <TableControls
+          mode="cursor"
+          page={page}
+          pageSize={pageSize}
+          totalRows={totalRows}
+          totalPages={totalPages}
+          hasPrevPage={cursorMeta.hasPrevPage}
+          hasNextPage={cursorMeta.hasNextPage}
+          onPrev={() => {
+            setCursor(cursorMeta.prevCursor);
+            setCursorDirection('prev');
+            setPage(current => Math.max(current - 1, 1));
+          }}
+          onNext={() => {
+            setCursor(cursorMeta.nextCursor);
+            setCursorDirection('next');
+            setPage(current => current + 1);
+          }}
+          onPageChange={(nextPage) => {
+            setPage(nextPage);
+            setCursor(null);
+            setCursorDirection('next');
+          }}
+          onPageSizeChange={(nextSize) => {
+            setPageSize(nextSize);
+            setPage(1);
+            setCursor(null);
+            setCursorDirection('next');
+          }}
+        />
       </div>
 
       {/* TICKET VIEW MODAL */}

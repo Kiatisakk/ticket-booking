@@ -92,6 +92,38 @@
   flex-wrap: wrap;
 }
 
+.events-view-tabs {
+  display: inline-flex;
+  gap: 4px;
+  margin-bottom: 18px;
+  padding: 4px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.events-view-tab {
+  border: none;
+  background: transparent;
+  color: var(--muted2);
+  border-radius: 8px;
+  padding: 9px 18px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+
+.events-view-tab:hover {
+  color: var(--text);
+}
+
+.events-view-tab.active {
+  background: var(--indigo);
+  color: #fff;
+}
+
 .search-input, .filter-select {
   background: var(--surface2);
   border: 1px solid var(--border);

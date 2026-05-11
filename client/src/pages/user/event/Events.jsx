@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../../../context/AuthContext';
+import TableControls from '../../../components/TableControls';
+import { normalizePaginatedPayload } from '../../../utils/tableView';
 import './Events.css';
 
 const API_URL = 'http://localhost:4000/api';
@@ -43,6 +45,14 @@ function Events() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
+  const [statusView, setStatusView] = useState('upcoming');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [totalRows, setTotalRows] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [cursor, setCursor] = useState(null);
+  const [cursorDirection, setCursorDirection] = useState('next');
+  const [cursorMeta, setCursorMeta] = useState({ hasNextPage: false, hasPrevPage: false, nextCursor: null, prevCursor: null });
 
   useEffect(() => {
     let active = true;
@@ -51,12 +61,26 @@ function Events() {
       setLoading(true);
       try {
         const response = await axios.get(`${API_URL}/events`, {
-          headers: { Authorization: `Bearer ${token}` }
+          headers: { Authorization: `Bearer ${token}` },
+          params: {
+            pagination: 'cursor',
+            page,
+            pageSize,
+            cursor: cursor || undefined,
+            direction: cursorDirection,
+            status: statusView,
+            search: searchTerm || undefined,
+            category: categoryFilter !== 'all' ? categoryFilter : undefined
+          }
         });
-        const payload = response.data;
-        const rows = Array.isArray(payload) ? payload : payload.data || [];
+        const payload = normalizePaginatedPayload(response.data);
         if (!active) return;
-        setEvents(rows.map(normalizeEvent));
+        setEvents(payload.rows.map(normalizeEvent));
+        setTotalRows(payload.totalRows);
+        setTotalPages(payload.totalPages);
+        setCursorMeta(payload.pagination?.type === 'cursor'
+          ? payload.pagination
+          : { hasNextPage: false, hasPrevPage: false, nextCursor: null, prevCursor: null });
       } catch (error) {
         console.error('Failed to fetch events:', error);
       } finally {
@@ -68,15 +92,11 @@ function Events() {
     return () => {
       active = false;
     };
-  }, [token]);
+  }, [token, searchTerm, categoryFilter, statusView, page, pageSize, cursor, cursorDirection]);
 
-  const filteredEvents = events.filter(event => {
-    const matchCategory = categoryFilter === 'all' || event.category === categoryFilter;
-    const matchSearch = !searchTerm || event.title.toLowerCase().includes(searchTerm.toLowerCase());
-    return matchCategory && matchSearch;
-  });
-  const upcomingEvents = filteredEvents.filter(event => !event.isPast);
-  const pastEvents = filteredEvents.filter(event => event.isPast);
+  const isPastView = statusView === 'past';
+  const sectionTitle = isPastView ? 'Ended Events' : 'Upcoming Events';
+  const emptyMessage = isPastView ? 'No ended events found' : 'No upcoming events found';
 
   const renderEventCard = (event, isPast) => {
     const nearest = getNextShowtime(event, isPast);
@@ -144,18 +164,55 @@ function Events() {
       </div>
 
       <div className="events-main">
+        <div className="events-view-tabs">
+          <button
+            type="button"
+            className={`events-view-tab${statusView === 'upcoming' ? ' active' : ''}`}
+            onClick={() => {
+              setStatusView('upcoming');
+              setPage(1);
+              setCursor(null);
+              setCursorDirection('next');
+            }}
+          >
+            Upcoming
+          </button>
+          <button
+            type="button"
+            className={`events-view-tab${statusView === 'past' ? ' active' : ''}`}
+            onClick={() => {
+              setStatusView('past');
+              setPage(1);
+              setCursor(null);
+              setCursorDirection('next');
+            }}
+          >
+            Ended
+          </button>
+        </div>
+
         <div className="filters">
           <input
             type="text"
             placeholder="🔍 Search events..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => {
+              setSearchTerm(e.target.value);
+              setPage(1);
+              setCursor(null);
+              setCursorDirection('next');
+            }}
             className="search-input"
           />
 
           <select
             value={categoryFilter}
-            onChange={(e) => setCategoryFilter(e.target.value)}
+            onChange={(e) => {
+              setCategoryFilter(e.target.value);
+              setPage(1);
+              setCursor(null);
+              setCursorDirection('next');
+            }}
             className="filter-select"
           >
             <option value="all">All Categories</option>
@@ -167,30 +224,50 @@ function Events() {
 
         <div className="events-section">
           <div className="events-section-header">
-            <h2 className="events-section-title">Upcoming Events</h2>
-            <span className="events-section-count">{upcomingEvents.length} events</span>
+            <h2 className={`events-section-title${isPastView ? ' events-section-title-past' : ''}`}>
+              {sectionTitle}
+            </h2>
+            <span className="events-section-count">{totalRows} events</span>
           </div>
-          {upcomingEvents.length === 0 ? (
-            <div className="no-events"><p>No upcoming events found</p></div>
+          {events.length === 0 ? (
+            <div className="no-events"><p>{emptyMessage}</p></div>
           ) : (
             <div className="events-grid">
-              {upcomingEvents.map(event => renderEventCard(event, false))}
+              {events.map(event => renderEventCard(event, isPastView || event.isPast))}
             </div>
           )}
         </div>
 
-        {pastEvents.length > 0 && (
-          <div className="events-section events-section-past">
-            <div className="events-section-header">
-              <h2 className="events-section-title events-section-title-past">Past Events</h2>
-              <span className="events-section-count">{pastEvents.length} events</span>
-            </div>
-            <div className="events-grid">
-              {pastEvents.map(event => renderEventCard(event, true))}
-            </div>
-          </div>
-        )}
-
+        <TableControls
+          mode="cursor"
+          page={page}
+          pageSize={pageSize}
+          totalRows={totalRows}
+          totalPages={totalPages}
+          hasPrevPage={cursorMeta.hasPrevPage}
+          hasNextPage={cursorMeta.hasNextPage}
+          onPrev={() => {
+            setCursor(cursorMeta.prevCursor);
+            setCursorDirection('prev');
+            setPage(current => Math.max(current - 1, 1));
+          }}
+          onNext={() => {
+            setCursor(cursorMeta.nextCursor);
+            setCursorDirection('next');
+            setPage(current => current + 1);
+          }}
+          onPageChange={(nextPage) => {
+            setPage(nextPage);
+            setCursor(null);
+            setCursorDirection('next');
+          }}
+          onPageSizeChange={(nextSize) => {
+            setPageSize(nextSize);
+            setPage(1);
+            setCursor(null);
+            setCursorDirection('next');
+          }}
+        />
       </div>
     </div>
   );

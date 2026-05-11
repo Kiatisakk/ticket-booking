@@ -25,10 +25,10 @@ function UserManagement() {
   const [pageSize, setPageSize] = useState(10);
   const [page, setPage] = useState(1);
   const [totalRows, setTotalRows] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
   const [cursor, setCursor] = useState(null);
   const [cursorDirection, setCursorDirection] = useState('next');
   const [cursorMeta, setCursorMeta] = useState({ hasNextPage: false, hasPrevPage: false, nextCursor: null, prevCursor: null });
-  const [totalPages, setTotalPages] = useState(1);
   const [paginationMode, setPaginationMode] = useState('cursor');
 
   const fetchUsers = useCallback(async () => {
@@ -240,6 +240,7 @@ function UserManagement() {
             }}
             onPageSizeChange={(size) => {
               setPageSize(size);
+              setPage(1);
               setCursor(null);
               setCursorDirection('next');
             }}

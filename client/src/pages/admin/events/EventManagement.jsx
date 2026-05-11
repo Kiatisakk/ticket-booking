@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAdminAuth } from '../../../context/AdminAuthContext';
+import TableControls from '../../../components/TableControls';
+import { normalizePaginatedPayload } from '../../../utils/tableView';
 import './EventManagement.css';
 
 const API_URL = 'http://localhost:4000/api';
@@ -37,11 +39,25 @@ function EventManagement() {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const [tab, setTab] = useState('upcoming');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [totalRows, setTotalRows] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [cursor, setCursor] = useState(null);
+  const [cursorDirection, setCursorDirection] = useState('next');
+  const [cursorMeta, setCursorMeta] = useState({ hasNextPage: false, hasPrevPage: false, nextCursor: null, prevCursor: null });
 
   const fetchEvents = useCallback(async () => {
     setLoading(true);
     try {
-      const params = {};
+      const params = {
+        pagination: 'cursor',
+        page,
+        pageSize,
+        cursor: cursor || undefined,
+        direction: cursorDirection,
+        status: tab
+      };
       if (search) params.search = search;
       if (categoryFilter) params.category = categoryFilter;
 
@@ -49,15 +65,19 @@ function EventManagement() {
         headers: { Authorization: `Bearer ${authToken}` },
         params
       });
-      const payload = res.data;
-      const rows = Array.isArray(payload) ? payload : payload.data || [];
-      setEvents(rows);
+      const payload = normalizePaginatedPayload(res.data);
+      setEvents(payload.rows);
+      setTotalRows(payload.totalRows);
+      setTotalPages(payload.totalPages);
+      setCursorMeta(payload.pagination?.type === 'cursor'
+        ? payload.pagination
+        : { hasNextPage: false, hasPrevPage: false, nextCursor: null, prevCursor: null });
     } catch {
       setEvents(MOCK_EVENTS);
     } finally {
       setLoading(false);
     }
-  }, [apiScope, authToken, search, categoryFilter]);
+  }, [apiScope, authToken, search, categoryFilter, tab, page, pageSize, cursor, cursorDirection]);
 
   useEffect(() => {
     fetchEvents();
@@ -79,12 +99,7 @@ function EventManagement() {
     }
   };
 
-  const filtered = events.filter(e => {
-    const matchSearch = !search || e.title?.toLowerCase().includes(search.toLowerCase());
-    const matchCat = !categoryFilter || e.category?.toLowerCase() === categoryFilter.toLowerCase();
-    const matchTab = tab === 'upcoming' ? !e.isPast : e.isPast;
-    return matchSearch && matchCat && matchTab;
-  });
+  const filtered = events;
 
   const upcomingCount = events.filter(e => !e.isPast).length;
   const pastCount     = events.filter(e => e.isPast).length;
@@ -168,10 +183,10 @@ function EventManagement() {
       </div>
 
       <div className="em-tabs">
-        <button className={`em-tab ${tab === 'upcoming' ? 'em-tab-active' : ''}`} onClick={() => setTab('upcoming')}>
+        <button className={`em-tab ${tab === 'upcoming' ? 'em-tab-active' : ''}`} onClick={() => { setTab('upcoming'); setPage(1); setCursor(null); setCursorDirection('next'); }}>
           Upcoming Events ({upcomingCount})
         </button>
-        <button className={`em-tab ${tab === 'past' ? 'em-tab-active' : ''}`} onClick={() => setTab('past')}>
+        <button className={`em-tab ${tab === 'past' ? 'em-tab-active' : ''}`} onClick={() => { setTab('past'); setPage(1); setCursor(null); setCursorDirection('next'); }}>
           Past Events ({pastCount})
         </button>
       </div>
@@ -182,9 +197,9 @@ function EventManagement() {
           type="text"
           placeholder="Search events..."
           value={search}
-          onChange={e => setSearch(e.target.value)}
+          onChange={e => { setSearch(e.target.value); setPage(1); setCursor(null); setCursorDirection('next'); }}
         />
-        <select className="em-filter-select" value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}>
+        <select className="em-filter-select" value={categoryFilter} onChange={e => { setCategoryFilter(e.target.value); setPage(1); setCursor(null); setCursorDirection('next'); }}>
           <option value="">All Categories</option>
           <option value="Concert">Concert</option>
           <option value="Movie">Movie</option>
@@ -197,6 +212,37 @@ function EventManagement() {
           <div className="em-loading">Loading events...</div>
         ) : renderTable(filtered)}
       </div>
+
+      <TableControls
+        mode="cursor"
+        page={page}
+        pageSize={pageSize}
+        totalRows={totalRows}
+        totalPages={totalPages}
+        hasPrevPage={cursorMeta.hasPrevPage}
+        hasNextPage={cursorMeta.hasNextPage}
+        onPrev={() => {
+          setCursor(cursorMeta.prevCursor);
+          setCursorDirection('prev');
+          setPage(current => Math.max(current - 1, 1));
+        }}
+        onNext={() => {
+          setCursor(cursorMeta.nextCursor);
+          setCursorDirection('next');
+          setPage(current => current + 1);
+        }}
+        onPageChange={(nextPage) => {
+          setPage(nextPage);
+          setCursor(null);
+          setCursorDirection('next');
+        }}
+        onPageSizeChange={(nextSize) => {
+          setPageSize(nextSize);
+          setPage(1);
+          setCursor(null);
+          setCursorDirection('next');
+        }}
+      />
 
       {/* Delete Confirmation Modal */}
       {deleteTarget && (

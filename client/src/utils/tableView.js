@@ -1,5 +1,19 @@
 export const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
 
+export function normalizePaginatedPayload(payload) {
+  const rows = Array.isArray(payload) ? payload : payload?.data || [];
+  const pageSize = Array.isArray(payload) ? rows.length || 10 : payload.pageSize || 10;
+  const totalRows = Array.isArray(payload) ? rows.length : payload.total || 0;
+  return {
+    rows,
+    page: Array.isArray(payload) ? 1 : payload.page || 1,
+    pageSize,
+    totalRows,
+    totalPages: Array.isArray(payload) ? 1 : payload.totalPages || getTotalPages(totalRows, pageSize),
+    pagination: Array.isArray(payload) ? null : payload.pagination || null
+  };
+}
+
 function normalizeValue(value) {
   if (value == null) return '';
   if (value instanceof Date) return value.getTime();
