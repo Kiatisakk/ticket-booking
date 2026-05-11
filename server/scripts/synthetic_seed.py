@@ -303,7 +303,7 @@ def create_venues_and_seats(cur, args: argparse.Namespace, refs: RefData, rng: r
                       '''
                       INSERT INTO "Seats" ("VenueID", "SeatTypeID", "RowLabel", "SeatNumber")
                       VALUES (%s, %s, %s, %s)
-                      ON CONFLICT ON CONSTRAINT unique_seat_position DO NOTHING
+                      ON CONFLICT ("VenueID", "RowLabel", "SeatNumber") DO NOTHING
                       ''',
                       (venue_id, refs.seat_types[seat_type][0], row_label, str(seat_no)),
                   )

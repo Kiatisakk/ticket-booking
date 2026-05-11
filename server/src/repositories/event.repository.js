@@ -21,7 +21,10 @@ function createEventRepository(db = prisma) {
         where: buildEventWhere(filters),
         include: {
           Category: true,
-          Showtimes: true
+          Showtimes: {
+            include: { Venue: true },
+            orderBy: { StartDateTime: 'asc' }
+          }
         }
       });
     },
@@ -32,7 +35,8 @@ function createEventRepository(db = prisma) {
         include: {
           Category: true,
           Showtimes: {
-            include: { Venue: true }
+            include: { Venue: true },
+            orderBy: { StartDateTime: 'asc' }
           }
         }
       });

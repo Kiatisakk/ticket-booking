@@ -14,7 +14,8 @@ function createShowtimeRepository(db = prisma) {
     findByEvent(eventId) {
       return db.showtime.findMany({
         where: { EventID: eventId },
-        include: { Venue: true }
+        include: { Venue: true },
+        orderBy: { StartDateTime: 'asc' }
       });
     },
 

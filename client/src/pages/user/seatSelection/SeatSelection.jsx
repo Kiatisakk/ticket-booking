@@ -4,6 +4,7 @@ import { useBooking } from '../../../context/BookingContext';
 import { useAuth } from '../../../context/AuthContext';
 import axios from 'axios';
 import SeatLayoutGenerator from './SeatLayoutGenerator';
+import { sortShowtimesByBookingOrder } from '../../../utils/showtimes';
 import './SeatSelection.css';
 
 const API_URL = 'http://localhost:4000/api';
@@ -22,8 +23,9 @@ function SeatSelection() {
   const [bookedSeatIds, setBookedSeatIds] = useState([]);
   const [loading, setLoading] = useState(true);
   const [allShowtimes, setAllShowtimes] = useState([]);
+  const [eventDetails, setEventDetails] = useState(location.state?.event || null);
 
-  const { event } = location.state || {};
+  const event = eventDetails;
 
   useEffect(() => {
     setSelectedSeats([]);
@@ -44,7 +46,9 @@ function SeatSelection() {
       const response = await axios.get(`${API_URL}/events/${eventId}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      setAllShowtimes(response.data.Showtimes || []);
+      const sortedShowtimes = sortShowtimesByBookingOrder(response.data.Showtimes || []);
+      setEventDetails({ ...response.data, Showtimes: sortedShowtimes });
+      setAllShowtimes(sortedShowtimes);
     } catch (error) {
       console.error('Failed to fetch all showtimes:', error);
     }
@@ -58,6 +62,10 @@ function SeatSelection() {
       });
       setShowtime(response.data);
       setSeats(response.data.Venue?.Seats || []);
+      if (!eventDetails && response.data.Event?.EventID) {
+        setEventDetails(response.data.Event);
+        fetchAllShowtimes(response.data.Event.EventID);
+      }
 
       const bookedResponse = await axios.get(`${API_URL}/showtimes/${id}/booked-seats`, {
         headers: { Authorization: `Bearer ${token}` }

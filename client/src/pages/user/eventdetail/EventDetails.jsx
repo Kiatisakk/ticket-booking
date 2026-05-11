@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../../../context/AuthContext';
+import { getFirstBookableShowtime, sortShowtimesByBookingOrder } from '../../../utils/showtimes';
 import './EventDetails.css';
 
 const API_URL = 'http://localhost:4000/api';
@@ -31,7 +32,10 @@ function EventDetails() {
       const response = await axios.get(`${API_URL}/events/${id}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      setEvent(response.data);
+      setEvent({
+        ...response.data,
+        Showtimes: sortShowtimesByBookingOrder(response.data.Showtimes || [])
+      });
     } catch (error) {
       console.error('Failed to fetch event:', error);
     } finally {
@@ -76,8 +80,8 @@ function EventDetails() {
 
   const handleProceedToSeats = () => {
     if (event?.Showtimes && event.Showtimes.length > 0) {
-      const firstShowtimeId = event.Showtimes[0].ShowtimeID;
-      navigate(`/seats/${firstShowtimeId}`, { state: { event } });
+      const firstShowtime = getFirstBookableShowtime(event.Showtimes);
+      navigate(`/seats/${firstShowtime.ShowtimeID}`, { state: { event } });
     }
   };
 
