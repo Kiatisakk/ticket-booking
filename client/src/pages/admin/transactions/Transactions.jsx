@@ -41,13 +41,18 @@ function Transactions() {
   const [page, setPage] = useState(1);
   const [totalRows, setTotalRows] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
+  const [cursor, setCursor] = useState(null);
+  const [cursorDirection, setCursorDirection] = useState('next');
+  const [cursorMeta, setCursorMeta] = useState({ hasNextPage: false, hasPrevPage: false, nextCursor: null, prevCursor: null });
 
   const fetchTransactions = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
       const params = {
-        page,
+        pagination: 'cursor',
+        cursor: cursor || undefined,
+        direction: cursorDirection,
         pageSize,
         sortBy: sortConfig.key,
         sortOrder: sortConfig.direction,
@@ -65,6 +70,7 @@ function Transactions() {
         : res.data;
       setTransactions(payload.data || []);
       setTotalRows(payload.total || 0);
+      setCursorMeta(payload.pagination || { hasNextPage: false, hasPrevPage: false, nextCursor: null, prevCursor: null });
       setTotalPages(payload.totalPages || 1);
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to load transactions');
@@ -74,7 +80,7 @@ function Transactions() {
     } finally {
       setLoading(false);
     }
-  }, [adminToken, search, statusFilter, methodFilter, sortConfig, page, pageSize]);
+  }, [adminToken, search, statusFilter, methodFilter, sortConfig, cursor, cursorDirection, pageSize]);
 
   useEffect(() => {
     fetchTransactions();
@@ -84,11 +90,15 @@ function Transactions() {
 
   useEffect(() => {
     setPage(1);
+    setCursor(null);
+    setCursorDirection('next');
   }, [search, statusFilter, methodFilter, pageSize]);
 
   const handleSort = (key) => {
     setSortConfig(current => nextSortConfig(current, key));
     setPage(1);
+    setCursor(null);
+    setCursorDirection('next');
   };
 
   return (
@@ -171,12 +181,27 @@ function Transactions() {
         </div>
         {!loading && transactions.length > 0 && (
           <TableControls
+            mode="cursor"
             page={Math.min(page, totalPages)}
             pageSize={pageSize}
             totalRows={totalRows}
             totalPages={totalPages}
+            hasPrevPage={cursorMeta.hasPrevPage}
+            hasNextPage={cursorMeta.hasNextPage}
+            onPrev={() => {
+              setCursor(cursorMeta.prevCursor);
+              setCursorDirection('prev');
+            }}
+            onNext={() => {
+              setCursor(cursorMeta.nextCursor);
+              setCursorDirection('next');
+            }}
             onPageChange={setPage}
-            onPageSizeChange={setPageSize}
+            onPageSizeChange={(size) => {
+              setPageSize(size);
+              setCursor(null);
+              setCursorDirection('next');
+            }}
           />
         )}
       </div>

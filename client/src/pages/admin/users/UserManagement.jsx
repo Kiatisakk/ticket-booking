@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { useAdminAuth } from '../../../context/AdminAuthContext';
 import TableControls from '../../../components/TableControls';
-import { getPageRows, getTotalPages, nextSortConfig, sortLabel, sortRows } from '../../../utils/tableView';
+import { nextSortConfig, sortLabel } from '../../../utils/tableView';
 import './UserManagement.css';
 
 const API_URL = 'http://localhost:4000/api';
@@ -24,52 +24,53 @@ function UserManagement() {
   const [sortConfig, setSortConfig] = useState({ key: 'id', direction: 'asc' });
   const [pageSize, setPageSize] = useState(10);
   const [page, setPage] = useState(1);
+  const [totalRows, setTotalRows] = useState(0);
+  const [cursor, setCursor] = useState(null);
+  const [cursorDirection, setCursorDirection] = useState('next');
+  const [cursorMeta, setCursorMeta] = useState({ hasNextPage: false, hasPrevPage: false, nextCursor: null, prevCursor: null });
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
     try {
       const res = await axios.get(`${API_URL}/admin/users`, {
-        headers: { Authorization: `Bearer ${adminToken}` }
+        headers: { Authorization: `Bearer ${adminToken}` },
+        params: {
+          pagination: 'cursor',
+          pageSize,
+          cursor: cursor || undefined,
+          direction: cursorDirection,
+          search: search || undefined,
+          role: roleFilter
+        }
       });
-      setUsers(res.data);
+      const payload = Array.isArray(res.data) ? { data: res.data, total: res.data.length } : res.data;
+      setUsers(payload.data || []);
+      setTotalRows(payload.total || 0);
+      setCursorMeta(payload.pagination || { hasNextPage: false, hasPrevPage: false, nextCursor: null, prevCursor: null });
     } catch (error) {
       console.error('Failed to fetch users:', error);
     } finally {
       setLoading(false);
     }
-  }, [adminToken]);
+  }, [adminToken, pageSize, cursor, cursorDirection, search, roleFilter]);
 
   useEffect(() => {
     fetchUsers();
   }, [fetchUsers]);
 
-  const filtered = users.filter(u => {
-    const matchSearch = !search ||
-      u.fullName?.toLowerCase().includes(search.toLowerCase()) ||
-      u.email?.toLowerCase().includes(search.toLowerCase()) ||
-      u.id?.toString().includes(search);
-    const matchRole = roleFilter === 'All' || u.role === roleFilter;
-    return matchSearch && matchRole;
-  });
-  const sortAccessors = {
-    id: u => u.id,
-    name: u => u.fullName,
-    email: u => u.email,
-    role: u => u.role,
-    bookings: u => u.bookingsCount,
-    registered: u => u.createdAt
-  };
-  const sorted = sortRows(filtered, sortConfig, sortAccessors);
-  const totalPages = getTotalPages(sorted.length, pageSize);
-  const pageRows = getPageRows(sorted, Math.min(page, totalPages), pageSize);
+  const pageRows = users;
 
   useEffect(() => {
     setPage(1);
+    setCursor(null);
+    setCursorDirection('next');
   }, [search, roleFilter, pageSize]);
 
   const handleSort = (key) => {
     setSortConfig(current => nextSortConfig(current, key));
     setPage(1);
+    setCursor(null);
+    setCursorDirection('next');
   };
 
   const handleDelete = async () => {
@@ -137,7 +138,7 @@ function UserManagement() {
         <div className="um-table-scroll">
           {loading ? (
             <div className="um-loading">Loading users...</div>
-          ) : filtered.length === 0 ? (
+          ) : users.length === 0 ? (
             <div className="um-empty">No users found</div>
           ) : (
             <table className="um-table">
@@ -204,14 +205,29 @@ function UserManagement() {
             </table>
           )}
         </div>
-        {!loading && filtered.length > 0 && (
+        {!loading && users.length > 0 && (
           <TableControls
-            page={Math.min(page, totalPages)}
+            mode="cursor"
+            page={page}
             pageSize={pageSize}
-            totalRows={sorted.length}
-            totalPages={totalPages}
+            totalRows={totalRows}
+            totalPages={1}
+            hasPrevPage={cursorMeta.hasPrevPage}
+            hasNextPage={cursorMeta.hasNextPage}
+            onPrev={() => {
+              setCursor(cursorMeta.prevCursor);
+              setCursorDirection('prev');
+            }}
+            onNext={() => {
+              setCursor(cursorMeta.nextCursor);
+              setCursorDirection('next');
+            }}
             onPageChange={setPage}
-            onPageSizeChange={setPageSize}
+            onPageSizeChange={(size) => {
+              setPageSize(size);
+              setCursor(null);
+              setCursorDirection('next');
+            }}
           />
         )}
       </div>

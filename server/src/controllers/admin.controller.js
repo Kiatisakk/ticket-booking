@@ -63,6 +63,69 @@ function paginationPayload(data, total, page, pageSize) {
   };
 }
 
+function parseCursorPagination(query) {
+  const pageSize = Math.min(Math.max(parseInt(query.pageSize || '10', 10) || 10, 1), 100);
+  const cursor = query.cursor ? parseInt(query.cursor, 10) : null;
+  const direction = query.direction === 'prev' ? 'prev' : 'next';
+  return {
+    enabled: query.pagination === 'cursor',
+    pageSize,
+    cursor: Number.isInteger(cursor) ? cursor : null,
+    direction
+  };
+}
+
+async function findManyByIdCursor(model, {
+  idField,
+  where,
+  select,
+  include,
+  pageSize,
+  cursor,
+  direction
+}) {
+  const orderDirection = direction === 'prev' ? 'asc' : 'desc';
+  const cursorWhere = cursor
+    ? { [idField]: direction === 'prev' ? { gt: cursor } : { lt: cursor } }
+    : {};
+  const rows = await model.findMany({
+    where: { AND: [where || {}, cursorWhere] },
+    ...(select ? { select } : {}),
+    ...(include ? { include } : {}),
+    orderBy: { [idField]: orderDirection },
+    take: pageSize + 1
+  });
+
+  const hasMore = rows.length > pageSize;
+  const pageRows = rows.slice(0, pageSize);
+  const data = direction === 'prev' ? pageRows.reverse() : pageRows;
+  const first = data[0];
+  const last = data[data.length - 1];
+
+  return {
+    data,
+    hasNextPage: direction === 'prev' ? Boolean(cursor) : hasMore,
+    hasPrevPage: direction === 'prev' ? hasMore : Boolean(cursor),
+    nextCursor: last ? String(last[idField]) : null,
+    prevCursor: first ? String(first[idField]) : null
+  };
+}
+
+function cursorPayload(data, cursorInfo, pageSize, total = null) {
+  return {
+    data,
+    pageSize,
+    total,
+    pagination: {
+      type: 'cursor',
+      nextCursor: cursorInfo.nextCursor,
+      prevCursor: cursorInfo.prevCursor,
+      hasNextPage: cursorInfo.hasNextPage,
+      hasPrevPage: cursorInfo.hasPrevPage
+    }
+  };
+}
+
 // ─── Admin Auth ───────────────────────────────────────────────────────────────
 
 exports.adminLogin = async (req, res) => {
@@ -432,6 +495,7 @@ exports.getAllTransactions = async (req, res) => {
   try {
     const { search, status, method, sortBy } = req.query;
     const { page, pageSize, skip, take, enabled: paginated } = parsePagination(req.query);
+    const cursorPage = parseCursorPagination(req.query);
     const direction = sortDirection(req.query.sortOrder);
 
     const where = {};
@@ -500,6 +564,34 @@ exports.getAllTransactions = async (req, res) => {
       orderBy
     };
 
+    if (cursorPage.enabled) {
+      const [cursorResult, total] = await Promise.all([
+        findManyByIdCursor(prisma.payment, {
+          idField: 'PaymentID',
+          where,
+          select: query.select,
+          pageSize: cursorPage.pageSize,
+          cursor: cursorPage.cursor,
+          direction: cursorPage.direction
+        }),
+        prisma.payment.count({ where })
+      ]);
+
+      const mapped = cursorResult.data.map(p => ({
+        id:            p.PaymentID,
+        bookingId:     p.BookingID,
+        transactionId: p.TransactionID || `TXN-${p.PaymentID}`,
+        amount:        Number(p.Amount),
+        method:        p.Method?.MethodName || 'Unknown',
+        status:        p.Status?.StatusName || 'Unknown',
+        date:          p.PaidAt,
+        user:          p.Booking?.User?.FullName || 'Unknown',
+        userRole:      p.Booking?.User?.Role?.RoleName || 'Unknown'
+      }));
+
+      return res.json(cursorPayload(mapped, cursorResult, cursorPage.pageSize, total));
+    }
+
     if (paginated) {
       query.skip = skip;
       query.take = take;
@@ -535,6 +627,7 @@ exports.getAllBookings = async (req, res) => {
   try {
     const { search, status, sortBy } = req.query;
     const { page, pageSize, skip, take, enabled: paginated } = parsePagination(req.query);
+    const cursorPage = parseCursorPagination(req.query);
     const direction = sortDirection(req.query.sortOrder);
 
     const where = {};
@@ -599,17 +692,7 @@ exports.getAllBookings = async (req, res) => {
       orderBy
     };
 
-    if (paginated) {
-      query.skip = skip;
-      query.take = take;
-    }
-
-    const [bookings, total] = await Promise.all([
-      prisma.booking.findMany(query),
-      paginated ? prisma.booking.count({ where }) : Promise.resolve(null)
-    ]);
-
-    const mapped = bookings.map(b => {
+    const mapBookings = bookings => bookings.map(b => {
       const events = [...new Set(
         b.BookingDetails
           .map(d => d.Showtime?.Event?.Title)
@@ -632,6 +715,39 @@ exports.getAllBookings = async (req, res) => {
       };
     });
 
+    if (cursorPage.enabled) {
+      const [cursorResult, total] = await Promise.all([
+        findManyByIdCursor(prisma.booking, {
+          idField: 'BookingID',
+          where,
+          select: query.select,
+          pageSize: cursorPage.pageSize,
+          cursor: cursorPage.cursor,
+          direction: cursorPage.direction
+        }),
+        prisma.booking.count({ where })
+      ]);
+
+      return res.json(cursorPayload(
+        mapBookings(cursorResult.data),
+        cursorResult,
+        cursorPage.pageSize,
+        total
+      ));
+    }
+
+    if (paginated) {
+      query.skip = skip;
+      query.take = take;
+    }
+
+    const [bookings, total] = await Promise.all([
+      prisma.booking.findMany(query),
+      paginated ? prisma.booking.count({ where }) : Promise.resolve(null)
+    ]);
+
+    const mapped = mapBookings(bookings);
+
     res.json(paginated ? paginationPayload(mapped, total, page, pageSize) : mapped);
   } catch (error) {
     console.error('Admin getAllBookings error:', error);
@@ -643,15 +759,31 @@ exports.getAllBookings = async (req, res) => {
 
 exports.getAllUsers = async (req, res) => {
   try {
-    const users = await prisma.user.findMany({
-      include: {
-        Role: true,
-        _count: { select: { Bookings: true } }
-      },
-      orderBy: { CreatedAt: 'desc' }
-    });
+    const { search, role } = req.query;
+    const cursorPage = parseCursorPagination(req.query);
+    const where = {};
 
-    const result = users.map(u => ({
+    if (search) {
+      const searchNum = parseInt(search, 10);
+      where.OR = [
+        { FullName: { contains: search, mode: 'insensitive' } },
+        { Email: { contains: search, mode: 'insensitive' } }
+      ];
+      if (!Number.isNaN(searchNum)) {
+        where.OR.push({ UserID: searchNum });
+      }
+    }
+
+    if (role && role !== 'All') {
+      where.Role = { RoleName: role };
+    }
+
+    const include = {
+      Role: true,
+      _count: { select: { Bookings: true } }
+    };
+
+    const mapUsers = users => users.map(u => ({
       id: u.UserID,
       fullName: u.FullName,
       email: u.Email,
@@ -660,6 +792,38 @@ exports.getAllUsers = async (req, res) => {
       bookingsCount: u._count.Bookings,
       createdAt: u.CreatedAt
     }));
+
+    if (cursorPage.enabled) {
+      const [cursorResult, total] = await Promise.all([
+        findManyByIdCursor(prisma.user, {
+          idField: 'UserID',
+          where,
+          include,
+          pageSize: cursorPage.pageSize,
+          cursor: cursorPage.cursor,
+          direction: cursorPage.direction
+        }),
+        prisma.user.count({ where })
+      ]);
+
+      return res.json(cursorPayload(
+        mapUsers(cursorResult.data),
+        cursorResult,
+        cursorPage.pageSize,
+        total
+      ));
+    }
+
+    const users = await prisma.user.findMany({
+      where,
+      include: {
+        Role: true,
+        _count: { select: { Bookings: true } }
+      },
+      orderBy: { CreatedAt: 'desc' }
+    });
+
+    const result = mapUsers(users);
 
     res.json(result);
   } catch (error) {

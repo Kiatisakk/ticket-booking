@@ -32,6 +32,9 @@ function AdminBookings() {
   const [page, setPage] = useState(1);
   const [totalRows, setTotalRows] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
+  const [cursor, setCursor] = useState(null);
+  const [cursorDirection, setCursorDirection] = useState('next');
+  const [cursorMeta, setCursorMeta] = useState({ hasNextPage: false, hasPrevPage: false, nextCursor: null, prevCursor: null });
   const serverSortableKeys = new Set(['bookingId', 'user', 'amount', 'bookingDate', 'status']);
   const serverMode = serverSortableKeys.has(sortConfig.key);
 
@@ -39,12 +42,14 @@ function AdminBookings() {
     setLoading(true);
     try {
       const params = {
+        pagination: 'cursor',
+        cursor: cursor || undefined,
+        direction: cursorDirection,
         sortBy: sortConfig.key,
         sortOrder: sortConfig.direction,
         search: search || undefined
       };
       if (serverMode) {
-        params.page = page;
         params.pageSize = pageSize;
       }
       if (statusFilter !== 'All') params.status = statusFilter;
@@ -58,6 +63,7 @@ function AdminBookings() {
         : res.data;
       setBookings(payload.data || []);
       setTotalRows(payload.total || 0);
+      setCursorMeta(payload.pagination || { hasNextPage: false, hasPrevPage: false, nextCursor: null, prevCursor: null });
       setTotalPages(payload.totalPages || getTotalPages(payload.total || 0, pageSize));
     } catch {
       setBookings([]);
@@ -66,7 +72,7 @@ function AdminBookings() {
     } finally {
       setLoading(false);
     }
-  }, [adminToken, search, statusFilter, sortConfig, page, pageSize, serverMode]);
+  }, [adminToken, search, statusFilter, sortConfig, pageSize, serverMode, cursor, cursorDirection]);
 
   useEffect(() => {
     fetchBookings();
@@ -89,11 +95,15 @@ function AdminBookings() {
 
   useEffect(() => {
     setPage(1);
+    setCursor(null);
+    setCursorDirection('next');
   }, [search, statusFilter, pageSize]);
 
   const handleSort = (key) => {
     setSortConfig(current => nextSortConfig(current, key));
     setPage(1);
+    setCursor(null);
+    setCursorDirection('next');
   };
 
   return (
@@ -185,12 +195,27 @@ function AdminBookings() {
         </div>
         {!loading && bookings.length > 0 && (
           <TableControls
+            mode="cursor"
             page={Math.min(page, effectiveTotalPages)}
             pageSize={pageSize}
             totalRows={effectiveTotalRows}
             totalPages={effectiveTotalPages}
+            hasPrevPage={cursorMeta.hasPrevPage}
+            hasNextPage={cursorMeta.hasNextPage}
+            onPrev={() => {
+              setCursor(cursorMeta.prevCursor);
+              setCursorDirection('prev');
+            }}
+            onNext={() => {
+              setCursor(cursorMeta.nextCursor);
+              setCursorDirection('next');
+            }}
             onPageChange={setPage}
-            onPageSizeChange={setPageSize}
+            onPageSizeChange={(size) => {
+              setPageSize(size);
+              setCursor(null);
+              setCursorDirection('next');
+            }}
           />
         )}
       </div>
