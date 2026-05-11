@@ -1,22 +1,35 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../../../context/AuthContext';
+import TableControls from '../../../components/TableControls';
 import './Events.css';
 
 const API_URL = 'http://localhost:4000/api';
 
-function isEventPast(event) {
-  if (!event.Showtimes || event.Showtimes.length === 0) return false;
-  const now = new Date();
-  // Event is past if ALL its showtimes are in the past
-  return event.Showtimes.every(s => new Date(s.StartDateTime) < now);
+function normalizeEvent(event) {
+  const showtimes = event.Showtimes || (event.startDateTime ? [{
+    StartDateTime: event.startDateTime,
+    BasePrice: event.basePrice,
+    Venue: event.venue ? { VenueName: event.venue } : undefined
+  }] : []);
+
+  return {
+    id: event.EventID || event.id,
+    title: event.Title || event.title || 'Untitled event',
+    description: event.Description || event.description || '',
+    category: event.Category?.CategoryName || event.category || '',
+    showtimes,
+    isPast: typeof event.isPast === 'boolean'
+      ? event.isPast
+      : showtimes.length > 0 && showtimes.every(showtime => new Date(showtime.StartDateTime) < new Date())
+  };
 }
 
 function getNextShowtime(event, isPast) {
-  if (!event.Showtimes || event.Showtimes.length === 0) return null;
+  if (!event.showtimes.length) return null;
   const now = new Date();
-  const sorted = event.Showtimes
+  const sorted = event.showtimes
     .slice()
     .sort((a, b) => new Date(a.StartDateTime) - new Date(b.StartDateTime));
 
@@ -26,81 +39,82 @@ function getNextShowtime(event, isPast) {
 
 function Events() {
   const { token } = useAuth();
+  const navigate = useNavigate();
   const [events, setEvents] = useState([]);
-  const [filteredEvents, setFilteredEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
-  const navigate = useNavigate();
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [totalRows, setTotalRows] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
 
   useEffect(() => {
-    fetchEvents();
-  }, [token]);
+    let active = true;
 
-  const fetchEvents = async () => {
-    try {
-      const response = await axios.get(`${API_URL}/events`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setEvents(response.data);
-      setFilteredEvents(response.data);
-    } catch (error) {
-      console.error('Failed to fetch events:', error);
-    } finally {
-      setLoading(false);
+    async function fetchEvents() {
+      setLoading(true);
+      try {
+        const response = await axios.get(`${API_URL}/events`, {
+          headers: { Authorization: `Bearer ${token}` },
+          params: {
+            pagination: 'offset',
+            page,
+            pageSize,
+            search: searchTerm || undefined,
+            category: categoryFilter !== 'all' ? categoryFilter : undefined
+          }
+        });
+        const payload = response.data;
+        const rows = Array.isArray(payload) ? payload : payload.data || [];
+        if (!active) return;
+        setEvents(rows.map(normalizeEvent));
+        setTotalRows(Array.isArray(payload) ? rows.length : payload.total || 0);
+        setTotalPages(Array.isArray(payload) ? 1 : payload.totalPages || 1);
+      } catch (error) {
+        console.error('Failed to fetch events:', error);
+      } finally {
+        if (active) setLoading(false);
+      }
     }
+
+    fetchEvents();
+    return () => {
+      active = false;
+    };
+  }, [token, searchTerm, categoryFilter, page, pageSize]);
+
+  const upcomingEvents = events.filter(event => !event.isPast);
+  const pastEvents = events.filter(event => event.isPast);
+
+  const updateSearch = (value) => {
+    setSearchTerm(value);
+    setPage(1);
   };
 
-  useEffect(() => {
-    let filtered = events;
+  const updateCategory = (value) => {
+    setCategoryFilter(value);
+    setPage(1);
+  };
 
-    if (categoryFilter !== 'all') {
-      filtered = filtered.filter(e => e.Category?.CategoryName === categoryFilter);
-    }
+  const renderEventCard = (event, isPast) => {
+    const nearest = getNextShowtime(event, isPast);
 
-    if (searchTerm) {
-      filtered = filtered.filter(e =>
-        e.Title?.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
-
-    setFilteredEvents(filtered);
-  }, [searchTerm, categoryFilter, events]);
-
-  if (loading) {
-    return <div className="events-page"><div className="loading">Loading events...</div></div>;
-  }
-
-  const upcomingEvents = filteredEvents.filter(e => !isEventPast(e));
-  const pastEvents     = filteredEvents.filter(e => isEventPast(e));
-
-  const renderEventCard = (event, isPast) => (
-    <div
-      key={event.EventID}
-      className={`event-card${isPast ? ' event-card-past' : ''}`}
-      onClick={() => navigate(`/events/${event.EventID}`)}
-    >
-      {isPast && <div className="event-past-ribbon">Past Event</div>}
-      <div className="event-icon">
-        {
-          event.Category?.CategoryName === 'Movie' ? '🎬' :
-          event.Category?.CategoryName === 'Concert' ? '🎵' :
-          event.Category?.CategoryName === 'Seminar' ? '📚' : '🎫'
-        }
-      </div>
-      <h3>{event.Title}</h3>
-      {event.Category?.CategoryName && (
-        <div className="event-category">
-          {event.Category.CategoryName}
+    return (
+      <div
+        key={event.id}
+        className={`event-card${isPast ? ' event-card-past' : ''}`}
+        onClick={() => navigate(`/events/${event.id}`)}
+      >
+        {isPast && <div className="event-past-ribbon">Past Event</div>}
+        <div className="event-icon">
+          {event.category === 'Movie' ? 'Movie' : event.category === 'Concert' ? 'Live' : event.category === 'Seminar' ? 'Talk' : 'Event'}
         </div>
-      )}
-      <p className="event-description">
-        {event.Description?.substring(0, 100)}...
-      </p>
+        <h3>{event.title}</h3>
+        {event.category && <div className="event-category">{event.category}</div>}
+        <p className="event-description">{event.description.substring(0, 100)}...</p>
 
-      {event.Showtimes?.length > 0 && (() => {
-        const nearest = getNextShowtime(event, isPast);
-        return (
+        {nearest && (
           <div className={`event-booking-deadline${isPast ? ' event-deadline-past' : ''}`}>
             {isPast ? 'Last showtime:' : 'Next showtime:'}{' '}
             <span className="deadline-item">
@@ -113,67 +127,64 @@ function Events() {
               })}
             </span>
           </div>
-        );
-      })()}
+        )}
 
-      <button className={`event-button${isPast ? ' event-button-past' : ''}`} disabled={isPast}>
-        {isPast ? 'Event Ended' : 'View Details →'}
-      </button>
-    </div>
-  );
+        <button className={`event-button${isPast ? ' event-button-past' : ''}`} disabled={isPast}>
+          {isPast ? 'Event Ended' : 'View Details'}
+        </button>
+      </div>
+    );
+  };
+
+  if (loading) {
+    return <div className="events-page"><div className="loading">Loading events...</div></div>;
+  }
 
   return (
     <div className="events-page">
-      {/* Hero Banner Style adapted from your HTML */}
       <div className="events-hero">
         <div className="hero-glow"></div>
         <div className="events-hero-inner">
-          <div className="hero-badge">
-            <span role="img" aria-label="ticket">🎟</span> THAILAND'S TICKET PLATFORM
-          </div>
+          <div className="hero-badge">THAILAND'S TICKET PLATFORM</div>
           <h1 className="hero-title">
             Your next <span className="hero-highlight">unforgettable</span><br />
             experience starts here
           </h1>
           <p className="hero-sub">
-            Concerts, movies, seminars — buy tickets in seconds, no queues.
+            Concerts, movies, seminars - buy tickets in seconds, no queues.
           </p>
         </div>
       </div>
 
       <div className="events-main">
-        {/* Filters */}
         <div className="filters">
           <input
             type="text"
-            placeholder="🔍 Search events..."
+            placeholder="Search events..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => updateSearch(e.target.value)}
             className="search-input"
           />
 
           <select
             value={categoryFilter}
-            onChange={(e) => setCategoryFilter(e.target.value)}
+            onChange={(e) => updateCategory(e.target.value)}
             className="filter-select"
           >
             <option value="all">All Categories</option>
-            <option value="Movie">🎬 Movie</option>
-            <option value="Concert">🎵 Concert</option>
-            <option value="Seminar">📚 Seminar</option>
+            <option value="Movie">Movie</option>
+            <option value="Concert">Concert</option>
+            <option value="Seminar">Seminar</option>
           </select>
         </div>
 
-        {/* Upcoming Events */}
         <div className="events-section">
           <div className="events-section-header">
             <h2 className="events-section-title">Upcoming Events</h2>
             <span className="events-section-count">{upcomingEvents.length} events</span>
           </div>
           {upcomingEvents.length === 0 ? (
-            <div className="no-events">
-              <p>No upcoming events found</p>
-            </div>
+            <div className="no-events"><p>No upcoming events found</p></div>
           ) : (
             <div className="events-grid">
               {upcomingEvents.map(event => renderEventCard(event, false))}
@@ -181,7 +192,6 @@ function Events() {
           )}
         </div>
 
-        {/* Past Events */}
         {pastEvents.length > 0 && (
           <div className="events-section events-section-past">
             <div className="events-section-header">
@@ -193,6 +203,18 @@ function Events() {
             </div>
           </div>
         )}
+
+        <TableControls
+          page={page}
+          pageSize={pageSize}
+          totalRows={totalRows}
+          totalPages={totalPages}
+          onPageChange={setPage}
+          onPageSizeChange={(nextSize) => {
+            setPageSize(nextSize);
+            setPage(1);
+          }}
+        />
       </div>
     </div>
   );

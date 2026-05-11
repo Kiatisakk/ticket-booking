@@ -331,9 +331,7 @@ exports.getBookingVsCapacity = asyncHandler(async (req, res) => {
       where: stWhere,
       include: {
         Event: { include: { Category: true } },
-        Venue: {
-          include: { Seats: true }
-        }
+        Venue: true
       },
       orderBy: { StartDateTime: 'desc' },
       take: 8
@@ -351,7 +349,7 @@ exports.getBookingVsCapacity = asyncHandler(async (req, res) => {
             where: catFilter ? { Event: { Category: { CategoryName: catFilter } } } : {},
             include: {
               Event: { include: { Category: true } },
-              Venue: { include: { Seats: true } }
+              Venue: true
             },
             orderBy: { StartDateTime: 'desc' },
             take: 1
@@ -371,21 +369,35 @@ exports.getBookingVsCapacity = asyncHandler(async (req, res) => {
         .sort((a, b) => new Date(b.StartDateTime) - new Date(a.StartDateTime));
     }
 
-    const result = await Promise.all(showtimes.map(async st => {
-      const capacity = st.Venue?.Seats?.length ?? 0;
+    const venueIds = [...new Set(showtimes.map(st => st.VenueID).filter(Boolean))];
+    const showtimeIds = showtimes.map(st => st.ShowtimeID);
+    const [capacityRows, soldRows] = await Promise.all([
+      venueIds.length
+        ? prisma.seat.groupBy({
+            by: ['VenueID'],
+            where: { VenueID: { in: venueIds } },
+            _count: { SeatID: true }
+          })
+        : [],
+      showtimeIds.length
+        ? prisma.$queryRaw`
+            SELECT bd."ShowtimeID", COUNT(DISTINCT bd."SeatID")::int as sold
+            FROM "BookingDetails" bd
+            JOIN "Bookings" b ON bd."BookingID" = b."BookingID"
+            JOIN "Payments" p ON p."BookingID" = b."BookingID"
+            WHERE bd."ShowtimeID" = ANY(${showtimeIds}::int[])
+              AND b."StatusID" = ${completedStatusId}
+              AND p."StatusID" = ${successStatusId}
+            GROUP BY bd."ShowtimeID"
+          `
+        : []
+    ]);
+    const capacityByVenue = new Map(capacityRows.map(row => [row.VenueID, row._count.SeatID]));
+    const soldByShowtime = new Map(soldRows.map(row => [Number(row.ShowtimeID), Number(row.sold)]));
 
-      // Count distinct sold seats with completed bookings and successful payments.
-      // Historical mock data can contain repeated attempts for the same seat/showtime.
-      const soldRows = await prisma.$queryRaw`
-        SELECT COUNT(DISTINCT bd."SeatID")::int as sold
-        FROM "BookingDetails" bd
-        JOIN "Bookings" b ON bd."BookingID" = b."BookingID"
-        JOIN "Payments" p ON p."BookingID" = b."BookingID"
-        WHERE bd."ShowtimeID" = ${st.ShowtimeID}
-          AND b."StatusID" = ${completedStatusId}
-          AND p."StatusID" = ${successStatusId}
-      `;
-      const sold = Math.min(Number(soldRows[0]?.sold ?? 0), capacity);
+    const result = showtimes.map(st => {
+      const capacity = capacityByVenue.get(st.VenueID) || 0;
+      const sold = Math.min(soldByShowtime.get(st.ShowtimeID) || 0, capacity);
       const occupancyRatePct = capacity > 0 ? Math.round((sold / capacity) * 10000) / 100 : 0;
       const status = occupancyRatePct >= 100
         ? 'Sold Out'
@@ -413,7 +425,7 @@ exports.getBookingVsCapacity = asyncHandler(async (req, res) => {
         status,
         venue: venueName
       };
-    }));
+    });
 
     res.json(result.reverse()); // chronological order
 });

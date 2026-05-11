@@ -52,18 +52,18 @@ exports.getAllTransactions = asyncHandler(async (req, res) => {
     bookingId: { BookingID: direction },
     transactionId: { TransactionID: direction },
     amount: { Amount: direction },
-    date: { CreatedAt: direction },
+    date: { PaidAt: direction },
     status: { Status: { StatusName: direction } },
     method: { Method: { MethodName: direction } },
     user: { Booking: { User: { FullName: direction } } }
   };
-  const orderBy = sortMap[sortBy] || { CreatedAt: 'desc' };
+  const orderBy = sortMap[sortBy] || { PaidAt: 'desc' };
 
   const cursorSorts = {
     bookingId: { idField: 'PaymentID', sortField: 'BookingID', valueType: 'number' },
     transactionId: { idField: 'PaymentID', sortField: 'TransactionID', valueType: 'string' },
     amount: { idField: 'PaymentID', sortField: 'Amount', valueType: 'number' },
-    date: { idField: 'PaymentID', sortField: 'CreatedAt', valueType: 'date' }
+    date: { idField: 'PaymentID', sortField: 'PaidAt', valueType: 'date' }
   };
   const cursorConfig = cursorSorts[sortBy || 'date']
     ? { ...cursorSorts[sortBy || 'date'], sortOrder: direction }

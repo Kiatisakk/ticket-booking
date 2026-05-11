@@ -2,7 +2,7 @@ const showtimeService = require('../services/showtime.service');
 const asyncHandler = require('../utils/asyncHandler');
 
 exports.getAllShowtimes = asyncHandler(async (req, res) => {
-  const showtimes = await showtimeService.getAllShowtimes();
+  const showtimes = await showtimeService.getAllShowtimes(req.query);
   res.json(showtimes);
 });
 

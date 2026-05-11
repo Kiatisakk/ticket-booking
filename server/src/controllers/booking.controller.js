@@ -15,7 +15,7 @@ exports.createBooking = asyncHandler(async (req, res) => {
 });
 
 exports.getMyBookings = asyncHandler(async (req, res) => {
-  const bookings = await bookingService.getMyBookings(req.user.userId);
+  const bookings = await bookingService.getMyBookings(req.user.userId, req.query);
   res.json(bookings);
 });
 

@@ -83,7 +83,7 @@ function createBookingService({
       });
     },
 
-    async getMyBookings(userId) {
+    async getMyBookings(userId, query = {}) {
       const pending = await bookings.findBookingStatus('Pending');
       const cancelled = await bookings.findBookingStatus('Cancelled');
 
@@ -91,7 +91,14 @@ function createBookingService({
         await bookings.expirePendingForUser(userId, pending.StatusID, cancelled.StatusID);
       }
 
-      return bookings.findManyByUser(userId);
+      const statusMap = {
+        pending: pending?.StatusID,
+        cancelled: cancelled?.StatusID,
+        completed: (await bookings.findBookingStatus('Completed'))?.StatusID
+      };
+      const statusId = statusMap[String(query.status || '').toLowerCase()];
+
+      return bookings.findManyByUser(userId, query, { statusId });
     },
 
     async getBookingById({ bookingId, user }) {

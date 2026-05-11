@@ -1,18 +1,6 @@
 const prisma = require('../../config/prisma');
 const asyncHandler = require('../../utils/asyncHandler');
-
-function compareSeatPosition(a, b) {
-  const rowCompare = String(a.RowLabel || '').localeCompare(String(b.RowLabel || ''), undefined, {
-    numeric: true,
-    sensitivity: 'base'
-  });
-  if (rowCompare !== 0) return rowCompare;
-
-  return String(a.SeatNumber || '').localeCompare(String(b.SeatNumber || ''), undefined, {
-    numeric: true,
-    sensitivity: 'base'
-  });
-}
+const { offsetPayload, parsePagination } = require('../../utils/pagination');
 
 exports.getCategories = asyncHandler(async (req, res) => {
   const categories = await prisma.eventCategory.findMany({ orderBy: { CategoryID: 'asc' } });
@@ -20,17 +8,28 @@ exports.getCategories = asyncHandler(async (req, res) => {
 });
 
 exports.getAdminVenues = asyncHandler(async (req, res) => {
-  const venues = await prisma.venue.findMany({
-    orderBy: { VenueID: 'asc' },
-    include: { _count: { select: { Seats: true } } }
-  });
+  const page = parsePagination(req.query, { defaultPageSize: 12 });
+  const [venues, total] = await Promise.all([
+    prisma.venue.findMany({
+      orderBy: { VenueID: 'asc' },
+      include: { _count: { select: { Seats: true } } },
+      ...(page.enabled ? { skip: page.skip, take: page.take } : {})
+    }),
+    page.enabled ? prisma.venue.count() : Promise.resolve(null)
+  ]);
 
-  res.json(venues.map(venue => ({
+  const data = venues.map(venue => ({
     id: venue.VenueID,
     name: venue.VenueName,
     location: venue.Location || '',
     capacity: venue._count.Seats
-  })));
+  }));
+
+  if (page.enabled) {
+    return res.json(offsetPayload(data, total, page.page, page.pageSize));
+  }
+
+  res.json(data);
 });
 
 exports.createVenue = asyncHandler(async (req, res) => {
@@ -96,11 +95,49 @@ exports.deleteVenue = asyncHandler(async (req, res) => {
 
 exports.getVenueSeats = asyncHandler(async (req, res) => {
   const venueId = parseInt(req.params.venueId, 10);
-  const seats = await prisma.seat.findMany({
-    where: { VenueID: venueId },
-    include: { SeatType: true }
-  });
-  seats.sort(compareSeatPosition);
+  const page = parsePagination(req.query, { defaultPageSize: 100 });
+  const seatRows = page.enabled ? await prisma.$queryRaw`
+    SELECT
+      s."SeatID",
+      s."VenueID",
+      s."SeatTypeID",
+      s."RowLabel",
+      s."SeatNumber",
+      st."TypeName" AS "SeatTypeName"
+    FROM "Seats" s
+    JOIN "SeatTypes" st ON st."SeatTypeID" = s."SeatTypeID"
+    WHERE s."VenueID" = ${venueId}
+    ORDER BY
+      s."RowLabel" ASC,
+      CASE WHEN s."SeatNumber" ~ '^[0-9]+$' THEN s."SeatNumber"::int END ASC NULLS LAST,
+      s."SeatNumber" ASC,
+      s."SeatID" ASC
+    LIMIT ${page.take} OFFSET ${page.skip}
+  ` : await prisma.$queryRaw`
+    SELECT
+      s."SeatID",
+      s."VenueID",
+      s."SeatTypeID",
+      s."RowLabel",
+      s."SeatNumber",
+      st."TypeName" AS "SeatTypeName"
+    FROM "Seats" s
+    JOIN "SeatTypes" st ON st."SeatTypeID" = s."SeatTypeID"
+    WHERE s."VenueID" = ${venueId}
+    ORDER BY
+      s."RowLabel" ASC,
+      CASE WHEN s."SeatNumber" ~ '^[0-9]+$' THEN s."SeatNumber"::int END ASC NULLS LAST,
+      s."SeatNumber" ASC,
+      s."SeatID" ASC
+  `;
+  const seats = seatRows.map(row => ({
+    SeatID: Number(row.SeatID),
+    VenueID: Number(row.VenueID),
+    SeatTypeID: Number(row.SeatTypeID),
+    RowLabel: row.RowLabel,
+    SeatNumber: row.SeatNumber,
+    SeatType: { TypeName: row.SeatTypeName }
+  }));
 
   const detailCounts = seats.length
     ? await prisma.bookingDetail.groupBy({
@@ -111,7 +148,7 @@ exports.getVenueSeats = asyncHandler(async (req, res) => {
     : [];
   const bookedMap = new Map(detailCounts.map(item => [item.SeatID, item._count.SeatID]));
 
-  res.json(seats.map(seat => ({
+  const data = seats.map(seat => ({
     id: seat.SeatID,
     venueId: seat.VenueID,
     seatTypeId: seat.SeatTypeID,
@@ -119,7 +156,14 @@ exports.getVenueSeats = asyncHandler(async (req, res) => {
     rowLabel: seat.RowLabel,
     seatNumber: seat.SeatNumber,
     bookingCount: bookedMap.get(seat.SeatID) || 0
-  })));
+  }));
+
+  if (page.enabled) {
+    const total = await prisma.seat.count({ where: { VenueID: venueId } });
+    return res.json(offsetPayload(data, total, page.page, page.pageSize));
+  }
+
+  res.json(data);
 });
 
 exports.createSeat = asyncHandler(async (req, res) => {

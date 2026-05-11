@@ -1,5 +1,6 @@
 const prisma = require('../config/prisma');
 const { Prisma } = require('@prisma/client');
+const { findManyHybrid } = require('../utils/pagination');
 
 function createBookingRepository(db = prisma) {
   return {
@@ -76,28 +77,47 @@ function createBookingRepository(db = prisma) {
       });
     },
 
-    findManyByUser(userId) {
-      return db.booking.findMany({
-        where: { UserID: userId },
-        include: {
-          Status: true,
-          BookingDetails: {
-            include: {
-              Showtime: {
-                include: {
-                  Event: true,
-                  Venue: true
-                }
-              },
-              Seat: {
-                include: { SeatType: true }
-              },
-              Ticket: true
-            }
-          },
-          Payment: true
+    findManyByUser(userId, query = {}, filters = {}) {
+      const where = {
+        UserID: userId,
+        ...(filters.statusId ? { StatusID: filters.statusId } : {})
+      };
+      const include = {
+        Status: true,
+        BookingDetails: {
+          include: {
+            Showtime: {
+              include: {
+                Event: true,
+                Venue: true
+              }
+            },
+            Seat: {
+              include: { SeatType: true }
+            },
+            Ticket: true
+          }
         },
-        orderBy: { BookingTimestamp: 'desc' }
+        Payment: true
+      };
+
+      return findManyHybrid(db.booking, {
+        query,
+        where,
+        include: {
+          ...include,
+          BookingDetails: {
+            ...include.BookingDetails,
+            orderBy: { DetailID: 'asc' }
+          }
+        },
+        orderBy: [{ BookingTimestamp: 'desc' }, { BookingID: 'desc' }],
+        cursorConfig: {
+          idField: 'BookingID',
+          sortField: 'BookingTimestamp',
+          sortOrder: 'desc',
+          valueType: 'date'
+        }
       });
     },
 

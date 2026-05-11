@@ -1,12 +1,22 @@
 const prisma = require('../config/prisma');
+const { findManyHybrid } = require('../utils/pagination');
 
 function createShowtimeRepository(db = prisma) {
   return {
-    findAll() {
-      return db.showtime.findMany({
+    findAll(query = {}) {
+      return findManyHybrid(db.showtime, {
+        query,
+        where: {},
         include: {
           Event: true,
           Venue: true
+        },
+        orderBy: [{ StartDateTime: 'asc' }, { ShowtimeID: 'asc' }],
+        cursorConfig: {
+          idField: 'ShowtimeID',
+          sortField: 'StartDateTime',
+          sortOrder: 'asc',
+          valueType: 'date'
         }
       });
     },

@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import axios from 'axios';
 import { useAdminAuth } from '../../../context/AdminAuthContext';
+import TableControls from '../../../components/TableControls';
 import './MasterData.css';
 
 const API_URL = 'http://localhost:4000/api';
@@ -26,12 +27,30 @@ function MasterData() {
   const [seatLoading, setSeatLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [venuePage, setVenuePage] = useState(1);
+  const [venuePageSize, setVenuePageSize] = useState(10);
+  const [venueTotalRows, setVenueTotalRows] = useState(0);
+  const [venueTotalPages, setVenueTotalPages] = useState(1);
+  const [seatPage, setSeatPage] = useState(1);
+  const [seatPageSize, setSeatPageSize] = useState(100);
+  const [seatTotalRows, setSeatTotalRows] = useState(0);
+  const [seatTotalPages, setSeatTotalPages] = useState(1);
 
   const loadVenues = useCallback(async () => {
-    const { data } = await axios.get(`${API_URL}/admin/venues`, { headers });
-    setVenues(data);
-    setSelectedVenueId(current => current || (data[0]?.id ? String(data[0].id) : ''));
-  }, [adminToken]);
+    const { data } = await axios.get(`${API_URL}/admin/venues`, {
+      headers,
+      params: { pagination: 'offset', page: venuePage, pageSize: venuePageSize }
+    });
+    const rows = Array.isArray(data) ? data : data.data || [];
+    setVenues(rows);
+    setVenueTotalRows(Array.isArray(data) ? rows.length : data.total || 0);
+    setVenueTotalPages(Array.isArray(data) ? 1 : data.totalPages || 1);
+    setSelectedVenueId(current => (
+      rows.some(venue => String(venue.id) === String(current))
+        ? current
+        : (rows[0]?.id ? String(rows[0].id) : '')
+    ));
+  }, [adminToken, venuePage, venuePageSize]);
 
   const loadSeatTypes = useCallback(async () => {
     const { data } = await axios.get(`${API_URL}/seat-types`, { headers });
@@ -51,12 +70,18 @@ function MasterData() {
     }
     setSeatLoading(true);
     try {
-      const { data } = await axios.get(`${API_URL}/admin/venues/${venueId}/seats`, { headers });
-      setSeats(data);
+      const { data } = await axios.get(`${API_URL}/admin/venues/${venueId}/seats`, {
+        headers,
+        params: { page: seatPage, pageSize: seatPageSize }
+      });
+      const rows = Array.isArray(data) ? data : data.data || [];
+      setSeats(rows);
+      setSeatTotalRows(Array.isArray(data) ? rows.length : data.total || 0);
+      setSeatTotalPages(Array.isArray(data) ? 1 : data.totalPages || 1);
     } finally {
       setSeatLoading(false);
     }
-  }, [adminToken]);
+  }, [adminToken, seatPage, seatPageSize]);
 
   useEffect(() => {
     let active = true;
@@ -98,6 +123,7 @@ function MasterData() {
         await axios.post(`${API_URL}/admin/venues`, venueForm, { headers });
       }
       resetVenueForm();
+      setVenuePage(1);
       await loadVenues();
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to save venue');
@@ -140,6 +166,7 @@ function MasterData() {
         await axios.post(`${API_URL}/admin/seats`, payload, { headers });
       }
       resetSeatForm();
+      setSeatPage(1);
       await Promise.all([loadSeats(selectedVenueId), loadVenues()]);
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to save seat');
@@ -193,6 +220,7 @@ function MasterData() {
         }, { headers });
       }
       resetBulkSeatForm();
+      setSeatPage(1);
       await Promise.all([loadSeats(selectedVenueId), loadVenues()]);
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to add seats');
@@ -260,7 +288,10 @@ function MasterData() {
               type="button"
               key={venue.id}
               className={`md-venue-card${String(selectedVenueId) === String(venue.id) ? ' active' : ''}`}
-              onClick={() => setSelectedVenueId(String(venue.id))}
+              onClick={() => {
+                setSelectedVenueId(String(venue.id));
+                setSeatPage(1);
+              }}
             >
               <span className="md-venue-title">{venue.name}</span>
               <span className="md-venue-sub">{venue.location || `Venue #${venue.id}`}</span>
@@ -272,6 +303,17 @@ function MasterData() {
             </button>
           ))}
         </div>
+        <TableControls
+          page={venuePage}
+          pageSize={venuePageSize}
+          totalRows={venueTotalRows}
+          totalPages={venueTotalPages}
+          onPageChange={setVenuePage}
+          onPageSizeChange={(nextSize) => {
+            setVenuePageSize(nextSize);
+            setVenuePage(1);
+          }}
+        />
       </section>
 
       <section className="md-section">
@@ -387,6 +429,17 @@ function MasterData() {
             </table>
           )}
         </div>
+        <TableControls
+          page={seatPage}
+          pageSize={seatPageSize}
+          totalRows={seatTotalRows}
+          totalPages={seatTotalPages}
+          onPageChange={setSeatPage}
+          onPageSizeChange={(nextSize) => {
+            setSeatPageSize(nextSize);
+            setSeatPage(1);
+          }}
+        />
       </section>
     </div>
   );

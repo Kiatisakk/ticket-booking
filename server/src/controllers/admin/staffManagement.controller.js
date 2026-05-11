@@ -1,6 +1,7 @@
 const bcrypt = require('bcrypt');
 const prisma = require('../../config/prisma');
 const asyncHandler = require('../../utils/asyncHandler');
+const { findManyHybrid } = require('../../utils/pagination');
 
 function normalizeEmail(email = '') {
   return email.trim().toLowerCase();
@@ -18,9 +19,7 @@ exports.addStaffUser = asyncHandler(async (req, res) => {
     return res.status(400).json({ error: 'Password must be at least 6 characters long' });
   }
 
-  const existingUser = await prisma.user.findFirst({
-    where: { Email: { equals: normalizedEmail, mode: 'insensitive' } }
-  });
+  const existingUser = await prisma.user.findUnique({ where: { Email: normalizedEmail } });
   if (existingUser) {
     return res.status(400).json({ error: 'User already exists' });
   }
@@ -58,15 +57,22 @@ exports.getAllStaff = asyncHandler(async (req, res) => {
     return res.json([]);
   }
 
-  const staff = await prisma.user.findMany({
+  const payload = await findManyHybrid(prisma.user, {
+    query: req.query,
     where: { RoleID: staffRole.RoleID },
-    orderBy: { CreatedAt: 'desc' }
+    orderBy: [{ CreatedAt: 'desc' }, { UserID: 'desc' }],
+    cursorConfig: {
+      idField: 'UserID',
+      sortField: 'CreatedAt',
+      sortOrder: 'desc',
+      valueType: 'date'
+    },
+    map: rows => rows.map(user => ({
+      id: user.UserID,
+      fullName: user.FullName,
+      email: user.Email,
+      createdAt: user.CreatedAt
+    }))
   });
-
-  res.json(staff.map(user => ({
-    id: user.UserID,
-    fullName: user.FullName,
-    email: user.Email,
-    createdAt: user.CreatedAt
-  })));
+  res.json(payload);
 });

@@ -1,14 +1,23 @@
 const prisma = require('../config/prisma');
+const { findManyHybrid, sortDirection } = require('../utils/pagination');
 
-function buildEventWhere({ categoryId, search } = {}) {
+function buildEventWhere({ category, categoryId, search, status } = {}) {
   const where = {};
 
   if (categoryId) {
     where.CategoryID = parseInt(categoryId);
+  } else if (category && category !== 'all') {
+    where.Category = { CategoryName: category };
   }
 
   if (search) {
     where.Title = { contains: search, mode: 'insensitive' };
+  }
+
+  if (status === 'upcoming') {
+    where.Showtimes = { some: { StartDateTime: { gte: new Date() } } };
+  } else if (status === 'past') {
+    where.Showtimes = { every: { StartDateTime: { lt: new Date() } } };
   }
 
   return where;
@@ -17,7 +26,17 @@ function buildEventWhere({ categoryId, search } = {}) {
 function createEventRepository(db = prisma) {
   return {
     findAll(filters) {
-      return db.event.findMany({
+      const sortBy = filters?.sortBy || 'eventId';
+      const sortOrder = sortDirection(filters?.sortOrder);
+      const orderByMap = {
+        eventId: { EventID: sortOrder },
+        title: { Title: sortOrder },
+        category: { Category: { CategoryName: sortOrder } }
+      };
+      const orderBy = orderByMap[sortBy] || orderByMap.eventId;
+
+      return findManyHybrid(db.event, {
+        query: filters,
         where: buildEventWhere(filters),
         include: {
           Category: true,
@@ -25,7 +44,16 @@ function createEventRepository(db = prisma) {
             include: { Venue: true },
             orderBy: { StartDateTime: 'asc' }
           }
-        }
+        },
+        orderBy,
+        cursorConfig: ['eventId', undefined, null].includes(sortBy)
+          ? {
+              idField: 'EventID',
+              sortField: 'EventID',
+              sortOrder,
+              valueType: 'number'
+            }
+          : null
       });
     },
 

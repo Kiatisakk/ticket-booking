@@ -3,8 +3,8 @@ const showtimeRepository = require('../repositories/showtime.repository');
 
 function createShowtimeService({ showtimes = showtimeRepository } = {}) {
   return {
-    getAllShowtimes() {
-      return showtimes.findAll();
+    getAllShowtimes(query = {}) {
+      return showtimes.findAll(query);
     },
 
     getShowtimesByEvent(eventId) {

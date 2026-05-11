@@ -1,10 +1,19 @@
 const EVENT_LIST_CACHE_TTL_MS = Number(process.env.EVENT_LIST_CACHE_TTL_MS || 5000);
 const eventListCache = new Map();
+const { decodeCursor, encodeCursor, offsetPayload, parsePagination } = require('../utils/pagination');
 
-function getCacheKey({ search, categoryId }) {
+function getCacheKey({ search, category, categoryId, status, sortBy, sortOrder, page, pageSize, cursor, direction }) {
   return JSON.stringify({
     search: search || '',
-    categoryId: categoryId || ''
+    category: category || '',
+    categoryId: categoryId || '',
+    status: status || '',
+    sortBy: sortBy || '',
+    sortOrder: sortOrder || '',
+    page: page || '',
+    pageSize: pageSize || '',
+    cursor: cursor || '',
+    direction: direction || ''
   });
 }
 
@@ -12,7 +21,7 @@ function invalidateEventListCache() {
   eventListCache.clear();
 }
 
-function buildEventListWhere({ search, categoryId }) {
+function buildEventListWhere({ search, category, categoryId }) {
   const clauses = [];
   const params = [];
 
@@ -24,12 +33,199 @@ function buildEventListWhere({ search, categoryId }) {
   if (categoryId) {
     params.push(parseInt(categoryId, 10));
     clauses.push(`e."CategoryID" = $${params.length}`);
+  } else if (category && category !== 'all') {
+    params.push(category);
+    clauses.push(`c."CategoryName" = $${params.length}`);
   }
 
   return {
     whereSql: clauses.length ? `WHERE ${clauses.join(' AND ')}` : '',
     params
   };
+}
+
+function normalizeSort({ sortBy = 'eventId', sortOrder = 'desc' } = {}) {
+  const direction = String(sortOrder).toLowerCase() === 'asc' ? 'ASC' : 'DESC';
+  const sortMap = {
+    eventId: 'pe."EventID"',
+    title: 'pe."Title"',
+    startDateTime: 'pe."FirstShowtime"',
+    category: 'pe."CategoryName"'
+  };
+
+  return {
+    sortBy: sortMap[sortBy] ? sortBy : 'eventId',
+    sortSql: sortMap[sortBy] || sortMap.eventId,
+    direction
+  };
+}
+
+function statusClause(status) {
+  if (status === 'upcoming') {
+    return 'COALESCE(eb."LatestShowtime" >= $NOW_PARAM, true)';
+  }
+  if (status === 'past') {
+    return 'eb."LatestShowtime" < $NOW_PARAM';
+  }
+  return '';
+}
+
+function cursorClause({ cursor, direction, sortOrder }) {
+  const decoded = decodeCursor(cursor, 'EventID');
+  const id = Number(decoded?.id ?? decoded?.value);
+  if (!Number.isFinite(id)) return '';
+
+  const isAsc = String(sortOrder).toLowerCase() === 'asc';
+  const isPrev = direction === 'prev';
+  const moveForward = isPrev ? !isAsc : isAsc;
+  return `pe."EventID" ${moveForward ? '>' : '<'} ${id}`;
+}
+
+function buildEventListSql({
+  whereSql,
+  params,
+  nowParamIndex,
+  status,
+  sortBy,
+  sortOrder,
+  limitParamIndex,
+  offsetParamIndex,
+  cursor,
+  direction,
+  includePage = false,
+  countOnly = false
+}) {
+  const normalizedSort = normalizeSort({ sortBy, sortOrder });
+  const filters = [];
+  const statusSql = statusClause(status).replaceAll('$NOW_PARAM', `$${nowParamIndex}`);
+  if (statusSql) filters.push(statusSql);
+  if (includePage && normalizedSort.sortBy === 'eventId' && cursor) {
+    const clause = cursorClause({ cursor, direction, sortOrder });
+    if (clause) filters.push(clause);
+  }
+  const eventFilterSql = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+  const pageSql = includePage
+    ? `LIMIT $${limitParamIndex} OFFSET $${offsetParamIndex}`
+    : '';
+
+  const baseCtes = `
+    WITH filtered_events AS MATERIALIZED (
+      SELECT
+        e."EventID",
+        e."Title",
+        e."Description",
+        e."CategoryID",
+        c."CategoryName"
+      FROM "Events" e
+      LEFT JOIN "EventCategories" c ON c."CategoryID" = e."CategoryID"
+      ${whereSql}
+    ),
+    event_bounds AS (
+      SELECT
+        fe."EventID",
+        MIN(s."StartDateTime") AS "FirstShowtime",
+        MAX(s."StartDateTime") AS "LatestShowtime"
+      FROM filtered_events fe
+      LEFT JOIN "Showtimes" s ON s."EventID" = fe."EventID"
+      GROUP BY fe."EventID"
+    ),
+    page_events AS MATERIALIZED (
+      SELECT
+        fe.*,
+        eb."FirstShowtime",
+        eb."LatestShowtime"
+      FROM filtered_events fe
+      LEFT JOIN event_bounds eb ON eb."EventID" = fe."EventID"
+      ${eventFilterSql}
+      ORDER BY ${normalizedSort.sortSql} ${normalizedSort.direction}, pe."EventID" ${normalizedSort.direction}
+      ${pageSql}
+    )
+  `.replaceAll('pe.', 'fe.');
+
+  if (countOnly) {
+    return `
+      ${baseCtes}
+      SELECT COUNT(*)::int AS "total"
+      FROM page_events
+    `;
+  }
+
+  return `
+    ${baseCtes},
+    first_showtime AS (
+      SELECT DISTINCT ON (s."EventID")
+        s."EventID",
+        s."ShowtimeID",
+        s."VenueID",
+        s."BasePrice",
+        s."StartDateTime",
+        v."VenueName"
+      FROM "Showtimes" s
+      JOIN page_events pe ON pe."EventID" = s."EventID"
+      JOIN "Venues" v ON v."VenueID" = s."VenueID"
+      ORDER BY s."EventID", s."StartDateTime" ASC
+    ),
+    booking_event_flags AS (
+      SELECT DISTINCT
+        s."EventID"
+      FROM "Showtimes" s
+      JOIN page_events pe ON pe."EventID" = s."EventID"
+      JOIN "BookingDetails" bd ON bd."ShowtimeID" = s."ShowtimeID"
+    ),
+    venue_capacity AS (
+      SELECT
+        seats."VenueID",
+        COUNT(seats."SeatID")::int AS "TotalSeats"
+      FROM "Seats" seats
+      JOIN (
+        SELECT DISTINCT "VenueID"
+        FROM first_showtime
+        WHERE "VenueID" IS NOT NULL
+      ) fv ON fv."VenueID" = seats."VenueID"
+      GROUP BY seats."VenueID"
+    ),
+    active_booked_first_showtime AS (
+      SELECT
+        bd."ShowtimeID",
+        COUNT(bd."SeatID")::int AS "BookedCount"
+      FROM "BookingDetails" bd
+      JOIN first_showtime fs ON fs."ShowtimeID" = bd."ShowtimeID"
+      JOIN "Bookings" b ON b."BookingID" = bd."BookingID"
+      JOIN "BookingStatuses" bs ON bs."StatusID" = b."StatusID"
+      WHERE
+        bs."StatusName" = 'Completed'
+        OR (
+          bs."StatusName" = 'Pending'
+          AND b."ExpiresAt" > $${nowParamIndex}
+        )
+      GROUP BY bd."ShowtimeID"
+    )
+    SELECT
+      pe."EventID" AS "id",
+      pe."Title" AS "title",
+      pe."Description" AS "description",
+      COALESCE(pe."CategoryName", 'Uncategorized') AS "category",
+      pe."CategoryID" AS "categoryId",
+      COALESCE(fs."BasePrice", 0) AS "basePrice",
+      COALESCE(fs."VenueName", '-') AS "venue",
+      fs."VenueID" AS "venueId",
+      COALESCE(vc."TotalSeats", 0) AS "totalSeats",
+      COALESCE(vc."TotalSeats", 0) - COALESCE(ab."BookedCount", 0) AS "seatsRemaining",
+      fs."StartDateTime" AS "startDateTime",
+      fs."ShowtimeID" AS "showtimeId",
+      CASE
+        WHEN pe."LatestShowtime" IS NULL THEN false
+        ELSE pe."LatestShowtime" < $${nowParamIndex}
+      END AS "isPast",
+      bef."EventID" IS NOT NULL AS "hasBookings",
+      pe."LatestShowtime" AS "latestShowtime"
+    FROM page_events pe
+    LEFT JOIN first_showtime fs ON fs."EventID" = pe."EventID"
+    LEFT JOIN booking_event_flags bef ON bef."EventID" = pe."EventID"
+    LEFT JOIN venue_capacity vc ON vc."VenueID" = fs."VenueID"
+    LEFT JOIN active_booked_first_showtime ab ON ab."ShowtimeID" = fs."ShowtimeID"
+    ORDER BY ${normalizeSort({ sortBy, sortOrder }).sortSql.replaceAll('pe.', 'pe.')} ${normalizeSort({ sortBy, sortOrder }).direction}, pe."EventID" ${normalizeSort({ sortBy, sortOrder }).direction}
+  `;
 }
 
 function mapEventListRows(rows) {
@@ -53,10 +249,11 @@ function mapEventListRows(rows) {
 }
 
 async function getEventList(db, options = {}) {
-  const { search, categoryId } = options;
+  const { search, category, categoryId, status, sortBy = 'eventId', sortOrder = 'desc' } = options;
   const now = options.now || new Date();
+  const page = parsePagination(options, { defaultPageSize: 12 });
   const canUseCache = !Object.prototype.hasOwnProperty.call(options, 'now') && EVENT_LIST_CACHE_TTL_MS > 0;
-  const cacheKey = getCacheKey({ search, categoryId });
+  const cacheKey = getCacheKey({ search, category, categoryId, status, sortBy, sortOrder, ...page });
 
   if (canUseCache) {
     const cached = eventListCache.get(cacheKey);
@@ -65,8 +262,79 @@ async function getEventList(db, options = {}) {
     }
   }
 
-  const { whereSql, params } = buildEventListWhere({ search, categoryId });
+  const { whereSql, params } = buildEventListWhere({ search, category, categoryId });
   const nowParamIndex = params.length + 1;
+
+  if (page.enabled) {
+    const wantsCursor = page.requestedMode === 'cursor';
+    const canUseCursor = wantsCursor && normalizeSort({ sortBy, sortOrder }).sortBy === 'eventId';
+    const pageSize = page.pageSize;
+    const offset = canUseCursor ? 0 : page.skip;
+    const limitParamIndex = nowParamIndex + 1;
+    const offsetParamIndex = nowParamIndex + 2;
+    const rows = await db.$queryRawUnsafe(
+      buildEventListSql({
+        whereSql,
+        params,
+        nowParamIndex,
+        status,
+        sortBy,
+        sortOrder,
+        limitParamIndex,
+        offsetParamIndex,
+        cursor: canUseCursor ? page.cursor : null,
+        direction: page.direction,
+        includePage: true
+      }),
+      ...params,
+      now,
+      pageSize + (canUseCursor ? 1 : 0),
+      offset
+    );
+    const countRows = await db.$queryRawUnsafe(
+      buildEventListSql({
+        whereSql,
+        params,
+        nowParamIndex,
+        status,
+        sortBy,
+        sortOrder,
+        limitParamIndex,
+        offsetParamIndex,
+        includePage: false,
+        countOnly: true
+      }),
+      ...params,
+      now
+    );
+    const total = Number(countRows[0]?.total || 0);
+    const mappedRows = mapEventListRows(rows);
+
+    if (canUseCursor) {
+      const pageRows = mappedRows.slice(0, pageSize);
+      const data = page.direction === 'prev' ? pageRows.reverse() : pageRows;
+      const first = data[0];
+      const last = data[data.length - 1];
+      const hasMore = mappedRows.length > pageSize;
+      return {
+        data,
+        pageSize,
+        total,
+        pagination: {
+          type: 'cursor',
+          nextCursor: last ? encodeCursor({ id: last.id, value: last.id }) : null,
+          prevCursor: first ? encodeCursor({ id: first.id, value: first.id }) : null,
+          hasNextPage: page.direction === 'prev' ? Boolean(page.cursor) : hasMore,
+          hasPrevPage: page.direction === 'prev' ? hasMore : Boolean(page.cursor)
+        }
+      };
+    }
+
+    return offsetPayload(mappedRows, total, page.page, pageSize, wantsCursor
+      ? { fallbackFrom: 'cursor', reason: 'Requested event sort requires offset pagination' }
+      : {});
+  }
+
   const sql = `
     WITH filtered_events AS MATERIALIZED (
       SELECT

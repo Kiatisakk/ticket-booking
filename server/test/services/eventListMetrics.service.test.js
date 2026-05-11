@@ -122,3 +122,50 @@ test('getEventList caches normal list calls until invalidated', async () => {
   await getEventList(db, {});
   assert.equal(queryCount, 2);
 });
+
+test('getEventList returns offset pagination payload when requested', async () => {
+  invalidateEventListCache();
+  const calls = [];
+  const db = {
+    $queryRawUnsafe: async (sql, ...params) => {
+      calls.push({ sql, params });
+      if (sql.includes('COUNT(*)')) return [{ total: 25 }];
+      return [
+        {
+          id: 10,
+          title: 'Concert',
+          description: 'Live',
+          category: 'Concert',
+          categoryId: 2,
+          basePrice: '1000',
+          venue: 'Arena',
+          venueId: 7,
+          totalSeats: 100,
+          seatsRemaining: 65,
+          startDateTime: new Date('2030-01-01T10:00:00Z'),
+          showtimeId: 50,
+          isPast: false,
+          hasBookings: true,
+          latestShowtime: new Date('2030-01-02T10:00:00Z')
+        }
+      ];
+    }
+  };
+
+  const payload = await getEventList(db, {
+    pagination: 'offset',
+    page: '2',
+    pageSize: '10',
+    status: 'upcoming',
+    now: new Date('2029-01-01T00:00:00Z')
+  });
+
+  assert.equal(calls.length, 2);
+  assert.match(calls[0].sql, /LIMIT \$2 OFFSET \$3/);
+  assert.match(calls[0].sql, /COALESCE\(eb\."LatestShowtime" >= \$1, true\)/);
+  assert.deepEqual(calls[0].params, [new Date('2029-01-01T00:00:00Z'), 10, 10]);
+  assert.equal(payload.pagination.type, 'offset');
+  assert.equal(payload.total, 25);
+  assert.equal(payload.totalPages, 3);
+  assert.equal(payload.data[0].id, 10);
+});

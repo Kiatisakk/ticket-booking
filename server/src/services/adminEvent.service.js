@@ -32,20 +32,7 @@ async function assertCategory(categoryId) {
   return parsedCategoryId;
 }
 
-async function mapShowtimeWithAvailability(showtime) {
-  const now = new Date();
-  const capacity = await prisma.seat.count({ where: { VenueID: showtime.VenueID } });
-  const booked = await prisma.bookingDetail.count({
-    where: {
-      ShowtimeID: showtime.ShowtimeID,
-      Booking: {
-        OR: [
-          { Status: { StatusName: 'Completed' } },
-          { Status: { StatusName: 'Pending' }, ExpiresAt: { gt: now } }
-        ]
-      }
-    }
-  });
+function mapShowtimeWithAvailability(showtime, { capacity = 0, booked = 0 } = {}) {
 
   return {
     id: showtime.ShowtimeID,
@@ -71,15 +58,55 @@ function createShowtimeData(eventId, showtime) {
 }
 
 async function deleteShowtimesWithoutBookings(deletedShowtimeIds = []) {
-  for (const showtimeId of deletedShowtimeIds) {
-    const parsedShowtimeId = parseId(showtimeId);
-    if (!parsedShowtimeId) continue;
+  const showtimeIds = deletedShowtimeIds.map(parseId).filter(Boolean);
+  if (showtimeIds.length === 0) return;
 
-    const hasBookings = await prisma.bookingDetail.count({ where: { ShowtimeID: parsedShowtimeId } });
-    if (hasBookings === 0) {
-      await prisma.showtime.delete({ where: { ShowtimeID: parsedShowtimeId } });
-    }
+  const bookedRows = await prisma.bookingDetail.groupBy({
+    by: ['ShowtimeID'],
+    where: { ShowtimeID: { in: showtimeIds } },
+    _count: { ShowtimeID: true }
+  });
+  const bookedShowtimeIds = new Set(bookedRows.map(row => row.ShowtimeID));
+  const deletableIds = showtimeIds.filter(showtimeId => !bookedShowtimeIds.has(showtimeId));
+
+  if (deletableIds.length > 0) {
+    await prisma.showtime.deleteMany({ where: { ShowtimeID: { in: deletableIds } } });
   }
+}
+
+async function getShowtimeAvailability(showtimes, db = prisma) {
+  const venueIds = [...new Set(showtimes.map(showtime => showtime.VenueID).filter(Boolean))];
+  const showtimeIds = showtimes.map(showtime => showtime.ShowtimeID);
+
+  const [capacityRows, bookedRows] = await Promise.all([
+    venueIds.length
+      ? db.seat.groupBy({
+          by: ['VenueID'],
+          where: { VenueID: { in: venueIds } },
+          _count: { SeatID: true }
+        })
+      : [],
+    showtimeIds.length
+      ? db.bookingDetail.groupBy({
+          by: ['ShowtimeID'],
+          where: {
+            ShowtimeID: { in: showtimeIds },
+            Booking: {
+              OR: [
+                { Status: { StatusName: 'Completed' } },
+                { Status: { StatusName: 'Pending' }, ExpiresAt: { gt: new Date() } }
+              ]
+            }
+          },
+          _count: { SeatID: true }
+        })
+      : []
+  ]);
+
+  return {
+    capacityByVenue: new Map(capacityRows.map(row => [row.VenueID, row._count.SeatID])),
+    bookedByShowtime: new Map(bookedRows.map(row => [row.ShowtimeID, row._count.SeatID]))
+  };
 }
 
 async function upsertShowtimes(eventId, showtimes = []) {
@@ -102,8 +129,20 @@ async function upsertShowtimes(eventId, showtimes = []) {
 function createAdminEventService(db = prisma) {
   return {
     list(query = {}) {
-      const { search, categoryId } = query;
-      return getEventList(db, { search, categoryId });
+      const { search, category, categoryId, status, sortBy, sortOrder, pagination, cursor, direction, page, pageSize } = query;
+      return getEventList(db, {
+        search,
+        category,
+        categoryId,
+        status,
+        sortBy,
+        sortOrder,
+        pagination,
+        cursor,
+        direction,
+        page,
+        pageSize
+      });
     },
 
     async getById(eventId, { audience = 'admin' } = {}) {
@@ -120,7 +159,11 @@ function createAdminEventService(db = prisma) {
 
       if (!event) throw new HttpError(404, 'Event not found');
 
-      const showtimes = await Promise.all(event.Showtimes.map(mapShowtimeWithAvailability));
+      const availability = await getShowtimeAvailability(event.Showtimes, db);
+      const showtimes = event.Showtimes.map(showtime => mapShowtimeWithAvailability(showtime, {
+        capacity: availability.capacityByVenue.get(showtime.VenueID) || 0,
+        booked: availability.bookedByShowtime.get(showtime.ShowtimeID) || 0
+      }));
 
       if (audience === 'staff') {
         return {
