@@ -235,6 +235,45 @@
   padding: 11px 12px;
 }
 
+.rp-lov-panel {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.rp-lov-option {
+  align-items: center;
+  background: #1a1e27;
+  border: 1px solid rgba(255,255,255,0.09);
+  border-radius: 10px;
+  color: #cbd5e1;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 700;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 10px;
+}
+
+.rp-lov-option input {
+  accent-color: #6366f1;
+}
+
+.rp-retention-grid {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+  height: 430px;
+}
+
+.rp-retention-panel {
+  min-width: 0;
+  min-height: 0;
+  position: relative;
+}
+
 .rp-table-wrap {
   width: 100%;
   max-width: 100%;

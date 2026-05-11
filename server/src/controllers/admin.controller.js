@@ -1086,6 +1086,39 @@ function monthLabels(months) {
 
 // ─── Report KPI ───────────────────────────────────────────────────────────────
 
+function getTimeBucketConfig(start, end) {
+  const days = Math.max(1, (end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000));
+  if (days <= 2) return { grain: 'hour', label: 'Hourly' };
+  if (days <= 120) return { grain: 'day', label: 'Daily' };
+  return { grain: 'month', label: 'Monthly' };
+}
+
+function formatTimeBucket(date, grain) {
+  const year = date.getUTCFullYear();
+  const month = date.getUTCMonth();
+  const day = date.getUTCDate();
+  const hour = date.getUTCHours();
+
+  if (grain === 'hour') {
+    return {
+      key: `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(hour).padStart(2, '0')}`,
+      label: `${MONTHS_LABEL[month]} ${day} ${String(hour).padStart(2, '0')}:00`
+    };
+  }
+
+  if (grain === 'day') {
+    return {
+      key: `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
+      label: `${MONTHS_LABEL[month]} ${day}`
+    };
+  }
+
+  return {
+    key: `${year}-${String(month + 1).padStart(2, '0')}`,
+    label: `${MONTHS_LABEL[month]}'${String(year).slice(2)}`
+  };
+}
+
 exports.getReportKpi = async (req, res) => {
   try {
     const { category, venueId } = req.query;
@@ -1270,7 +1303,11 @@ exports.getRevenueByVenue = async (req, res) => {
       ORDER BY yr, month
     `;
 
-    const venueNames = [...new Set(rows.map(r => r.venue))].sort();
+    const allVenues = await prisma.venue.findMany({
+      select: { VenueName: true },
+      orderBy: { VenueName: 'asc' }
+    });
+    const venueNames = allVenues.map(venue => venue.VenueName);
     const labels = monthLabels(months);
 
     const datasets = {};
@@ -1296,9 +1333,11 @@ exports.getBookingsByHour = async (req, res) => {
     const { category } = req.query;
     const { start, end } = getDateRange(req.query);
     const catFilter = category && category !== 'all' ? category : null;
+    const bucketConfig = getTimeBucketConfig(start, end);
+    const truncUnit = bucketConfig.grain;
 
     const rows = await prisma.$queryRaw`
-      SELECT EXTRACT(HOUR FROM p."PaidAt")::int as hour,
+      SELECT date_trunc(${truncUnit}, p."PaidAt") as bucket,
              COUNT(DISTINCT p."PaymentID")::int as count
       FROM "Payments" p
       JOIN "Bookings" b ON p."BookingID" = b."BookingID"
@@ -1310,19 +1349,14 @@ exports.getBookingsByHour = async (req, res) => {
         AND p."PaidAt" >= ${start}
         AND p."PaidAt" <  ${end}
         AND (${catFilter}::text IS NULL OR ec."CategoryName" = ${catFilter})
-      GROUP BY hour
-      ORDER BY hour
+      GROUP BY bucket
+      ORDER BY bucket
     `;
 
-    const labels = [];
-    const data   = [];
-    for (let h = 0; h < 24; h++) {
-      labels.push(String(h).padStart(2, '0'));
-      const found = rows.find(r => r.hour === h);
-      data.push(Number(found?.count ?? 0));
-    }
+    const labels = rows.map(row => formatTimeBucket(new Date(row.bucket), bucketConfig.grain).label);
+    const data = rows.map(row => Number(row.count || 0));
 
-    res.json({ labels, data });
+    res.json({ labels, data, granularity: bucketConfig.label });
   } catch (error) {
     console.error('getBookingsByHour error:', error);
     res.status(500).json({ error: 'Failed to fetch bookings by hour' });
@@ -1429,14 +1463,19 @@ exports.getBookingVsCapacity = async (req, res) => {
         ? new Date(st.StartDateTime).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
         : '';
 
+      const timeStr = st.StartDateTime
+        ? new Date(st.StartDateTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+        : '';
+      const venueName = st.Venue?.VenueName || 'Unknown';
+
       return {
-        label:    `${st.Event?.Title ?? 'Unknown'} - ${dateStr}`,
+        label: `${st.Event?.Title ?? 'Unknown'} - ${dateStr} ${timeStr} - ${venueName}`,
         capacity,
         sold,
         remaining: Math.max(capacity - sold, 0),
         occupancyRatePct,
         status,
-        venue: st.Venue?.VenueName || 'Unknown'
+        venue: venueName
       };
     }));
 
@@ -1579,8 +1618,8 @@ exports.getCustomerRetention = async (req, res) => {
       };
     }
 
-    const repeat  = result['Repeat Customers']?.revenue ?? 0;
-    const oneTime = result['One-time Customers']?.revenue ?? 0;
+    const repeat  = result['Repeat Customers']?.users ?? 0;
+    const oneTime = result['One-time Customers']?.users ?? 0;
     const total   = repeat + oneTime;
 
     res.json({
@@ -1645,13 +1684,11 @@ exports.getInterestByCategory = async (req, res) => {
 exports.getPeakShowtimeHours = async (req, res) => {
   try {
     const { category } = req.query;
-    const { start, end, months } = getDateRange(req.query);
+    const { start, end } = getDateRange(req.query);
     const catFilter = category && category !== 'all' ? category : null;
 
     const rows = await prisma.$queryRaw`
       SELECT ec."CategoryName" as category,
-             EXTRACT(YEAR FROM s."StartDateTime")::int as yr,
-             EXTRACT(MONTH FROM s."StartDateTime")::int as month,
              EXTRACT(HOUR FROM s."StartDateTime")::int as hour,
              COUNT(t."TicketID")::int as tickets
       FROM "Tickets" t
@@ -1662,27 +1699,29 @@ exports.getPeakShowtimeHours = async (req, res) => {
       WHERE s."StartDateTime" >= ${start}
         AND s."StartDateTime" <  ${end}
         AND (${catFilter}::text IS NULL OR ec."CategoryName" = ${catFilter})
-      GROUP BY ec."CategoryName", EXTRACT(YEAR FROM s."StartDateTime"), EXTRACT(MONTH FROM s."StartDateTime"), EXTRACT(HOUR FROM s."StartDateTime")
-      ORDER BY yr, month, hour
+      GROUP BY ec."CategoryName", EXTRACT(HOUR FROM s."StartDateTime")
+      ORDER BY hour
     `;
 
-    const labels = monthLabels(months);
+    const activeHours = [...new Set(rows.map(row => Number(row.hour)))]
+      .filter(hour => Number.isFinite(hour))
+      .sort((a, b) => a - b);
+    const labels = activeHours.map(hour => `${String(hour).padStart(2, '0')}:00`);
     const datasets = { Concert: [], Movie: [], Seminar: [] };
     const detailRows = [];
 
-    for (const [monthIndex, { year, month }] of months.entries()) {
-      for (const cat of Object.keys(datasets)) {
-        const candidates = rows.filter(r => r.category === cat && r.yr === year && r.month === month);
-        const peak = candidates.sort((a, b) => Number(b.tickets) - Number(a.tickets))[0];
-        const peakHour = peak ? Number(peak.hour) : null;
-        const tickets = peak ? Number(peak.tickets) : 0;
-        datasets[cat].push(peakHour);
-        detailRows.push({
-          month: labels[monthIndex],
-          category: cat,
-          peakHour: peakHour === null ? '-' : `${String(peakHour).padStart(2, '0')}:00`,
-          tickets
-        });
+    for (const cat of Object.keys(datasets)) {
+      for (const hour of activeHours) {
+        const found = rows.find(r => r.category === cat && Number(r.hour) === hour);
+        const tickets = Number(found?.tickets ?? 0);
+        datasets[cat].push(tickets);
+        if (tickets > 0) {
+          detailRows.push({
+            hour: `${String(hour).padStart(2, '0')}:00`,
+            category: cat,
+            tickets
+          });
+        }
       }
     }
 

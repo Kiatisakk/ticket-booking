@@ -4,8 +4,8 @@ export const REPORTS = [
     no: 1,
     title: 'Revenue by Category',
     endpoint: 'revenue-by-category',
-    chart: 'bar',
-    description: 'Monthly revenue split by event category.',
+    chart: 'line',
+    description: 'Monthly revenue trend by event category.',
     filters: ['date', 'category']
   },
   {
@@ -41,8 +41,8 @@ export const REPORTS = [
     no: 5,
     title: 'Bookings by Hour',
     endpoint: 'bookings-by-hour',
-    chart: 'bar',
-    description: 'Booking volume by hour of day.',
+    chart: 'line',
+    description: 'Chronological booking volume by date and hour.',
     filters: ['date', 'category']
   },
   {
@@ -66,7 +66,7 @@ export const REPORTS = [
   {
     id: 'seat-type-revenue',
     no: 8,
-    title: 'Seat Type Velocity',
+    title: 'Seat Type Velocity & Pricing Optimization',
     endpoint: 'seat-type-revenue',
     chart: 'bar',
     description: 'Sell-out speed by seat type before showtime.',
@@ -78,7 +78,7 @@ export const REPORTS = [
     title: 'Customer Retention',
     endpoint: 'customer-retention',
     chart: 'doughnut',
-    description: 'Revenue contribution from repeat vs one-time customers.',
+    description: 'User count comparison between repeat and one-time customers.',
     filters: ['date', 'category']
   },
   {
@@ -93,10 +93,10 @@ export const REPORTS = [
   {
     id: 'peak-showtime-hours',
     no: 11,
-    title: 'Peak Showtime Hours',
+    title: 'Bookings by Hour (By Category)',
     endpoint: 'peak-showtime-hours',
     chart: 'bar',
-    description: 'Monthly peak showtime hour by category.',
+    description: 'Ticket sales by showtime hour and category.',
     filters: ['date', 'category']
   },
   {

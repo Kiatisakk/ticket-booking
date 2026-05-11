@@ -76,7 +76,6 @@ const CATEGORY_COLORS = {
 };
 
 const LINE_COLORS = ['#6366f1', '#22c55e', '#f59e0b', '#ec4899', '#14b8a6', '#94a3b8'];
-const SEAT_COLORS = ['rgba(168,85,247,0.85)', 'rgba(99,102,241,0.85)', 'rgba(20,184,166,0.85)', 'rgba(245,158,11,0.85)'];
 
 const BAR_CHART_OPTIONS = {
   ...CHART_DEFAULTS,
@@ -110,6 +109,59 @@ const ZERO_VALUE_PLUGIN = {
         if (Number(dataset.data?.[valueIndex]) !== 0) return;
         ctx.fillText('0', bar.x, bar.y - 4);
       });
+    });
+
+    ctx.restore();
+  }
+};
+
+const BAR_VALUE_LABELS_PLUGIN = {
+  id: 'barValueLabels',
+  afterDatasetsDraw(chart) {
+    const { ctx, data } = chart;
+
+    ctx.save();
+    ctx.fillStyle = '#cbd5e1';
+    ctx.font = '700 10px DM Sans';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+
+    data.datasets.forEach((dataset, datasetIndex) => {
+      if (dataset.type === 'line') return;
+      const meta = chart.getDatasetMeta(datasetIndex);
+      if (meta.hidden) return;
+
+      meta.data.forEach((bar, valueIndex) => {
+        const value = Number(dataset.data?.[valueIndex] || 0);
+        if (!Number.isFinite(value) || value === 0) return;
+        ctx.fillText(value.toLocaleString(), bar.x, bar.y - 5);
+      });
+    });
+
+    ctx.restore();
+  }
+};
+
+const DOUGHNUT_PERCENT_LABELS_PLUGIN = {
+  id: 'doughnutPercentLabels',
+  afterDatasetsDraw(chart) {
+    const { ctx, data } = chart;
+    const values = data.datasets[0]?.data || [];
+    const total = values.reduce((sum, value) => sum + Number(value || 0), 0);
+    if (!total) return;
+
+    ctx.save();
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '800 12px DM Sans';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    const meta = chart.getDatasetMeta(0);
+    meta.data.forEach((arc, index) => {
+      const value = Number(values[index] || 0);
+      if (!value) return;
+      const point = arc.tooltipPosition();
+      ctx.fillText(`${((value / total) * 100).toFixed(1)}%`, point.x, point.y);
     });
 
     ctx.restore();
@@ -157,14 +209,6 @@ function scaleRatio(value, minValue, maxValue) {
   return clamp((value - minValue) / (maxValue - minValue));
 }
 
-function rgbFromString(rgb) {
-  return rgb.split(',').map(part => Number(part.trim()));
-}
-
-function rgbaFromTone(rgb, alpha) {
-  return `rgba(${rgb},${alpha.toFixed(2)})`;
-}
-
 const VIRIDIS_STOPS = [
   [68, 1, 84],
   [59, 82, 139],
@@ -180,6 +224,13 @@ const SEAT_HEATMAP_STOPS = [
   [249, 115, 22],
   [220, 38, 38],
   [127, 29, 29]
+];
+
+const CANCELLATION_HEATMAP_STOPS = [
+  [22, 163, 74],
+  [250, 204, 21],
+  [249, 115, 22],
+  [220, 38, 38]
 ];
 
 function interpolateColorStops(stops, ratio) {
@@ -207,6 +258,22 @@ function seatHeatmapColor(ratio, value) {
   }
 
   const rgb = interpolateColorStops(SEAT_HEATMAP_STOPS, ratio);
+  const luminance = (0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2]) / 255;
+  return {
+    background: `rgb(${rgb.join(',')})`,
+    color: luminance > 0.58 ? '#111827' : '#f8fafc'
+  };
+}
+
+function cancellationHeatmapColor(ratio, value, isMissing) {
+  if (isMissing) {
+    return {
+      background: 'rgba(255,255,255,0.035)',
+      color: '#64748b'
+    };
+  }
+
+  const rgb = interpolateColorStops(CANCELLATION_HEATMAP_STOPS, value <= 0 ? 0 : ratio);
   const luminance = (0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2]) / 255;
   return {
     background: `rgb(${rgb.join(',')})`,
@@ -255,6 +322,17 @@ function barDatasets(datasets = {}) {
   }));
 }
 
+function getTickStep(values = []) {
+  const maxValue = Math.max(...values.map(value => Number(value || 0)), 0);
+  if (maxValue <= 10) return 1;
+
+  const roughStep = maxValue / 5;
+  const magnitude = 10 ** Math.floor(Math.log10(roughStep));
+  const normalized = roughStep / magnitude;
+  const multiplier = normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10;
+  return multiplier * magnitude;
+}
+
 function SeatHeatmap({ data }) {
   if (!data?.rows?.length || !data?.cols?.length) return <NoData />;
 
@@ -297,25 +375,16 @@ function SeatHeatmap({ data }) {
   );
 }
 
-const HEATMAP_TONES = {
-  red: { base: '239,68,68', text: '#fecaca' },
-  orange: { base: '245,158,11', text: '#fde68a' },
-  green: { base: '20,184,166', text: '#99f6e4' },
-  purple: { base: '139,92,246', text: '#ddd6fe' }
-};
-
 function CancellationHeatmapGrid({ heatmap }) {
   if (!heatmap?.rows?.length || !heatmap?.cols?.length) return <NoData />;
 
-  const tone = HEATMAP_TONES[heatmap.tone] || HEATMAP_TONES.red;
-  const [r, g, b] = rgbFromString(tone.base);
   const nonZeroValues = flattenNumericValues(heatmap.data, { includeZero: false });
   const allValues = flattenNumericValues(heatmap.data);
   const minNonZero = nonZeroValues.length ? Math.min(...nonZeroValues) : 0;
   const maxValue = nonZeroValues.length ? Math.max(...nonZeroValues) : 0;
   const legendMin = nonZeroValues.length ? minNonZero : (allValues.length ? Math.min(...allValues) : 0);
   const legendMax = maxValue || (allValues.length ? Math.max(...allValues) : 0);
-  const legendGradient = `linear-gradient(90deg, rgba(${r},${g},${b},0.20), rgba(${r},${g},${b},1))`;
+  const legendGradient = `linear-gradient(90deg, ${CANCELLATION_HEATMAP_STOPS.map(rgb => `rgb(${rgb.join(',')})`).join(', ')})`;
 
   return (
     <div className="rp-cancel-heatmap">
@@ -342,12 +411,12 @@ function CancellationHeatmapGrid({ heatmap }) {
               const isMissing = rawValue === null || rawValue === undefined;
               const value = Number(rawValue || 0);
               const ratio = value > 0 ? scaleRatio(value, minNonZero, maxValue) : 0;
-              const alpha = isMissing ? 0 : value === 0 ? 0.2 : 0.2 + ratio * 0.8;
+              const color = cancellationHeatmapColor(ratio, value, isMissing);
               return (
                 <div
                   key={`${row}-${col}`}
                   className={`rp-cancel-cell${isMissing ? ' missing' : ''}`}
-                  style={{ background: isMissing ? 'rgba(255,255,255,0.035)' : rgbaFromTone(tone.base, alpha), color: value > 0 ? '#fff' : tone.text }}
+                  style={color}
                   title={`${row} / ${col}: ${isMissing ? 'N/A' : formatPercent(value)}`}
                 >
                   {isMissing ? '-' : formatPercent(value)}
@@ -378,7 +447,7 @@ function datasetForSelection(datasets, selectedKey) {
   return { [selectedKey]: datasets?.[selectedKey] || [] };
 }
 
-function buildChart(report, data, selectedCategory = 'all') {
+function buildChart(report, data, selectedCategory = 'all', selectedVenueSeries = []) {
   if (!data) return null;
 
   if (report.id === 'revenue-by-category') {
@@ -388,11 +457,17 @@ function buildChart(report, data, selectedCategory = 'all') {
     return {
       chartData: {
         labels: data.labels,
-        datasets: barDatasets(datasets)
+        datasets: datasetEntries(datasets).map((dataset, index) => ({
+          ...dataset,
+          backgroundColor: 'rgba(99,102,241,0.10)',
+          borderColor: CATEGORY_COLORS[dataset.label]?.replace(/0\.\d+\)/, '1)') || LINE_COLORS[index % LINE_COLORS.length],
+          fill: false,
+          pointRadius: 4,
+          tension: 0
+        }))
       },
-      options: BAR_CHART_OPTIONS,
-      plugins: [ZERO_VALUE_PLUGIN],
-      Component: Bar
+      options: CHART_DEFAULTS,
+      Component: Line
     };
   }
 
@@ -405,23 +480,7 @@ function buildChart(report, data, selectedCategory = 'all') {
         labels: data.labels,
         datasets: barDatasets(datasets)
       },
-      options: {
-        ...BAR_CHART_OPTIONS,
-        scales: {
-          ...BAR_CHART_OPTIONS.scales,
-          y: {
-            ...BAR_CHART_OPTIONS.scales.y,
-            min: 0,
-            max: 23,
-            ticks: {
-              color: '#64748b',
-              font: { family: 'DM Sans', size: 11 },
-              callback: value => `${String(value).padStart(2, '0')}:00`
-            }
-          }
-        }
-      },
-      plugins: [ZERO_VALUE_PLUGIN],
+      options: BAR_CHART_OPTIONS,
       Component: Bar
     };
   }
@@ -433,12 +492,47 @@ function buildChart(report, data, selectedCategory = 'all') {
     return {
       chartData: {
         labels: rows.map(row => row.seatType),
-        datasets: barDatasets({
-          'Total Revenue': rows.map(row => Number(row.totalRevenue || 0))
-        })
+        datasets: [
+          {
+            label: 'Total Revenue (THB)',
+            data: rows.map(row => Number(row.totalRevenue || 0)),
+            backgroundColor: 'rgba(99,102,241,0.82)',
+            borderColor: '#6366f1',
+            borderRadius: 7,
+            barPercentage: 0.82,
+            categoryPercentage: 0.68,
+            yAxisID: 'y'
+          },
+          {
+            type: 'line',
+            label: 'Days in Advance',
+            data: rows.map(row => Number(row.avgDaysInAdvance || 0)),
+            borderColor: '#f59e0b',
+            backgroundColor: 'rgba(245,158,11,0.18)',
+            pointBackgroundColor: '#f59e0b',
+            pointRadius: 4,
+            tension: 0.35,
+            yAxisID: 'y1'
+          }
+        ]
       },
-      options: BAR_CHART_OPTIONS,
-      plugins: [ZERO_VALUE_PLUGIN],
+      options: {
+        ...BAR_CHART_OPTIONS,
+        scales: {
+          ...BAR_CHART_OPTIONS.scales,
+          y: {
+            ...BAR_CHART_OPTIONS.scales.y,
+            position: 'left',
+            title: { display: true, text: 'Total Revenue (THB)', color: '#94a3b8' }
+          },
+          y1: {
+            ...BAR_CHART_OPTIONS.scales.y,
+            position: 'right',
+            grid: { drawOnChartArea: false },
+            title: { display: true, text: 'Days in Advance', color: '#94a3b8' }
+          }
+        }
+      },
       Component: Bar
     };
   }
@@ -468,8 +562,8 @@ function buildChart(report, data, selectedCategory = 'all') {
           data: data.data,
           borderColor: '#6366f1',
           backgroundColor: 'rgba(99,102,241,0.14)',
-          fill: true,
-          tension: 0.4,
+          fill: false,
+          tension: 0,
           pointRadius: 4
         }]
       },
@@ -482,7 +576,11 @@ function buildChart(report, data, selectedCategory = 'all') {
     if (!data.labels || !data.datasets) return null;
     const datasets = report.id === 'interest-by-category'
       ? datasetForSelection(data.datasets, selectedCategory)
-      : data.datasets;
+      : Object.fromEntries(
+        Object.entries(data.datasets).filter(([venue]) =>
+          !selectedVenueSeries.length || selectedVenueSeries.includes(venue)
+        )
+      );
 
     return {
       chartData: {
@@ -491,7 +589,8 @@ function buildChart(report, data, selectedCategory = 'all') {
           ...dataset,
           backgroundColor: 'transparent',
           borderColor: LINE_COLORS[index % LINE_COLORS.length],
-          fill: report.id === 'interest-by-category'
+          fill: false,
+          tension: 0
         }))
       },
       options: CHART_DEFAULTS,
@@ -507,21 +606,21 @@ function buildChart(report, data, selectedCategory = 'all') {
         datasets: [{
           label: 'Bookings',
           data: data.data,
-          backgroundColor: 'rgba(99,102,241,0.82)',
-          borderRadius: 7,
-          barPercentage: 0.9,
-          categoryPercentage: 0.72,
-          minBarLength: 2
+          borderColor: '#6366f1',
+          backgroundColor: 'rgba(99,102,241,0.14)',
+          fill: false,
+          tension: 0,
+          pointRadius: 2
         }]
       },
-      options: { ...BAR_CHART_OPTIONS, plugins: { ...BAR_CHART_OPTIONS.plugins, legend: { display: false } } },
-      plugins: [ZERO_VALUE_PLUGIN],
-      Component: Bar
+      options: { ...CHART_DEFAULTS, plugins: { ...CHART_DEFAULTS.plugins, legend: { display: false } } },
+      Component: Line
     };
   }
 
   if (report.id === 'booking-vs-capacity') {
     if (!Array.isArray(data)) return null;
+    const tickStep = getTickStep(data.flatMap(item => [item.capacity, item.sold]));
     return {
       chartData: {
         labels: data.map(item => item.label),
@@ -530,7 +629,22 @@ function buildChart(report, data, selectedCategory = 'all') {
           { label: 'Sold', data: data.map(item => item.sold), backgroundColor: 'rgba(99,102,241,0.82)', borderRadius: 7, barPercentage: 0.9, categoryPercentage: 0.72, minBarLength: 2 }
         ]
       },
-      options: { ...BAR_CHART_OPTIONS, indexAxis: 'y' },
+      options: {
+        ...BAR_CHART_OPTIONS,
+        indexAxis: 'y',
+        scales: {
+          ...BAR_CHART_OPTIONS.scales,
+          x: {
+            ...BAR_CHART_OPTIONS.scales.x,
+            beginAtZero: true,
+            ticks: {
+              ...BAR_CHART_OPTIONS.scales.x.ticks,
+              stepSize: tickStep,
+              maxTicksLimit: 7
+            }
+          }
+        }
+      },
       plugins: [ZERO_VALUE_PLUGIN],
       Component: Bar
     };
@@ -538,21 +652,48 @@ function buildChart(report, data, selectedCategory = 'all') {
 
   if (report.id === 'customer-retention') {
     if (!data.labels || !data.data) return null;
+    const colors = ['rgba(99,102,241,0.85)', 'rgba(20,184,166,0.85)'];
     return {
-      chartData: {
+      barData: {
+        labels: data.labels,
+        datasets: [{
+          label: 'Users',
+          data: data.data,
+          backgroundColor: colors,
+          borderRadius: 7,
+          barPercentage: 0.72,
+          categoryPercentage: 0.62
+        }]
+      },
+      doughnutData: {
         labels: data.labels,
         datasets: [{
           data: data.data,
-          backgroundColor: SEAT_COLORS.slice(0, data.labels?.length || 0),
+          backgroundColor: colors.slice(0, data.labels?.length || 0),
           borderWidth: 0
         }]
       },
       options: DOUGHNUT_OPTIONS,
+      barOptions: { ...BAR_CHART_OPTIONS, plugins: { ...BAR_CHART_OPTIONS.plugins, legend: { display: false } } },
+      plugins: [DOUGHNUT_PERCENT_LABELS_PLUGIN],
       Component: Doughnut
     };
   }
 
   return null;
+}
+
+function CustomerRetentionCharts({ chart }) {
+  return (
+    <div className="rp-retention-grid">
+      <div className="rp-retention-panel">
+        <Bar data={chart.barData} options={chart.barOptions} plugins={[BAR_VALUE_LABELS_PLUGIN]} />
+      </div>
+      <div className="rp-retention-panel">
+        <Doughnut data={chart.doughnutData} options={chart.options} plugins={chart.plugins || []} />
+      </div>
+    </div>
+  );
 }
 
 function buildReportTable(report, data) {
@@ -600,23 +741,22 @@ function buildReportTable(report, data) {
 
   if (report.id === 'customer-retention') {
     return {
-      columns: ['Customer Segment', 'Revenue Contribution', 'Users', 'Bookings'],
+      columns: ['Customer Segment', 'Users', 'Bookings', 'Revenue Contribution'],
       rows: (data.rows || []).map(row => [
         row.segment,
-        formatMoney(row.revenue),
         row.users,
-        row.bookings
+        row.bookings,
+        formatMoney(row.revenue)
       ])
     };
   }
 
   if (report.id === 'peak-showtime-hours') {
     return {
-      columns: ['Month', 'Category', 'Peak Hour', 'Tickets Sold'],
+      columns: ['Hour', 'Category', 'Tickets Sold'],
       rows: (data.rows || []).map(row => [
-        row.month,
+        row.hour,
         row.category,
-        row.peakHour,
         row.tickets
       ])
     };
@@ -720,6 +860,7 @@ function Reports() {
   const [error, setError] = useState('');
   const [viewMode, setViewMode] = useState('table');
   const [selectedHeatmapType, setSelectedHeatmapType] = useState('venue-seat-type');
+  const [selectedVenueSeries, setSelectedVenueSeries] = useState([]);
 
   const normalizedReportId = normalizeReportId(reportId);
   const selectedReport = getReportById(normalizedReportId);
@@ -728,9 +869,13 @@ function Reports() {
   const hasCategoryFilter = selectedReport.filters.includes('category');
   const hasVenueFilter = selectedReport.filters.includes('venue');
   const isTableOnlyReport = selectedReport.chart === 'tableOnly';
+  const venueSeriesOptions = useMemo(
+    () => selectedReport.id === 'revenue-by-venue' ? Object.keys(reportData?.datasets || {}) : [],
+    [selectedReport.id, reportData]
+  );
   const chart = useMemo(
-    () => buildChart(selectedReport, reportData, selectedCategory),
-    [selectedReport, reportData, selectedCategory]
+    () => buildChart(selectedReport, reportData, selectedCategory, selectedVenueSeries),
+    [selectedReport, reportData, selectedCategory, selectedVenueSeries]
   );
   const ChartComponent = chart?.Component;
   const dateRangeLabel = hasDateFilter ? `${startDate} to ${endDate}` : 'Full historical range';
@@ -759,6 +904,18 @@ function Reports() {
         setVenues([]);
       });
   }, [hasVenueFilter, selectedReport.requireVenue, selectedVenueId]);
+
+  useEffect(() => {
+    if (selectedReport.id !== 'revenue-by-venue') {
+      setSelectedVenueSeries([]);
+      return;
+    }
+
+    setSelectedVenueSeries(current => {
+      const valid = current.filter(venue => venueSeriesOptions.includes(venue));
+      return valid.length ? valid : venueSeriesOptions;
+    });
+  }, [selectedReport.id, venueSeriesOptions]);
 
   useEffect(() => {
     const token = localStorage.getItem('adminToken');
@@ -913,6 +1070,25 @@ function Reports() {
           </label>
         )}
 
+        {!loading && viewMode === 'visualization' && selectedReport.id === 'revenue-by-venue' && venueSeriesOptions.length > 0 && (
+          <div className="rp-lov-panel" aria-label="Venue series filter">
+            {venueSeriesOptions.map(venue => (
+              <label key={venue} className="rp-lov-option">
+                <input
+                  type="checkbox"
+                  checked={selectedVenueSeries.includes(venue)}
+                  onChange={event => {
+                    setSelectedVenueSeries(current => event.target.checked
+                      ? [...current, venue]
+                      : current.filter(item => item !== venue));
+                  }}
+                />
+                <span>{venue}</span>
+              </label>
+            ))}
+          </div>
+        )}
+
         <div className={`rp-visual ${selectedReport.chart.includes('Heatmap') ? 'heatmap' : ''}`}>
           {loading ? (
             <Spinner />
@@ -922,6 +1098,8 @@ function Reports() {
             <SeatHeatmap data={reportData} />
           ) : selectedReport.chart === 'cancellationHeatmap' ? (
             <CancellationHeatmaps data={reportData} selectedHeatmapKey={selectedHeatmapType} />
+          ) : selectedReport.id === 'customer-retention' && chart ? (
+            <CustomerRetentionCharts chart={chart} />
           ) : ChartComponent ? (
             <ChartComponent data={chart.chartData} options={chart.options} plugins={chart.plugins || []} />
           ) : (
