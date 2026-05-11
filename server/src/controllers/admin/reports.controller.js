@@ -48,39 +48,6 @@ function monthLabels(months) {
 
 // ─── Report KPI ───────────────────────────────────────────────────────────────
 
-function getTimeBucketConfig(start, end) {
-  const days = Math.max(1, (end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000));
-  if (days <= 2) return { grain: 'hour', label: 'Hourly' };
-  if (days <= 120) return { grain: 'day', label: 'Daily' };
-  return { grain: 'month', label: 'Monthly' };
-}
-
-function formatTimeBucket(date, grain) {
-  const year = date.getUTCFullYear();
-  const month = date.getUTCMonth();
-  const day = date.getUTCDate();
-  const hour = date.getUTCHours();
-
-  if (grain === 'hour') {
-    return {
-      key: `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(hour).padStart(2, '0')}`,
-      label: `${MONTHS_LABEL[month]} ${day} ${String(hour).padStart(2, '0')}:00`
-    };
-  }
-
-  if (grain === 'day') {
-    return {
-      key: `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
-      label: `${MONTHS_LABEL[month]} ${day}`
-    };
-  }
-
-  return {
-    key: `${year}-${String(month + 1).padStart(2, '0')}`,
-    label: `${MONTHS_LABEL[month]}'${String(year).slice(2)}`
-  };
-}
-
 exports.getReportKpi = asyncHandler(async (req, res) => {
     const { category, venueId } = req.query;
     const { start, end } = getDateRange(req.query);
@@ -268,17 +235,16 @@ exports.getRevenueByVenue = asyncHandler(async (req, res) => {
     res.json({ labels, datasets });
 });
 
-// ─── Report 5: Bookings by Hour ───────────────────────────────────────────────
+// ─── Report 5: Bookings by Month ──────────────────────────────────────────────
 
-exports.getBookingsByHour = asyncHandler(async (req, res) => {
+const getBookingsByMonth = asyncHandler(async (req, res) => {
     const { category } = req.query;
-    const { start, end } = getDateRange(req.query);
+    const { start, end, months } = getDateRange(req.query);
     const catFilter = category && category !== 'all' ? category : null;
-    const bucketConfig = getTimeBucketConfig(start, end);
-    const truncUnit = bucketConfig.grain;
 
     const rows = await prisma.$queryRaw`
-      SELECT date_trunc(${truncUnit}, p."PaidAt") as bucket,
+      SELECT EXTRACT(YEAR FROM p."PaidAt")::int as yr,
+             EXTRACT(MONTH FROM p."PaidAt")::int as month,
              COUNT(DISTINCT p."PaymentID")::int as count
       FROM "Payments" p
       JOIN "Bookings" b ON p."BookingID" = b."BookingID"
@@ -290,15 +256,29 @@ exports.getBookingsByHour = asyncHandler(async (req, res) => {
         AND p."PaidAt" >= ${start}
         AND p."PaidAt" <  ${end}
         AND (${catFilter}::text IS NULL OR ec."CategoryName" = ${catFilter})
-      GROUP BY bucket
-      ORDER BY bucket
+      GROUP BY yr, month
+      ORDER BY yr, month
     `;
 
-    const labels = rows.map(row => formatTimeBucket(new Date(row.bucket), bucketConfig.grain).label);
-    const data = rows.map(row => Number(row.count || 0));
+    const labels = monthLabels(months);
+    const data = months.map(({ year, month }) => {
+      const found = rows.find(row => Number(row.yr) === year && Number(row.month) === month);
+      return Number(found?.count || 0);
+    });
 
-    res.json({ labels, data, granularity: bucketConfig.label });
+    res.json({
+      labels,
+      data,
+      granularity: 'Monthly',
+      rows: labels.map((label, index) => ({
+        month: label,
+        bookings: data[index]
+      }))
+    });
 });
+
+exports.getBookingsByMonth = getBookingsByMonth;
+exports.getBookingsByHour = getBookingsByMonth;
 
 // ─── Report 6: Booking vs Capacity ───────────────────────────────────────────
 

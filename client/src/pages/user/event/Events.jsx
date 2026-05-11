@@ -43,6 +43,8 @@ function Events() {
   const navigate = useNavigate();
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
+  const [searchInput, setSearchInput] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [statusView, setStatusView] = useState('upcoming');
@@ -53,6 +55,17 @@ function Events() {
   const [cursor, setCursor] = useState(null);
   const [cursorDirection, setCursorDirection] = useState('next');
   const [cursorMeta, setCursorMeta] = useState({ hasNextPage: false, hasPrevPage: false, nextCursor: null, prevCursor: null });
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      setSearchTerm(searchInput.trim());
+      setPage(1);
+      setCursor(null);
+      setCursorDirection('next');
+    }, 300);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [searchInput]);
 
   useEffect(() => {
     let active = true;
@@ -84,7 +97,10 @@ function Events() {
       } catch (error) {
         console.error('Failed to fetch events:', error);
       } finally {
-        if (active) setLoading(false);
+        if (active) {
+          setHasLoaded(true);
+          setLoading(false);
+        }
       }
     }
 
@@ -141,7 +157,7 @@ function Events() {
     );
   };
 
-  if (loading) {
+  if (loading && !hasLoaded) {
     return <div className="events-page"><div className="loading">Loading events...</div></div>;
   }
 
@@ -195,13 +211,8 @@ function Events() {
           <input
             type="text"
             placeholder="🔍 Search events..."
-            value={searchTerm}
-            onChange={(e) => {
-              setSearchTerm(e.target.value);
-              setPage(1);
-              setCursor(null);
-              setCursorDirection('next');
-            }}
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
             className="search-input"
           />
 
@@ -229,6 +240,7 @@ function Events() {
             </h2>
             <span className="events-section-count">{totalRows} events</span>
           </div>
+          {loading && <div className="events-inline-loading">Refreshing events...</div>}
           {events.length === 0 ? (
             <div className="no-events"><p>{emptyMessage}</p></div>
           ) : (

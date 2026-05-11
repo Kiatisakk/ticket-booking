@@ -37,12 +37,12 @@ export const REPORTS = [
     filters: ['date', 'category']
   },
   {
-    id: 'bookings-by-hour',
+    id: 'bookings-by-month',
     no: 5,
-    title: 'Bookings by Hour',
-    endpoint: 'bookings-by-hour',
+    title: 'Bookings by Month',
+    endpoint: 'bookings-by-month',
     chart: 'line',
-    description: 'Chronological booking volume by date and hour.',
+    description: 'Monthly booking volume trend.',
     filters: ['date', 'category']
   },
   {
@@ -111,6 +111,7 @@ export const REPORTS = [
 ];
 
 const REPORT_ID_ALIASES = {
+  'bookings-by-hour': 'bookings-by-month',
   'boking-vs-capacity': 'booking-vs-capacity',
   'seat-type-velocity': 'seat-type-revenue',
   'failed-payment-rate': 'cancellation-rate'

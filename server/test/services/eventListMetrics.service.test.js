@@ -129,6 +129,7 @@ test('getEventList returns offset pagination payload when requested', async () =
   const db = {
     $queryRawUnsafe: async (sql, ...params) => {
       calls.push({ sql, params });
+      if (sql.includes('AS "upcoming"')) return [{ total: 30, upcoming: 25, past: 5 }];
       if (sql.includes('COUNT(*)')) return [{ total: 25 }];
       return [
         {
@@ -160,12 +161,14 @@ test('getEventList returns offset pagination payload when requested', async () =
     now: new Date('2029-01-01T00:00:00Z')
   });
 
-  assert.equal(calls.length, 2);
+  assert.equal(calls.length, 3);
   assert.match(calls[0].sql, /LIMIT \$2 OFFSET \$3/);
   assert.match(calls[0].sql, /COALESCE\(eb\."LatestShowtime" >= \$1, true\)/);
   assert.deepEqual(calls[0].params, [new Date('2029-01-01T00:00:00Z'), 10, 10]);
+  assert.deepEqual(calls[2].params, [new Date('2029-01-01T00:00:00Z')]);
   assert.equal(payload.pagination.type, 'offset');
   assert.equal(payload.total, 25);
   assert.equal(payload.totalPages, 3);
+  assert.deepEqual(payload.summary, { total: 30, upcoming: 25, past: 5 });
   assert.equal(payload.data[0].id, 10);
 });

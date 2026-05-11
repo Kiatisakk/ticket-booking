@@ -249,6 +249,12 @@
   font-size: 16px;
 }
 
+.events-inline-loading {
+  margin: -8px 0 18px;
+  color: var(--muted2);
+  font-size: 13px;
+}
+
 .event-booking-deadline {
   display: flex;
   flex-wrap: wrap;

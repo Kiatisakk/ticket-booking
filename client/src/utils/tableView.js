@@ -10,7 +10,8 @@ export function normalizePaginatedPayload(payload) {
     pageSize,
     totalRows,
     totalPages: Array.isArray(payload) ? 1 : payload.totalPages || getTotalPages(totalRows, pageSize),
-    pagination: Array.isArray(payload) ? null : payload.pagination || null
+    pagination: Array.isArray(payload) ? null : payload.pagination || null,
+    summary: Array.isArray(payload) ? null : payload.summary || null
   };
 }
 

@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAdminAuth } from '../../../context/AdminAuthContext';
 import TableControls from '../../../components/TableControls';
-import { normalizePaginatedPayload } from '../../../utils/tableView';
+import { nextSortConfig, normalizePaginatedPayload, sortLabel } from '../../../utils/tableView';
 import './EventManagement.css';
 
 const API_URL = 'http://localhost:4000/api';
@@ -20,6 +20,17 @@ function getCategoryClass(cat) {
   if (lower === 'movie') return 'em-badge em-badge-movie';
   if (lower === 'seminar') return 'em-badge em-badge-seminar';
   return 'em-badge em-badge-default';
+}
+
+function formatDate(dt) {
+  if (!dt) return '-';
+  return new Date(dt).toLocaleString('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
 }
 
 function EventManagement() {
@@ -39,13 +50,16 @@ function EventManagement() {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const [tab, setTab] = useState('upcoming');
+  const [sortConfig, setSortConfig] = useState({ key: 'eventId', direction: 'desc' });
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [totalRows, setTotalRows] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
+  const [eventSummary, setEventSummary] = useState({ total: 0, upcoming: 0, past: 0 });
   const [cursor, setCursor] = useState(null);
   const [cursorDirection, setCursorDirection] = useState('next');
   const [cursorMeta, setCursorMeta] = useState({ hasNextPage: false, hasPrevPage: false, nextCursor: null, prevCursor: null });
+  const [paginationMode, setPaginationMode] = useState('cursor');
 
   const fetchEvents = useCallback(async () => {
     setLoading(true);
@@ -56,7 +70,9 @@ function EventManagement() {
         pageSize,
         cursor: cursor || undefined,
         direction: cursorDirection,
-        status: tab
+        status: tab,
+        sortBy: sortConfig.key,
+        sortOrder: sortConfig.direction
       };
       if (search) params.search = search;
       if (categoryFilter) params.category = categoryFilter;
@@ -69,15 +85,29 @@ function EventManagement() {
       setEvents(payload.rows);
       setTotalRows(payload.totalRows);
       setTotalPages(payload.totalPages);
+      setPaginationMode(payload.pagination?.type || 'page');
+      setEventSummary(payload.summary || {
+        total: payload.totalRows,
+        upcoming: tab === 'upcoming' ? payload.totalRows : 0,
+        past: tab === 'past' ? payload.totalRows : 0
+      });
       setCursorMeta(payload.pagination?.type === 'cursor'
         ? payload.pagination
         : { hasNextPage: false, hasPrevPage: false, nextCursor: null, prevCursor: null });
     } catch {
       setEvents(MOCK_EVENTS);
+      setTotalRows(MOCK_EVENTS.length);
+      setTotalPages(1);
+      setPaginationMode('page');
+      setEventSummary({
+        total: MOCK_EVENTS.length,
+        upcoming: MOCK_EVENTS.filter(e => !e.isPast).length,
+        past: MOCK_EVENTS.filter(e => e.isPast).length
+      });
     } finally {
       setLoading(false);
     }
-  }, [apiScope, authToken, search, categoryFilter, tab, page, pageSize, cursor, cursorDirection]);
+  }, [apiScope, authToken, search, categoryFilter, tab, sortConfig, page, pageSize, cursor, cursorDirection]);
 
   useEffect(() => {
     fetchEvents();
@@ -101,8 +131,16 @@ function EventManagement() {
 
   const filtered = events;
 
-  const upcomingCount = events.filter(e => !e.isPast).length;
-  const pastCount     = events.filter(e => e.isPast).length;
+  const totalCount = eventSummary.total;
+  const upcomingCount = eventSummary.upcoming;
+  const pastCount = eventSummary.past;
+
+  const handleSort = (key) => {
+    setSortConfig(current => nextSortConfig(current, key));
+    setPage(1);
+    setCursor(null);
+    setCursorDirection('next');
+  };
 
   const renderTable = (list) => (
     list.length === 0 ? (
@@ -118,10 +156,11 @@ function EventManagement() {
       <table className="em-table">
         <thead>
           <tr>
-            <th>Event ID</th>
-            <th>Title</th>
-            <th>Category</th>
+            <th className="sortable-th"><button type="button" onClick={() => handleSort('eventId')}>Event ID <span className="sort-mark">{sortLabel(sortConfig, 'eventId')}</span></button></th>
+            <th className="sortable-th"><button type="button" onClick={() => handleSort('title')}>Title <span className="sort-mark">{sortLabel(sortConfig, 'title')}</span></button></th>
+            <th className="sortable-th"><button type="button" onClick={() => handleSort('category')}>Category <span className="sort-mark">{sortLabel(sortConfig, 'category')}</span></button></th>
             <th>Venue</th>
+            <th className="sortable-th"><button type="button" onClick={() => handleSort('startDateTime')}>Start Date <span className="sort-mark">{sortLabel(sortConfig, 'startDateTime')}</span></button></th>
             <th>Base Price</th>
             <th>Status</th>
             <th>Actions</th>
@@ -136,6 +175,7 @@ function EventManagement() {
                 <span className={getCategoryClass(event.category)}>{event.category}</span>
               </td>
               <td>{event.venue || '-'}</td>
+              <td className="em-date-cell">{formatDate(event.startDateTime)}</td>
               <td className="em-price-cell">
                 {event.basePrice != null ? `฿${Number(event.basePrice).toLocaleString()}` : '-'}
               </td>
@@ -172,7 +212,7 @@ function EventManagement() {
       <div className="em-header">
         <div>
           <div className="em-title">Event Management</div>
-          <div className="em-title-sub">{events.length} total events · {upcomingCount} upcoming · {pastCount} past</div>
+          <div className="em-title-sub">{totalCount} total events · {upcomingCount} upcoming · {pastCount} past</div>
         </div>
         <button className="em-add-btn" onClick={() => navigate(addPath)}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -214,7 +254,7 @@ function EventManagement() {
       </div>
 
       <TableControls
-        mode="cursor"
+        mode={paginationMode === 'cursor' ? 'cursor' : 'page'}
         page={page}
         pageSize={pageSize}
         totalRows={totalRows}

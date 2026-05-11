@@ -13,6 +13,7 @@ const ticketController = require('../controllers/ticket.controller');
 const adminController = require('../controllers/admin.controller');
 const staffController = require('../controllers/staff.controller');
 const seatLockController = require('../controllers/seatLock.controller');
+const adminReportsRoutes = require('./adminReports.routes');
 
 const router = express.Router();
 
@@ -92,19 +93,7 @@ router.get('/admin/bookings', authenticateAdmin, adminController.getAllBookings)
 router.get('/admin/transactions', authenticateAdmin, adminController.getAllTransactions);
 
 // Admin Reports
-router.get('/admin/reports/kpi',                  authenticateAdmin, adminController.getReportKpi);
-router.get('/admin/reports/revenue-by-category',  authenticateAdmin, adminController.getRevenueByCategory);
-router.get('/admin/reports/user-growth',           authenticateAdmin, adminController.getUserGrowth);
-router.get('/admin/reports/revenue-by-venue',      authenticateAdmin, adminController.getRevenueByVenue);
-router.get('/admin/reports/bookings-by-hour',      authenticateAdmin, adminController.getBookingsByHour);
-router.get('/admin/reports/booking-vs-capacity',   authenticateAdmin, adminController.getBookingVsCapacity);
-router.get('/admin/reports/venue-utilization',     authenticateAdmin, adminController.getVenueUtilization);
-router.get('/admin/reports/seat-type-revenue',     authenticateAdmin, adminController.getSeatTypeRevenue);
-router.get('/admin/reports/customer-retention',    authenticateAdmin, adminController.getCustomerRetention);
-router.get('/admin/reports/interest-by-category', authenticateAdmin, adminController.getInterestByCategory);
-router.get('/admin/reports/peak-showtime-hours',   authenticateAdmin, adminController.getPeakShowtimeHours);
-router.get('/admin/reports/seat-heatmap',          authenticateAdmin, adminController.getSeatHeatmap);
-router.get('/admin/reports/cancellation-heatmap',  authenticateAdmin, adminController.getCancellationHeatmap);
+router.use('/admin/reports', adminReportsRoutes);
 
 // ─── Staff Routes ─────────────────────────────────────────────────────────────
 

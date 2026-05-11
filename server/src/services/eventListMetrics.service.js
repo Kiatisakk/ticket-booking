@@ -228,6 +228,44 @@ function buildEventListSql({
   `;
 }
 
+function buildEventSummarySql({ whereSql, nowParamIndex }) {
+  return `
+    WITH filtered_events AS MATERIALIZED (
+      SELECT
+        e."EventID"
+      FROM "Events" e
+      LEFT JOIN "EventCategories" c ON c."CategoryID" = e."CategoryID"
+      ${whereSql}
+    ),
+    event_bounds AS (
+      SELECT
+        fe."EventID",
+        MAX(s."StartDateTime") AS "LatestShowtime"
+      FROM filtered_events fe
+      LEFT JOIN "Showtimes" s ON s."EventID" = fe."EventID"
+      GROUP BY fe."EventID"
+    )
+    SELECT
+      COUNT(*)::int AS "total",
+      COUNT(*) FILTER (
+        WHERE COALESCE(eb."LatestShowtime" >= $${nowParamIndex}, true)
+      )::int AS "upcoming",
+      COUNT(*) FILTER (
+        WHERE eb."LatestShowtime" < $${nowParamIndex}
+      )::int AS "past"
+    FROM filtered_events fe
+    LEFT JOIN event_bounds eb ON eb."EventID" = fe."EventID"
+  `;
+}
+
+function mapEventSummary(row = {}) {
+  return {
+    total: Number(row.total || 0),
+    upcoming: Number(row.upcoming || 0),
+    past: Number(row.past || 0)
+  };
+}
+
 function mapEventListRows(rows) {
   return rows.map(row => ({
     id: Number(row.id),
@@ -272,42 +310,50 @@ async function getEventList(db, options = {}) {
     const offset = canUseCursor ? 0 : page.skip;
     const limitParamIndex = nowParamIndex + 1;
     const offsetParamIndex = nowParamIndex + 2;
-    const rows = await db.$queryRawUnsafe(
-      buildEventListSql({
-        whereSql,
-        params,
-        nowParamIndex,
-        status,
-        sortBy,
-        sortOrder,
-        limitParamIndex,
-        offsetParamIndex,
-        cursor: canUseCursor ? page.cursor : null,
-        direction: page.direction,
-        includePage: true
-      }),
-      ...params,
-      now,
-      pageSize + (canUseCursor ? 1 : 0),
-      offset
-    );
-    const countRows = await db.$queryRawUnsafe(
-      buildEventListSql({
-        whereSql,
-        params,
-        nowParamIndex,
-        status,
-        sortBy,
-        sortOrder,
-        limitParamIndex,
-        offsetParamIndex,
-        includePage: false,
-        countOnly: true
-      }),
-      ...params,
-      now
-    );
+    const [rows, countRows, summaryRows] = await Promise.all([
+      db.$queryRawUnsafe(
+        buildEventListSql({
+          whereSql,
+          params,
+          nowParamIndex,
+          status,
+          sortBy,
+          sortOrder,
+          limitParamIndex,
+          offsetParamIndex,
+          cursor: canUseCursor ? page.cursor : null,
+          direction: page.direction,
+          includePage: true
+        }),
+        ...params,
+        now,
+        pageSize + (canUseCursor ? 1 : 0),
+        offset
+      ),
+      db.$queryRawUnsafe(
+        buildEventListSql({
+          whereSql,
+          params,
+          nowParamIndex,
+          status,
+          sortBy,
+          sortOrder,
+          limitParamIndex,
+          offsetParamIndex,
+          includePage: false,
+          countOnly: true
+        }),
+        ...params,
+        now
+      ),
+      db.$queryRawUnsafe(
+        buildEventSummarySql({ whereSql, nowParamIndex }),
+        ...params,
+        now
+      )
+    ]);
     const total = Number(countRows[0]?.total || 0);
+    const summary = mapEventSummary(summaryRows[0]);
     const mappedRows = mapEventListRows(rows);
 
     if (canUseCursor) {
@@ -320,6 +366,7 @@ async function getEventList(db, options = {}) {
         data,
         pageSize,
         total,
+        summary,
         pagination: {
           type: 'cursor',
           nextCursor: last ? encodeCursor({ id: last.id, value: last.id }) : null,
@@ -330,9 +377,12 @@ async function getEventList(db, options = {}) {
       };
     }
 
-    return offsetPayload(mappedRows, total, page.page, pageSize, wantsCursor
+    return {
+      ...offsetPayload(mappedRows, total, page.page, pageSize, wantsCursor
       ? { fallbackFrom: 'cursor', reason: 'Requested event sort requires offset pagination' }
-      : {});
+      : {}),
+      summary
+    };
   }
 
   const sql = `
@@ -447,6 +497,8 @@ async function getEventList(db, options = {}) {
 module.exports = {
   getEventList,
   buildEventListWhere,
+  buildEventSummarySql,
   invalidateEventListCache,
+  mapEventSummary,
   mapEventListRows
 };
