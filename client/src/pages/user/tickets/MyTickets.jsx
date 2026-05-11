@@ -20,6 +20,7 @@ function MyTickets() {
   // UI States
   const [activeTab, setActiveTab] = useState('all');
   const [selectedTicket, setSelectedTicket] = useState(null);
+  const [activeTicketIndex, setActiveTicketIndex] = useState(0);
 
   useEffect(() => {
     fetchBookings();
@@ -218,8 +219,31 @@ function MyTickets() {
               const sortedSeats = sortSeats(seats);
               const theme = getStatusTheme(booking.StatusID, booking.Status);
               const emojiInfo = getEventEmojiInfo(eventInfo.EventID);
-              const firstTicket = booking.BookingDetails?.find(d => d.Ticket)?.Ticket;
-              const ticketIdString = firstTicket?.TicketNo || `BK-${booking.BookingID}`;
+              const ticketItems = (booking.BookingDetails || [])
+                .filter(detail => detail.Ticket?.TicketNo)
+                .map(detail => ({
+                  ticketNo: detail.Ticket.TicketNo,
+                  seat: {
+                    label: `${detail.Seat?.RowLabel || ''}${detail.Seat?.SeatNumber || ''}`,
+                    rowLabel: detail.Seat?.RowLabel || '',
+                    seatNumber: detail.Seat?.SeatNumber || '',
+                    typeName: detail.Seat?.SeatType?.TypeName || 'Standard'
+                  }
+                }));
+              const sortedTicketItems = [...ticketItems].sort((a, b) => {
+                const [seatA, seatB] = [a.seat, b.seat];
+                const rowCompare = String(seatA.rowLabel || '').localeCompare(String(seatB.rowLabel || ''), undefined, {
+                  numeric: true,
+                  sensitivity: 'base'
+                });
+                if (rowCompare !== 0) return rowCompare;
+                return String(seatA.seatNumber || '').localeCompare(String(seatB.seatNumber || ''), undefined, {
+                  numeric: true,
+                  sensitivity: 'base'
+                });
+              });
+              const primaryTicket = sortedTicketItems[0];
+              const ticketIdString = primaryTicket?.ticketNo || `BK-${booking.BookingID}`;
 
               return (
                 <div key={booking.BookingID} className="ticket-card">
@@ -285,20 +309,20 @@ function MyTickets() {
                       </div>
                     ) : theme.css !== 'cancelled' ? (
                       <>
-                        <div className="qr-mini" style={{ background: '#fff', padding: '4px', borderRadius: '4px', display: 'inline-block' }}>
-                          <QRCodeSVG value={ticketIdString} size={72} />
-                        </div>
-                        <div className="qr-ticket-id">{ticketIdString}</div>
                         <button
                           className="btn-view"
-                          onClick={() => setSelectedTicket({
-                            name: eventInfo.Title,
-                            emoji: emojiInfo.char,
-                            date: showtime ? formatDate(showtime.StartDateTime) : '',
-                            location: venueName,
-                            ticketNo: ticketIdString,
-                            seats: sortedSeats
-                          })}
+                          onClick={() => {
+                            setActiveTicketIndex(0);
+                            setSelectedTicket({
+                              name: eventInfo.Title,
+                              emoji: emojiInfo.char,
+                              date: showtime ? formatDate(showtime.StartDateTime) : '',
+                              location: venueName,
+                              ticketNo: ticketIdString,
+                              tickets: sortedTicketItems,
+                              seats: sortedSeats
+                            });
+                          }}
                         >
                           View Ticket
                         </button>
@@ -328,20 +352,42 @@ function MyTickets() {
               </div>
             </div>
             <div className="modal-qr-section">
-              <div className="modal-qr-box" style={{ background: '#fff', padding: '12px', borderRadius: '12px', display: 'inline-block', margin: '0 auto' }}>
-                <QRCodeSVG value={selectedTicket.ticketNo} size={160} />
-              </div>
-              <div className="modal-ticket-no">{selectedTicket.ticketNo}</div>
-              <div className="modal-ticket-sub">Present this QR at the venue entrance</div>
-              <div className="modal-seats">
-                {selectedTicket.seats.map((s, i) => (
-                  <div key={i} className={`modal-seat-chip ${getSeatTypeClass(s.typeName)}`}>
-                    <span className="seat-dot" />
-                    {s.label}
-                    <span className="seat-type-label">{s.typeName}</span>
-                  </div>
-                ))}
-              </div>
+              {(() => {
+                const ticketOptions = selectedTicket.tickets?.length
+                  ? selectedTicket.tickets
+                  : selectedTicket.seats.map(s => ({ seat: s, ticketNo: selectedTicket.ticketNo }));
+                const active = ticketOptions[Math.min(activeTicketIndex, ticketOptions.length - 1)] || ticketOptions[0];
+
+                return (
+                  <>
+                    {ticketOptions.length > 1 && (
+                      <div className="modal-ticket-switcher">
+                        {ticketOptions.map((item, index) => (
+                          <button
+                            key={item.ticketNo}
+                            type="button"
+                            className={`modal-ticket-tab ${index === activeTicketIndex ? 'active' : ''}`}
+                            onClick={() => setActiveTicketIndex(index)}
+                          >
+                            <span>{item.seat.label}</span>
+                            <strong>{item.ticketNo}</strong>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    <div className="modal-qr-box" style={{ background: '#fff', padding: '12px', borderRadius: '12px', display: 'inline-block', margin: '0 auto' }}>
+                      <QRCodeSVG value={active.ticketNo} size={160} />
+                    </div>
+                    <div className="modal-ticket-no">{active.ticketNo}</div>
+                    <div className={`modal-seat-chip ${getSeatTypeClass(active.seat.typeName)}`}>
+                      <span className="seat-dot" />
+                      {active.seat.label}
+                      <span className="seat-type-label">{active.seat.typeName}</span>
+                    </div>
+                  </>
+                );
+              })()}
+              <div className="modal-ticket-sub">Ticket No. · Present the selected QR at the venue entrance</div>
             </div>
             <button className="modal-close" onClick={() => setSelectedTicket(null)}>Close</button>
           </div>

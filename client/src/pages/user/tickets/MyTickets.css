@@ -72,6 +72,7 @@
   background: var(--surface); border: 1px solid var(--border);
   border-radius: 18px; overflow: hidden; display: grid;
   grid-template-columns: auto 1fr auto;
+  align-items: stretch;
   transition: border-color 0.2s;
 }
 .my-tickets-page .ticket-card:hover { border-color: var(--border2); }
@@ -162,12 +163,32 @@
 
 /* Right panel — QR / action */
 .my-tickets-page .ticket-qr-panel { 
-  padding: 22px 20px 22px 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; border-left: 1px dashed var(--border); min-width: 120px; 
+  padding: 22px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border-left: 1px dashed var(--border);
+  min-width: 150px;
+  align-self: stretch;
 }
 .my-tickets-page .qr-mini { background: white; border-radius: 8px; padding: 8px; display: flex; align-items: center; justify-content: center; }
 .my-tickets-page .qr-ticket-id { font-family: monospace; font-size: 11px; color: var(--muted); text-align: center; }
 .my-tickets-page .btn-view { 
-  background: var(--indigo-dim); border: none; color: var(--indigo-light); font-family: inherit; font-size: 12.5px; font-weight: 700; border-radius: 8px; padding: 7px 14px; cursor: pointer; transition: background 0.15s; white-space: nowrap; 
+  background: var(--indigo-dim);
+  border: none;
+  color: var(--indigo-light);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  border-radius: 8px;
+  padding: 9px 16px;
+  cursor: pointer;
+  transition: background 0.15s;
+  white-space: nowrap;
+  min-width: 104px;
+  text-align: center;
 }
 .my-tickets-page .btn-view:hover { background: rgba(99,102,241,0.22); }
 
@@ -192,6 +213,40 @@
 .my-tickets-page .modal-qr-box { background: white; border-radius: 14px; padding: 20px; }
 .my-tickets-page .modal-ticket-no { font-family: monospace; font-size: 20px; font-weight: 800; letter-spacing: 0.12em; color: var(--text); text-align: center; }
 .my-tickets-page .modal-ticket-sub { font-size: 12px; color: var(--muted); text-align: center; }
+.my-tickets-page .modal-ticket-switcher {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+  max-width: 420px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+.my-tickets-page .modal-ticket-tab {
+  min-width: 128px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface2);
+  color: var(--text);
+  cursor: pointer;
+}
+.my-tickets-page .modal-ticket-tab.active {
+  border-color: var(--indigo-light);
+  background: var(--indigo-dim);
+}
+.my-tickets-page .modal-ticket-tab span {
+  font-size: 12px;
+  color: var(--muted2);
+}
+.my-tickets-page .modal-ticket-tab strong {
+  font-family: monospace;
+  font-size: 10px;
+  word-break: break-all;
+}
 .my-tickets-page .modal-seats { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
 .my-tickets-page .modal-seat-chip { padding: 7px 12px; font-size: 13px; }
 .my-tickets-page .modal-close { 
