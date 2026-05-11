@@ -7,6 +7,7 @@ const API_URL = 'http://localhost:4000/api';
 
 const emptyVenue = { name: '', location: '' };
 const emptySeat = { rowLabel: '', seatNumber: '', seatTypeId: '' };
+const emptyBulkSeat = { rowLabel: '', startNumber: '1', endNumber: '10', seatTypeId: '' };
 
 function MasterData() {
   const { adminToken } = useAdminAuth();
@@ -19,6 +20,7 @@ function MasterData() {
   const [venueForm, setVenueForm] = useState(emptyVenue);
   const [editingVenueId, setEditingVenueId] = useState(null);
   const [seatForm, setSeatForm] = useState(emptySeat);
+  const [bulkSeatForm, setBulkSeatForm] = useState(emptyBulkSeat);
   const [editingSeatId, setEditingSeatId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [seatLoading, setSeatLoading] = useState(false);
@@ -35,6 +37,9 @@ function MasterData() {
     const { data } = await axios.get(`${API_URL}/seat-types`, { headers });
     setSeatTypes(data);
     setSeatForm(current => current.seatTypeId
+      ? current
+      : { ...current, seatTypeId: data[0]?.SeatTypeID ? String(data[0].SeatTypeID) : '' });
+    setBulkSeatForm(current => current.seatTypeId
       ? current
       : { ...current, seatTypeId: data[0]?.SeatTypeID ? String(data[0].SeatTypeID) : '' });
   }, [adminToken]);
@@ -76,6 +81,10 @@ function MasterData() {
   const resetSeatForm = () => {
     setSeatForm({ ...emptySeat, seatTypeId: seatTypes[0]?.SeatTypeID ? String(seatTypes[0].SeatTypeID) : '' });
     setEditingSeatId(null);
+  };
+
+  const resetBulkSeatForm = () => {
+    setBulkSeatForm({ ...emptyBulkSeat, seatTypeId: seatTypes[0]?.SeatTypeID ? String(seatTypes[0].SeatTypeID) : '' });
   };
 
   const saveVenue = async (event) => {
@@ -134,6 +143,59 @@ function MasterData() {
       await Promise.all([loadSeats(selectedVenueId), loadVenues()]);
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to save seat');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const saveBulkSeats = async (event) => {
+    event.preventDefault();
+    if (!selectedVenueId) return;
+
+    const rowLabel = bulkSeatForm.rowLabel.trim().toUpperCase();
+    const startNumber = Number.parseInt(bulkSeatForm.startNumber, 10);
+    const endNumber = Number.parseInt(bulkSeatForm.endNumber, 10);
+
+    if (!rowLabel || !bulkSeatForm.seatTypeId || !Number.isInteger(startNumber) || !Number.isInteger(endNumber)) {
+      setError('Row, start number, end number, and seat type are required');
+      return;
+    }
+
+    if (startNumber < 1 || endNumber < startNumber) {
+      setError('Seat number range is invalid');
+      return;
+    }
+
+    const existingSeatKeys = new Set(
+      seats.map(seat => `${String(seat.rowLabel).toUpperCase()}-${String(seat.seatNumber)}`)
+    );
+    const seatNumbers = [];
+    for (let number = startNumber; number <= endNumber; number += 1) {
+      if (!existingSeatKeys.has(`${rowLabel}-${String(number)}`)) {
+        seatNumbers.push(number);
+      }
+    }
+
+    if (seatNumbers.length === 0) {
+      setError('All seats in this range already exist');
+      return;
+    }
+
+    setSaving(true);
+    setError('');
+    try {
+      for (const seatNumber of seatNumbers) {
+        await axios.post(`${API_URL}/admin/seats`, {
+          venueId: selectedVenueId,
+          seatTypeId: bulkSeatForm.seatTypeId,
+          rowLabel,
+          seatNumber: String(seatNumber)
+        }, { headers });
+      }
+      resetBulkSeatForm();
+      await Promise.all([loadSeats(selectedVenueId), loadVenues()]);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to add seats');
     } finally {
       setSaving(false);
     }
@@ -219,6 +281,47 @@ function MasterData() {
             <p>{selectedVenue ? `Manage seats for ${selectedVenue.name}.` : 'Select a venue to manage seats.'}</p>
           </div>
         </div>
+
+        <form className="md-form md-seat-bulk-form" onSubmit={saveBulkSeats}>
+          <input
+            value={bulkSeatForm.rowLabel}
+            onChange={e => setBulkSeatForm(current => ({ ...current, rowLabel: e.target.value }))}
+            placeholder="Row"
+            required
+            disabled={!selectedVenueId}
+          />
+          <input
+            type="number"
+            min="1"
+            value={bulkSeatForm.startNumber}
+            onChange={e => setBulkSeatForm(current => ({ ...current, startNumber: e.target.value }))}
+            placeholder="From"
+            required
+            disabled={!selectedVenueId}
+          />
+          <input
+            type="number"
+            min="1"
+            value={bulkSeatForm.endNumber}
+            onChange={e => setBulkSeatForm(current => ({ ...current, endNumber: e.target.value }))}
+            placeholder="To"
+            required
+            disabled={!selectedVenueId}
+          />
+          <select
+            value={bulkSeatForm.seatTypeId}
+            onChange={e => setBulkSeatForm(current => ({ ...current, seatTypeId: e.target.value }))}
+            required
+            disabled={!selectedVenueId}
+          >
+            {seatTypes.map(type => (
+              <option key={type.SeatTypeID} value={type.SeatTypeID}>
+                {type.TypeName}
+              </option>
+            ))}
+          </select>
+          <button type="submit" disabled={saving || !selectedVenueId}>Quick Add Seats</button>
+        </form>
 
         <form className="md-form md-seat-form" onSubmit={saveSeat}>
           <input

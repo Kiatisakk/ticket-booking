@@ -41,6 +41,18 @@
   grid-template-columns: 110px 150px minmax(180px, 1fr) auto auto;
 }
 
+.md-seat-bulk-form {
+  grid-template-columns: 90px 120px 120px minmax(160px, 1fr) auto;
+  padding: 12px;
+  background: rgba(34, 197, 94, 0.08);
+  border: 1px solid rgba(34, 197, 94, 0.2);
+  border-radius: 8px;
+}
+
+.md-seat-bulk-form + .md-seat-form {
+  margin-top: -4px;
+}
+
 .md-form input,
 .md-form select {
   min-height: 40px;
@@ -174,6 +186,7 @@
 
 @media (max-width: 900px) {
   .md-form,
+  .md-seat-bulk-form,
   .md-seat-form {
     grid-template-columns: 1fr;
   }

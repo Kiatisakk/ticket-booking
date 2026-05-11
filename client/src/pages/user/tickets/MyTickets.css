@@ -104,8 +104,54 @@
   display: flex; align-items: center; gap: 16px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); flex-wrap: wrap; 
 }
 .my-tickets-page .booking-id { font-family: monospace; font-size: 12px; color: var(--muted); background: var(--surface2); border-radius: 5px; padding: 3px 8px; }
-.my-tickets-page .seat-chips { display: flex; gap: 5px; flex-wrap: wrap; }
-.my-tickets-page .seat-chip { background: var(--surface2); border: 1px solid var(--border2); border-radius: 5px; padding: 3px 8px; font-size: 11.5px; font-weight: 600; color: var(--muted2); }
+.my-tickets-page .seat-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.my-tickets-page .seat-chip,
+.my-tickets-page .modal-seat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--muted2);
+}
+
+.my-tickets-page .seat-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: currentColor;
+  flex: 0 0 auto;
+}
+
+.my-tickets-page .seat-type-label {
+  color: inherit;
+  font-size: 10px;
+  font-weight: 800;
+  opacity: 0.86;
+  text-transform: uppercase;
+}
+
+.my-tickets-page .seat-type-vip {
+  background: rgba(245, 158, 11, 0.13);
+  border-color: rgba(245, 158, 11, 0.36);
+  color: #fbbf24;
+}
+
+.my-tickets-page .seat-type-standard {
+  background: rgba(59, 130, 246, 0.13);
+  border-color: rgba(59, 130, 246, 0.36);
+  color: #60a5fa;
+}
+
+.my-tickets-page .seat-type-sofa-bed {
+  background: rgba(168, 85, 247, 0.14);
+  border-color: rgba(168, 85, 247, 0.38);
+  color: #c084fc;
+}
 
 /* Buttons */
 .my-tickets-page .btn-cancel { 
@@ -147,7 +193,7 @@
 .my-tickets-page .modal-ticket-no { font-family: monospace; font-size: 20px; font-weight: 800; letter-spacing: 0.12em; color: var(--text); text-align: center; }
 .my-tickets-page .modal-ticket-sub { font-size: 12px; color: var(--muted); text-align: center; }
 .my-tickets-page .modal-seats { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
-.my-tickets-page .modal-seat-chip { background: var(--surface2); border: 1px solid var(--border2); border-radius: 8px; padding: 6px 14px; font-size: 13.5px; font-weight: 700; color: var(--indigo-light); }
+.my-tickets-page .modal-seat-chip { padding: 7px 12px; font-size: 13px; }
 .my-tickets-page .modal-close { 
   width: 100%; background: var(--surface2); border: none; border-top: 1px solid var(--border); color: var(--muted2); font-family: inherit; font-size: 14px; font-weight: 600; padding: 14px; cursor: pointer; transition: background 0.15s; 
 }

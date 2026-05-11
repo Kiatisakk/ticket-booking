@@ -139,6 +139,13 @@ function MyTickets() {
     return `${datePart} · ${timePart}`;
   };
 
+  const getSeatTypeClass = (typeName = '') => {
+    const normalized = typeName.toLowerCase().replace(/\s+/g, '-');
+    if (normalized.includes('vip')) return 'seat-type-vip';
+    if (normalized.includes('sofa')) return 'seat-type-sofa-bed';
+    return 'seat-type-standard';
+  };
+
   const filteredBookings = bookings.filter(b => {
     if (activeTab === 'all') return true;
     const theme = getStatusTheme(b.StatusID, b.Status);
@@ -189,7 +196,10 @@ function MyTickets() {
               const showtime = booking.BookingDetails?.[0]?.Showtime;
               const eventInfo = showtime?.Event || {};
               const venueName = showtime?.Venue?.VenueName || 'Venue TBD';
-              const seats = booking.BookingDetails?.map(d => `${d.Seat?.RowLabel}${d.Seat?.SeatNumber}`) || [];
+              const seats = booking.BookingDetails?.map(d => ({
+                label: `${d.Seat?.RowLabel}${d.Seat?.SeatNumber}`,
+                typeName: d.Seat?.SeatType?.TypeName || 'Standard'
+              })) || [];
               const theme = getStatusTheme(booking.StatusID, booking.Status);
               const emojiInfo = getEventEmojiInfo(eventInfo.EventID);
               const firstTicket = booking.BookingDetails?.find(d => d.Ticket)?.Ticket;
@@ -220,7 +230,13 @@ function MyTickets() {
                       <div className="ticket-booking-row">
                         <span className="booking-id">BK-{booking.BookingID}</span>
                         <div className="seat-chips">
-                          {seats.map((seat, i) => <span key={i} className="seat-chip">{seat}</span>)}
+                          {seats.map((seat, i) => (
+                            <span key={i} className={`seat-chip ${getSeatTypeClass(seat.typeName)}`}>
+                              <span className="seat-dot" />
+                              {seat.label}
+                              <span className="seat-type-label">{seat.typeName}</span>
+                            </span>
+                          ))}
                         </div>
                         <span style={{fontSize: '13px', fontWeight: '700', color: 'var(--text)'}}>
                           ฿ {Number(booking.TotalAmount || 0).toLocaleString()}
@@ -303,7 +319,11 @@ function MyTickets() {
               <div className="modal-ticket-sub">Present this QR at the venue entrance</div>
               <div className="modal-seats">
                 {selectedTicket.seats.map((s, i) => (
-                  <div key={i} className="modal-seat-chip">{s}</div>
+                  <div key={i} className={`modal-seat-chip ${getSeatTypeClass(s.typeName)}`}>
+                    <span className="seat-dot" />
+                    {s.label}
+                    <span className="seat-type-label">{s.typeName}</span>
+                  </div>
                 ))}
               </div>
             </div>
