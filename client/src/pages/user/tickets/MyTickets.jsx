@@ -3,7 +3,6 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../context/AuthContext';
 import axios from 'axios';
 import { QRCodeSVG } from 'qrcode.react';
-import TableControls from '../../../components/TableControls';
 import './MyTickets.css';
 
 const API_URL = 'http://localhost:4000/api';
@@ -22,32 +21,17 @@ function MyTickets() {
   const [activeTab, setActiveTab] = useState('all');
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [activeTicketIndex, setActiveTicketIndex] = useState(0);
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
-  const [totalRows, setTotalRows] = useState(0);
-  const [totalPages, setTotalPages] = useState(1);
 
   useEffect(() => {
     fetchBookings();
-  }, [activeTab, page, pageSize]);
+  }, []);
 
   const fetchBookings = async () => {
-    setLoading(true);
     try {
       const response = await axios.get(`${API_URL}/bookings/my`, {
-        headers: { Authorization: `Bearer ${token}` },
-        params: {
-          pagination: 'offset',
-          page,
-          pageSize,
-          status: activeTab === 'upcoming' ? 'pending' : activeTab
-        }
+        headers: { Authorization: `Bearer ${token}` }
       });
-      const payload = response.data;
-      const rows = Array.isArray(payload) ? payload : payload.data || [];
-      setBookings(rows);
-      setTotalRows(Array.isArray(payload) ? rows.length : payload.total || 0);
-      setTotalPages(Array.isArray(payload) ? 1 : payload.totalPages || 1);
+      setBookings(response.data);
     } catch (error) {
       console.error('Failed to fetch bookings:', error);
     } finally {
@@ -176,7 +160,14 @@ function MyTickets() {
     });
   });
 
-  const filteredBookings = bookings;
+  const filteredBookings = bookings.filter(b => {
+    if (activeTab === 'all') return true;
+    const theme = getStatusTheme(b.StatusID, b.Status);
+    if (activeTab === 'upcoming' && theme.isPending) return true;
+    if (activeTab === 'completed' && theme.css === 'completed') return true;
+    if (activeTab === 'cancelled' && theme.css === 'cancelled') return true;
+    return false;
+  });
 
   const totalTicketsCount = bookings.reduce((sum, b) => sum + (b.BookingDetails?.length || 0), 0);
 
@@ -200,10 +191,10 @@ function MyTickets() {
         </div>
 
         <div className="filter-tabs">
-          <button className={`ftab ${activeTab === 'all' ? 'active' : ''}`} onClick={() => { setActiveTab('all'); setPage(1); }}>All Bookings</button>
-          <button className={`ftab ${activeTab === 'upcoming' ? 'active' : ''}`} onClick={() => { setActiveTab('upcoming'); setPage(1); }}>Pending</button>
-          <button className={`ftab ${activeTab === 'completed' ? 'active' : ''}`} onClick={() => { setActiveTab('completed'); setPage(1); }}>Completed</button>
-          <button className={`ftab ${activeTab === 'cancelled' ? 'active' : ''}`} onClick={() => { setActiveTab('cancelled'); setPage(1); }}>Cancelled</button>
+          <button className={`ftab ${activeTab === 'all' ? 'active' : ''}`} onClick={() => setActiveTab('all')}>All Bookings</button>
+          <button className={`ftab ${activeTab === 'upcoming' ? 'active' : ''}`} onClick={() => setActiveTab('upcoming')}>Pending</button>
+          <button className={`ftab ${activeTab === 'completed' ? 'active' : ''}`} onClick={() => setActiveTab('completed')}>Completed</button>
+          <button className={`ftab ${activeTab === 'cancelled' ? 'active' : ''}`} onClick={() => setActiveTab('cancelled')}>Cancelled</button>
         </div>
 
         {filteredBookings.length === 0 ? (
@@ -347,18 +338,6 @@ function MyTickets() {
             })}
           </div>
         )}
-
-        <TableControls
-          page={page}
-          pageSize={pageSize}
-          totalRows={totalRows}
-          totalPages={totalPages}
-          onPageChange={setPage}
-          onPageSizeChange={(nextSize) => {
-            setPageSize(nextSize);
-            setPage(1);
-          }}
-        />
       </div>
 
       {/* TICKET VIEW MODAL */}

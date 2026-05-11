@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../../../context/AuthContext';
-import TableControls from '../../../components/TableControls';
 import './Events.css';
 
 const API_URL = 'http://localhost:4000/api';
@@ -44,10 +43,6 @@ function Events() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
-  const [totalRows, setTotalRows] = useState(0);
-  const [totalPages, setTotalPages] = useState(1);
 
   useEffect(() => {
     let active = true;
@@ -56,21 +51,12 @@ function Events() {
       setLoading(true);
       try {
         const response = await axios.get(`${API_URL}/events`, {
-          headers: { Authorization: `Bearer ${token}` },
-          params: {
-            pagination: 'offset',
-            page,
-            pageSize,
-            search: searchTerm || undefined,
-            category: categoryFilter !== 'all' ? categoryFilter : undefined
-          }
+          headers: { Authorization: `Bearer ${token}` }
         });
         const payload = response.data;
         const rows = Array.isArray(payload) ? payload : payload.data || [];
         if (!active) return;
         setEvents(rows.map(normalizeEvent));
-        setTotalRows(Array.isArray(payload) ? rows.length : payload.total || 0);
-        setTotalPages(Array.isArray(payload) ? 1 : payload.totalPages || 1);
       } catch (error) {
         console.error('Failed to fetch events:', error);
       } finally {
@@ -82,20 +68,15 @@ function Events() {
     return () => {
       active = false;
     };
-  }, [token, searchTerm, categoryFilter, page, pageSize]);
+  }, [token]);
 
-  const upcomingEvents = events.filter(event => !event.isPast);
-  const pastEvents = events.filter(event => event.isPast);
-
-  const updateSearch = (value) => {
-    setSearchTerm(value);
-    setPage(1);
-  };
-
-  const updateCategory = (value) => {
-    setCategoryFilter(value);
-    setPage(1);
-  };
+  const filteredEvents = events.filter(event => {
+    const matchCategory = categoryFilter === 'all' || event.category === categoryFilter;
+    const matchSearch = !searchTerm || event.title.toLowerCase().includes(searchTerm.toLowerCase());
+    return matchCategory && matchSearch;
+  });
+  const upcomingEvents = filteredEvents.filter(event => !event.isPast);
+  const pastEvents = filteredEvents.filter(event => event.isPast);
 
   const renderEventCard = (event, isPast) => {
     const nearest = getNextShowtime(event, isPast);
@@ -108,7 +89,11 @@ function Events() {
       >
         {isPast && <div className="event-past-ribbon">Past Event</div>}
         <div className="event-icon">
-          {event.category === 'Movie' ? 'Movie' : event.category === 'Concert' ? 'Live' : event.category === 'Seminar' ? 'Talk' : 'Event'}
+          {
+            event.category === 'Movie' ? '🎬' :
+            event.category === 'Concert' ? '🎵' :
+            event.category === 'Seminar' ? '📚' : '🎫'
+          }
         </div>
         <h3>{event.title}</h3>
         {event.category && <div className="event-category">{event.category}</div>}
@@ -130,7 +115,7 @@ function Events() {
         )}
 
         <button className={`event-button${isPast ? ' event-button-past' : ''}`} disabled={isPast}>
-          {isPast ? 'Event Ended' : 'View Details'}
+          {isPast ? 'Event Ended' : 'View Details →'}
         </button>
       </div>
     );
@@ -145,13 +130,15 @@ function Events() {
       <div className="events-hero">
         <div className="hero-glow"></div>
         <div className="events-hero-inner">
-          <div className="hero-badge">THAILAND'S TICKET PLATFORM</div>
+          <div className="hero-badge">
+            <span role="img" aria-label="ticket">🎟</span> THAILAND'S TICKET PLATFORM
+          </div>
           <h1 className="hero-title">
             Your next <span className="hero-highlight">unforgettable</span><br />
             experience starts here
           </h1>
           <p className="hero-sub">
-            Concerts, movies, seminars - buy tickets in seconds, no queues.
+            Concerts, movies, seminars — buy tickets in seconds, no queues.
           </p>
         </div>
       </div>
@@ -160,21 +147,21 @@ function Events() {
         <div className="filters">
           <input
             type="text"
-            placeholder="Search events..."
+            placeholder="🔍 Search events..."
             value={searchTerm}
-            onChange={(e) => updateSearch(e.target.value)}
+            onChange={(e) => setSearchTerm(e.target.value)}
             className="search-input"
           />
 
           <select
             value={categoryFilter}
-            onChange={(e) => updateCategory(e.target.value)}
+            onChange={(e) => setCategoryFilter(e.target.value)}
             className="filter-select"
           >
             <option value="all">All Categories</option>
-            <option value="Movie">Movie</option>
-            <option value="Concert">Concert</option>
-            <option value="Seminar">Seminar</option>
+            <option value="Movie">🎬 Movie</option>
+            <option value="Concert">🎵 Concert</option>
+            <option value="Seminar">📚 Seminar</option>
           </select>
         </div>
 
@@ -204,17 +191,6 @@ function Events() {
           </div>
         )}
 
-        <TableControls
-          page={page}
-          pageSize={pageSize}
-          totalRows={totalRows}
-          totalPages={totalPages}
-          onPageChange={setPage}
-          onPageSizeChange={(nextSize) => {
-            setPageSize(nextSize);
-            setPage(1);
-          }}
-        />
       </div>
     </div>
   );

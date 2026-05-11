@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAdminAuth } from '../../../context/AdminAuthContext';
-import TableControls from '../../../components/TableControls';
 import './EventManagement.css';
 
 const API_URL = 'http://localhost:4000/api';
@@ -38,20 +37,11 @@ function EventManagement() {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const [tab, setTab] = useState('upcoming');
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
-  const [totalRows, setTotalRows] = useState(0);
-  const [totalPages, setTotalPages] = useState(1);
 
   const fetchEvents = useCallback(async () => {
     setLoading(true);
     try {
-      const params = {
-        pagination: 'offset',
-        page,
-        pageSize,
-        status: tab
-      };
+      const params = {};
       if (search) params.search = search;
       if (categoryFilter) params.category = categoryFilter;
 
@@ -62,14 +52,12 @@ function EventManagement() {
       const payload = res.data;
       const rows = Array.isArray(payload) ? payload : payload.data || [];
       setEvents(rows);
-      setTotalRows(Array.isArray(payload) ? rows.length : payload.total || 0);
-      setTotalPages(Array.isArray(payload) ? 1 : payload.totalPages || 1);
     } catch {
       setEvents(MOCK_EVENTS);
     } finally {
       setLoading(false);
     }
-  }, [apiScope, authToken, search, categoryFilter, tab, page, pageSize]);
+  }, [apiScope, authToken, search, categoryFilter]);
 
   useEffect(() => {
     fetchEvents();
@@ -91,7 +79,12 @@ function EventManagement() {
     }
   };
 
-  const filtered = events;
+  const filtered = events.filter(e => {
+    const matchSearch = !search || e.title?.toLowerCase().includes(search.toLowerCase());
+    const matchCat = !categoryFilter || e.category?.toLowerCase() === categoryFilter.toLowerCase();
+    const matchTab = tab === 'upcoming' ? !e.isPast : e.isPast;
+    return matchSearch && matchCat && matchTab;
+  });
 
   const upcomingCount = events.filter(e => !e.isPast).length;
   const pastCount     = events.filter(e => e.isPast).length;
@@ -175,10 +168,10 @@ function EventManagement() {
       </div>
 
       <div className="em-tabs">
-        <button className={`em-tab ${tab === 'upcoming' ? 'em-tab-active' : ''}`} onClick={() => { setTab('upcoming'); setPage(1); }}>
+        <button className={`em-tab ${tab === 'upcoming' ? 'em-tab-active' : ''}`} onClick={() => setTab('upcoming')}>
           Upcoming Events ({upcomingCount})
         </button>
-        <button className={`em-tab ${tab === 'past' ? 'em-tab-active' : ''}`} onClick={() => { setTab('past'); setPage(1); }}>
+        <button className={`em-tab ${tab === 'past' ? 'em-tab-active' : ''}`} onClick={() => setTab('past')}>
           Past Events ({pastCount})
         </button>
       </div>
@@ -189,9 +182,9 @@ function EventManagement() {
           type="text"
           placeholder="Search events..."
           value={search}
-          onChange={e => { setSearch(e.target.value); setPage(1); }}
+          onChange={e => setSearch(e.target.value)}
         />
-        <select className="em-filter-select" value={categoryFilter} onChange={e => { setCategoryFilter(e.target.value); setPage(1); }}>
+        <select className="em-filter-select" value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}>
           <option value="">All Categories</option>
           <option value="Concert">Concert</option>
           <option value="Movie">Movie</option>
@@ -204,18 +197,6 @@ function EventManagement() {
           <div className="em-loading">Loading events...</div>
         ) : renderTable(filtered)}
       </div>
-
-      <TableControls
-        page={page}
-        pageSize={pageSize}
-        totalRows={totalRows}
-        totalPages={totalPages}
-        onPageChange={setPage}
-        onPageSizeChange={(nextSize) => {
-          setPageSize(nextSize);
-          setPage(1);
-        }}
-      />
 
       {/* Delete Confirmation Modal */}
       {deleteTarget && (
