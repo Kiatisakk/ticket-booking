@@ -10,6 +10,12 @@ function SeatLayoutGenerator({
 }) {
   const isSeminar = categoryName?.toLowerCase() === 'seminar';
 
+  const compareSeatNumbers = (a, b) => String(a.SeatNumber || '').localeCompare(
+    String(b.SeatNumber || ''),
+    undefined,
+    { numeric: true, sensitivity: 'base' }
+  );
+
   const groupSeatsByZoneAndRow = () => {
     const grouped = {};
     seats.forEach(seat => {
@@ -18,6 +24,9 @@ function SeatLayoutGenerator({
       if (!grouped[zone]) grouped[zone] = {};
       if (!grouped[zone][row]) grouped[zone][row] = [];
       grouped[zone][row].push(seat);
+    });
+    Object.values(grouped).forEach(rows => {
+      Object.values(rows).forEach(rowSeats => rowSeats.sort(compareSeatNumbers));
     });
     return grouped;
   };

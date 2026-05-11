@@ -146,6 +146,19 @@ function MyTickets() {
     return 'seat-type-standard';
   };
 
+  const sortSeats = (seatList) => [...seatList].sort((a, b) => {
+    const rowCompare = String(a.rowLabel || '').localeCompare(String(b.rowLabel || ''), undefined, {
+      numeric: true,
+      sensitivity: 'base'
+    });
+    if (rowCompare !== 0) return rowCompare;
+
+    return String(a.seatNumber || '').localeCompare(String(b.seatNumber || ''), undefined, {
+      numeric: true,
+      sensitivity: 'base'
+    });
+  });
+
   const filteredBookings = bookings.filter(b => {
     if (activeTab === 'all') return true;
     const theme = getStatusTheme(b.StatusID, b.Status);
@@ -198,8 +211,11 @@ function MyTickets() {
               const venueName = showtime?.Venue?.VenueName || 'Venue TBD';
               const seats = booking.BookingDetails?.map(d => ({
                 label: `${d.Seat?.RowLabel}${d.Seat?.SeatNumber}`,
+                rowLabel: d.Seat?.RowLabel || '',
+                seatNumber: d.Seat?.SeatNumber || '',
                 typeName: d.Seat?.SeatType?.TypeName || 'Standard'
               })) || [];
+              const sortedSeats = sortSeats(seats);
               const theme = getStatusTheme(booking.StatusID, booking.Status);
               const emojiInfo = getEventEmojiInfo(eventInfo.EventID);
               const firstTicket = booking.BookingDetails?.find(d => d.Ticket)?.Ticket;
@@ -230,7 +246,7 @@ function MyTickets() {
                       <div className="ticket-booking-row">
                         <span className="booking-id">BK-{booking.BookingID}</span>
                         <div className="seat-chips">
-                          {seats.map((seat, i) => (
+                          {sortedSeats.map((seat, i) => (
                             <span key={i} className={`seat-chip ${getSeatTypeClass(seat.typeName)}`}>
                               <span className="seat-dot" />
                               {seat.label}
@@ -281,7 +297,7 @@ function MyTickets() {
                             date: showtime ? formatDate(showtime.StartDateTime) : '',
                             location: venueName,
                             ticketNo: ticketIdString,
-                            seats: seats
+                            seats: sortedSeats
                           })}
                         >
                           View Ticket

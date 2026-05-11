@@ -23,6 +23,19 @@ async function findUserByEmail(email) {
   });
 }
 
+function compareSeatPosition(a, b) {
+  const rowCompare = String(a.RowLabel || '').localeCompare(String(b.RowLabel || ''), undefined, {
+    numeric: true,
+    sensitivity: 'base'
+  });
+  if (rowCompare !== 0) return rowCompare;
+
+  return String(a.SeatNumber || '').localeCompare(String(b.SeatNumber || ''), undefined, {
+    numeric: true,
+    sensitivity: 'base'
+  });
+}
+
 // ─── Admin Auth ───────────────────────────────────────────────────────────────
 
 exports.adminLogin = async (req, res) => {
@@ -830,9 +843,9 @@ exports.getVenueSeats = async (req, res) => {
     const venueId = parseInt(req.params.venueId);
     const seats = await prisma.seat.findMany({
       where: { VenueID: venueId },
-      include: { SeatType: true },
-      orderBy: [{ RowLabel: 'asc' }, { SeatNumber: 'asc' }]
+      include: { SeatType: true }
     });
+    seats.sort(compareSeatPosition);
 
     const detailCounts = await prisma.bookingDetail.groupBy({
       by: ['SeatID'],

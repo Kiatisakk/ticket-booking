@@ -64,7 +64,10 @@ function createShowtimeRepository(db = prisma) {
           "IsAvailable"
         FROM "ShowtimeAvailableSeats"
         WHERE "ShowtimeID" = ${showtimeId}
-        ORDER BY "RowLabel" ASC, "SeatNumber" ASC
+        ORDER BY
+          "RowLabel" ASC,
+          CASE WHEN "SeatNumber" ~ '^[0-9]+$' THEN "SeatNumber"::int END ASC NULLS LAST,
+          "SeatNumber" ASC
       `;
 
       const queryFallback = () => db.$queryRaw`
@@ -94,7 +97,10 @@ function createShowtimeRepository(db = prisma) {
         JOIN "Seats" s ON s."VenueID" = sh."VenueID"
         JOIN "SeatTypes" st ON st."SeatTypeID" = s."SeatTypeID"
         WHERE sh."ShowtimeID" = ${showtimeId}
-        ORDER BY s."RowLabel" ASC, s."SeatNumber" ASC
+        ORDER BY
+          s."RowLabel" ASC,
+          CASE WHEN s."SeatNumber" ~ '^[0-9]+$' THEN s."SeatNumber"::int END ASC NULLS LAST,
+          s."SeatNumber" ASC
       `;
 
       try {
