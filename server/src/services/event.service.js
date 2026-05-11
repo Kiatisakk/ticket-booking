@@ -25,10 +25,18 @@ function createEventService({
         throw new HttpError(403, 'Unauthorized. Admin or Staff role required.');
       }
 
+      if (!title?.trim()) {
+        throw new HttpError(400, 'Event title is required');
+      }
+
+      if (!categoryId || !Number.isInteger(Number(categoryId))) {
+        throw new HttpError(400, 'Category is required');
+      }
+
       return events.create({
-        title,
+        title: title.trim(),
         description,
-        categoryId,
+        categoryId: Number(categoryId),
         createdByUserId: user.userId
       });
     }

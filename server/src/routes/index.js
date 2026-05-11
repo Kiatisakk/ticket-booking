@@ -21,20 +21,19 @@ router.post('/auth/register', authController.register);
 router.post('/auth/login', authController.login);
 
 // Event Routes
-router.get('/events', eventController.getAllEvents);
-router.get('/events/:id', eventController.getEventById);
-router.post('/events', authenticateToken, eventController.createEvent);
+router.get('/events', authenticateToken, eventController.getAllEvents);
+router.get('/events/:id', authenticateToken, eventController.getEventById);
 
 // Venue & Seat Routes
-router.get('/venues', venueController.getAllVenues);
-router.get('/venues/:id', venueController.getVenueById);
-router.get('/seat-types', venueController.getAllSeatTypes);
+router.get('/venues', authenticateToken, venueController.getAllVenues);
+router.get('/venues/:id', authenticateToken, venueController.getVenueById);
+router.get('/seat-types', authenticateToken, venueController.getAllSeatTypes);
 
 // Showtime Routes
-router.get('/showtimes', showtimeController.getAllShowtimes);
-router.get('/showtimes/event/:eventId', showtimeController.getShowtimesByEvent);
-router.get('/showtimes/:id', showtimeController.getShowtimeById);
-router.get('/showtimes/:id/booked-seats', showtimeController.getBookedSeats);
+router.get('/showtimes', authenticateToken, showtimeController.getAllShowtimes);
+router.get('/showtimes/event/:eventId', authenticateToken, showtimeController.getShowtimesByEvent);
+router.get('/showtimes/:id', authenticateToken, showtimeController.getShowtimeById);
+router.get('/showtimes/:id/booked-seats', authenticateToken, showtimeController.getBookedSeats);
 
 // Booking Routes
 router.post('/bookings', authenticateToken, bookingController.createBooking);
@@ -121,15 +120,6 @@ router.get('/staff/events/:id', authenticateStaff, staffController.getEventById)
 router.post('/staff/events', authenticateStaff, staffController.createEvent);
 router.put('/staff/events/:id', authenticateStaff, staffController.updateEvent);
 router.delete('/staff/events/:id', authenticateStaff, staffController.deleteEvent);
-
-// Staff Bookings
-router.get('/staff/bookings', authenticateStaff, staffController.getAllBookings);
-
-// Staff Transactions
-router.get('/staff/transactions', authenticateStaff, staffController.getAllTransactions);
-
-// Staff Dashboard
-router.get('/staff/dashboard', authenticateStaff, staffController.getDashboard);
 
 // Seat Lock Routes
 router.post('/seats/lock', seatLockController.lockSeat);

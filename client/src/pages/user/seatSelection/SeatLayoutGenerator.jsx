@@ -24,12 +24,17 @@ function SeatLayoutGenerator({
 
   const groupedData = groupSeatsByZoneAndRow();
 
+  const getSeatTypeClass = (seat) => {
+    const typeName = seat.SeatType?.TypeName?.toLowerCase() || 'standard';
+    if (typeName.includes('vip')) return 'seat-type-vip';
+    if (typeName.includes('sofa')) return 'seat-type-sofa-bed';
+    return 'seat-type-standard';
+  };
+
   const getSeatStatusClass = (seat) => {
     if (isSeatBooked(seat.SeatID)) return 'taken';
-    if (isSeatSelected(seat.SeatID)) {
-      return seat.SeatType?.TypeName?.toLowerCase().includes('vip') ? 'vip-selected' : 'selected';
-    }
-    return seat.SeatType?.TypeName?.toLowerCase().includes('vip') ? 'vip-avail' : 'available';
+    if (isSeatSelected(seat.SeatID)) return 'selected';
+    return `available ${getSeatTypeClass(seat)}`;
   };
 
   if (!isSeminar) {
@@ -80,10 +85,11 @@ function SeatLayoutGenerator({
 
         {/* Legend */}
         <div className="legend">
-          <div className="legend-item"><div className="legend-swatch" style={{background: 'rgba(234,179,8,0.12)', borderColor: 'rgba(234,179,8,0.3)'}}></div>VIP Available</div>
-          <div className="legend-item"><div className="legend-swatch" style={{background: 'var(--surface2)', borderColor: 'var(--border2)'}}></div>Available</div>
-          <div className="legend-item"><div className="legend-swatch" style={{background: 'var(--indigo)', borderColor: 'var(--indigo-light)'}}></div>Selected</div>
-          <div className="legend-item"><div className="legend-swatch" style={{background: 'var(--surface3)', borderColor: 'var(--border)', opacity: 0.5}}></div>Taken</div>
+          <div className="legend-item"><div className="legend-swatch legend-vip"></div>VIP</div>
+          <div className="legend-item"><div className="legend-swatch legend-standard"></div>Standard</div>
+          <div className="legend-item"><div className="legend-swatch legend-sofa-bed"></div>Sofa Bed</div>
+          <div className="legend-item"><div className="legend-swatch legend-selected"></div>Selected</div>
+          <div className="legend-item"><div className="legend-swatch legend-taken"></div>Taken</div>
         </div>
       </div>
     );

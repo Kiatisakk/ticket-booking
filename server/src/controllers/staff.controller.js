@@ -235,19 +235,19 @@ exports.updateEvent = async (req, res) => {
     }
 
     if (title !== undefined && !title?.trim()) return res.status(400).json({ error: 'Event title is required' });
-    if (categoryId) {
-      const category = await prisma.eventCategory.findUnique({
-        where: { CategoryID: parseInt(categoryId) }
-      });
-      if (!category) return res.status(400).json({ error: 'Invalid category' });
-    }
+    if (!categoryId) return res.status(400).json({ error: 'Category is required' });
+
+    const category = await prisma.eventCategory.findUnique({
+      where: { CategoryID: parseInt(categoryId) }
+    });
+    if (!category) return res.status(400).json({ error: 'Invalid category' });
 
     const updatedEvent = await prisma.event.update({
       where: { EventID: eventId },
       data: {
         Title: title?.trim() || event.Title,
         Description: description?.trim() || event.Description,
-        CategoryID: categoryId ? parseInt(categoryId) : event.CategoryID
+        CategoryID: parseInt(categoryId)
       },
       include: {
         Category: true,

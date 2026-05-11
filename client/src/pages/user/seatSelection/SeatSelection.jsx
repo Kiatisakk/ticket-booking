@@ -41,7 +41,9 @@ function SeatSelection() {
 
   const fetchAllShowtimes = async (eventId) => {
     try {
-      const response = await axios.get(`${API_URL}/events/${eventId}`);
+      const response = await axios.get(`${API_URL}/events/${eventId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       setAllShowtimes(response.data.Showtimes || []);
     } catch (error) {
       console.error('Failed to fetch all showtimes:', error);
@@ -51,11 +53,15 @@ function SeatSelection() {
   const fetchShowtimeAndSeats = async (id) => {
     setLoading(true);
     try {
-      const response = await axios.get(`${API_URL}/showtimes/${id}`);
+      const response = await axios.get(`${API_URL}/showtimes/${id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       setShowtime(response.data);
       setSeats(response.data.Venue?.Seats || []);
 
-      const bookedResponse = await axios.get(`${API_URL}/showtimes/${id}/booked-seats`);
+      const bookedResponse = await axios.get(`${API_URL}/showtimes/${id}/booked-seats`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       setBookedSeatIds(bookedResponse.data.bookedSeatIds || []);
       if (bookedResponse.data.seats?.length) {
         setSeats(bookedResponse.data.seats.map(seat => ({

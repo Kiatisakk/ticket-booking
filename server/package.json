@@ -9,6 +9,7 @@
     "db:migrate": "prisma migrate dev",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
+    "db:apply-constraints": "prisma db execute --schema prisma/schema.prisma --file prisma/migrations/check_constraints.sql",
     "db:seed": "node prisma/seed.js",
     "db:seed-historical": "node src/seed-historical.js",
     "test": "node --test \"test/**/*.test.js\""

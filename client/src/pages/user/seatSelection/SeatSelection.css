@@ -167,12 +167,15 @@
   position: relative; user-select: none;
 }
 .seat:hover:not(.taken) { transform: scale(1.15); z-index: 1; }
-.seat.available { background: var(--surface2); border-color: var(--border2); color: transparent; }
+.seat.available { color: transparent; }
 .seat.available:hover { border-color: var(--indigo-light); background: var(--indigo-dim); }
-.seat.vip-avail { background: rgba(234,179,8,0.12); border-color: rgba(234,179,8,0.3); color: transparent; }
-.seat.vip-avail:hover { background: rgba(234,179,8,0.25); border-color: #fbbf24; }
+.seat.seat-type-vip { background: rgba(234,179,8,0.14); border-color: rgba(234,179,8,0.42); }
+.seat.seat-type-vip:hover { background: rgba(234,179,8,0.25); border-color: #fbbf24; }
+.seat.seat-type-standard { background: rgba(59,130,246,0.12); border-color: rgba(96,165,250,0.35); }
+.seat.seat-type-standard:hover { background: rgba(59,130,246,0.22); border-color: #60a5fa; }
+.seat.seat-type-sofa-bed { background: rgba(20,184,166,0.14); border-color: rgba(45,212,191,0.38); }
+.seat.seat-type-sofa-bed:hover { background: rgba(20,184,166,0.24); border-color: #2dd4bf; }
 .seat.selected { background: var(--indigo); border-color: var(--indigo-light); box-shadow: 0 0 12px rgba(99,102,241,0.5); }
-.seat.vip-selected { background: #ca8a04; border-color: #fbbf24; box-shadow: 0 0 12px rgba(234,179,8,0.5); }
 .seat.taken { background: var(--surface3); border-color: var(--border); cursor: not-allowed; opacity: 0.35; color: transparent; }
 .seat-num { color: rgba(255,255,255,0.8); font-size: 9px; position: absolute; bottom: 3px; }
 
@@ -190,6 +193,11 @@
 .legend { display: flex; gap: 20px; justify-content: center; flex-wrap: wrap; margin-top: 20px; }
 .legend-item { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--muted2); }
 .legend-swatch { width: 20px; height: 20px; border-radius: 4px; border: 1px solid transparent; }
+.legend-vip { background: rgba(234,179,8,0.14); border-color: rgba(234,179,8,0.42); }
+.legend-standard { background: rgba(59,130,246,0.12); border-color: rgba(96,165,250,0.35); }
+.legend-sofa-bed { background: rgba(20,184,166,0.14); border-color: rgba(45,212,191,0.38); }
+.legend-selected { background: var(--indigo); border-color: var(--indigo-light); }
+.legend-taken { background: var(--surface3); border-color: var(--border); opacity: 0.5; }
 
 /* BOOKING PANEL */
 .booking-panel { background: var(--surface); border-left: 1px solid var(--border); padding: 32px 24px; display: flex; flex-direction: column; }

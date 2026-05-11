@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { useAuth } from '../../../context/AuthContext';
 import './EventDetails.css';
 
 const API_URL = 'http://localhost:4000/api';
@@ -8,6 +9,7 @@ const API_URL = 'http://localhost:4000/api';
 function EventDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { token } = useAuth();
   const [event, setEvent] = useState(null);
   const [loading, setLoading] = useState(true);
   
@@ -16,7 +18,7 @@ function EventDetails() {
 
   useEffect(() => {
     fetchEventDetails();
-  }, [id]);
+  }, [id, token]);
 
   useEffect(() => {
     if (event?.Showtimes && event.Showtimes.length > 0) {
@@ -26,7 +28,9 @@ function EventDetails() {
 
   const fetchEventDetails = async () => {
     try {
-      const response = await axios.get(`${API_URL}/events/${id}`);
+      const response = await axios.get(`${API_URL}/events/${id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       setEvent(response.data);
     } catch (error) {
       console.error('Failed to fetch event:', error);
@@ -38,7 +42,9 @@ function EventDetails() {
   const fetchTicketPrices = async (showtimeId, showtimeBasePrice) => {
     setLoadingPrices(true);
     try {
-      const response = await axios.get(`${API_URL}/showtimes/${showtimeId}`);
+      const response = await axios.get(`${API_URL}/showtimes/${showtimeId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       const seats = response.data.Venue?.Seats || [];
       const basePrice = Number(showtimeBasePrice) || 0;
       

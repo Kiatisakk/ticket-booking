@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { useAuth } from '../../../context/AuthContext';
 import './Events.css';
 
 const API_URL = 'http://localhost:4000/api';
@@ -13,6 +14,7 @@ function isEventPast(event) {
 }
 
 function Events() {
+  const { token } = useAuth();
   const [events, setEvents] = useState([]);
   const [filteredEvents, setFilteredEvents] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -22,11 +24,13 @@ function Events() {
 
   useEffect(() => {
     fetchEvents();
-  }, []);
+  }, [token]);
 
   const fetchEvents = async () => {
     try {
-      const response = await axios.get(`${API_URL}/events`);
+      const response = await axios.get(`${API_URL}/events`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       setEvents(response.data);
       setFilteredEvents(response.data);
     } catch (error) {

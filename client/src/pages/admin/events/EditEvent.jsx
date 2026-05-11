@@ -145,6 +145,7 @@ function EditEvent() {
   const validate = () => {
     const errs = {};
     if (!title.trim()) errs.title = 'Event title is required';
+    if (!categoryId) errs.categoryId = 'Select a category';
     showtimes.forEach(s => {
       if (!s.venueId)       errs[`st_${s.key}_venueId`]       = 'Select a venue';
       if (!s.startDateTime) errs[`st_${s.key}_startDateTime`] = 'Date & time required';
@@ -166,7 +167,7 @@ function EditEvent() {
       await axios.put(`${API_URL}/${apiScope}/events/${id}`, {
         title: title.trim(),
         description: description.trim(),
-        categoryId: categoryId || null,
+        categoryId,
         showtimes: showtimes.map(s => ({
           id:            s.id || undefined,
           venueId:       s.venueId,
@@ -263,13 +264,22 @@ function EditEvent() {
             </div>
 
             <div className="eed-field">
-              <label className="eed-label">Category</label>
-              <select className="eed-select" value={categoryId} onChange={e => setCategoryId(e.target.value)}>
+              <label className="eed-label">Category <span className="eed-req">*</span></label>
+              <select
+                className={`eed-select${errors.categoryId ? ' err' : ''}`}
+                value={categoryId}
+                onChange={e => {
+                  setCategoryId(e.target.value);
+                  setErrors(p => ({ ...p, categoryId: '' }));
+                }}
+                required
+              >
                 <option value="">— Select category —</option>
                 {categories.map(c => (
                   <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
               </select>
+              {errors.categoryId && <span className="eed-err-msg">{errors.categoryId}</span>}
             </div>
 
             <div className="eed-field eed-full">
