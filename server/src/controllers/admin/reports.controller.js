@@ -46,6 +46,19 @@ function monthLabels(months) {
   });
 }
 
+async function getReportFactSources() {
+  const [row] = await prisma.$queryRaw`
+    SELECT
+      to_regclass('"ReportPaymentDetailFacts"') IS NOT NULL AS "hasPaymentFacts",
+      to_regclass('"ReportBookingDetailFacts"') IS NOT NULL AS "hasBookingFacts"
+  `;
+
+  return {
+    hasPaymentFacts: Boolean(row?.hasPaymentFacts),
+    hasBookingFacts: Boolean(row?.hasBookingFacts)
+  };
+}
+
 // ─── Report KPI ───────────────────────────────────────────────────────────────
 
 exports.getReportKpi = asyncHandler(async (req, res) => {
@@ -53,62 +66,100 @@ exports.getReportKpi = asyncHandler(async (req, res) => {
     const { start, end } = getDateRange(req.query);
     const catFilter = category && category !== 'all' ? category : null;
     const venueFilter = venueId && venueId !== 'all' ? parseInt(venueId) : null;
+    const factSources = await getReportFactSources();
 
-    const revenueResult = await prisma.$queryRaw`
-      SELECT COALESCE(SUM(sub.amount), 0)::float8 as revenue
-      FROM (
-        SELECT DISTINCT p."PaymentID", p."Amount" as amount
-        FROM "Payments" p
-        JOIN "Bookings" b ON p."BookingID" = b."BookingID"
-        JOIN "BookingDetails" bd ON bd."BookingID" = b."BookingID"
-        JOIN "Showtimes" s ON bd."ShowtimeID" = s."ShowtimeID"
-        JOIN "Events" e ON s."EventID" = e."EventID"
-        JOIN "EventCategories" ec ON e."CategoryID" = ec."CategoryID"
-        WHERE p."StatusID" = 2
-          AND p."PaidAt" >= ${start}
-          AND p."PaidAt" <  ${end}
-          AND (${catFilter}::text IS NULL OR ec."CategoryName" = ${catFilter})
-          AND (${venueFilter}::int IS NULL OR s."VenueID" = ${venueFilter})
-      ) sub
-    `;
+    const revenueResult = factSources.hasPaymentFacts
+      ? await prisma.$queryRaw`
+          SELECT COALESCE(SUM(sub.amount), 0)::float8 as revenue
+          FROM (
+            SELECT DISTINCT f."PaymentID", f."Amount" as amount
+            FROM "ReportPaymentDetailFacts" f
+            WHERE f."PaidAt" >= ${start}
+              AND f."PaidAt" <  ${end}
+              AND (${catFilter}::text IS NULL OR f."CategoryName" = ${catFilter})
+              AND (${venueFilter}::int IS NULL OR f."VenueID" = ${venueFilter})
+          ) sub
+        `
+      : await prisma.$queryRaw`
+          SELECT COALESCE(SUM(sub.amount), 0)::float8 as revenue
+          FROM (
+            SELECT DISTINCT p."PaymentID", p."Amount" as amount
+            FROM "Payments" p
+            JOIN "Bookings" b ON p."BookingID" = b."BookingID"
+            JOIN "BookingDetails" bd ON bd."BookingID" = b."BookingID"
+            JOIN "Showtimes" s ON bd."ShowtimeID" = s."ShowtimeID"
+            JOIN "Events" e ON s."EventID" = e."EventID"
+            JOIN "EventCategories" ec ON e."CategoryID" = ec."CategoryID"
+            WHERE p."StatusID" = 2
+              AND p."PaidAt" >= ${start}
+              AND p."PaidAt" <  ${end}
+              AND (${catFilter}::text IS NULL OR ec."CategoryName" = ${catFilter})
+              AND (${venueFilter}::int IS NULL OR s."VenueID" = ${venueFilter})
+          ) sub
+        `;
     const totalRevenue = Number(revenueResult[0]?.revenue ?? 0);
 
-    const bookingsResult = await prisma.$queryRaw`
-      SELECT COUNT(bd."DetailID")::int as count
-      FROM "BookingDetails" bd
-      JOIN "Bookings" b ON bd."BookingID" = b."BookingID"
-      JOIN "Showtimes" s ON bd."ShowtimeID" = s."ShowtimeID"
-      JOIN "Events" e ON s."EventID" = e."EventID"
-      JOIN "EventCategories" ec ON e."CategoryID" = ec."CategoryID"
-      WHERE b."StatusID" = 2
-        AND b."BookingTimestamp" >= ${start}
-        AND b."BookingTimestamp" <  ${end}
-        AND (${catFilter}::text IS NULL OR ec."CategoryName" = ${catFilter})
-        AND (${venueFilter}::int IS NULL OR s."VenueID" = ${venueFilter})
-    `;
+    const bookingsResult = factSources.hasBookingFacts
+      ? await prisma.$queryRaw`
+          SELECT COUNT(f."DetailID")::int as count
+          FROM "ReportBookingDetailFacts" f
+          WHERE f."BookingStatusID" = 2
+            AND f."BookingTimestamp" >= ${start}
+            AND f."BookingTimestamp" <  ${end}
+            AND (${catFilter}::text IS NULL OR f."CategoryName" = ${catFilter})
+            AND (${venueFilter}::int IS NULL OR f."VenueID" = ${venueFilter})
+        `
+      : await prisma.$queryRaw`
+          SELECT COUNT(bd."DetailID")::int as count
+          FROM "BookingDetails" bd
+          JOIN "Bookings" b ON bd."BookingID" = b."BookingID"
+          JOIN "Showtimes" s ON bd."ShowtimeID" = s."ShowtimeID"
+          JOIN "Events" e ON s."EventID" = e."EventID"
+          JOIN "EventCategories" ec ON e."CategoryID" = ec."CategoryID"
+          WHERE b."StatusID" = 2
+            AND b."BookingTimestamp" >= ${start}
+            AND b."BookingTimestamp" <  ${end}
+            AND (${catFilter}::text IS NULL OR ec."CategoryName" = ${catFilter})
+            AND (${venueFilter}::int IS NULL OR s."VenueID" = ${venueFilter})
+        `;
     const totalBookings = Number(bookingsResult[0]?.count ?? 0);
 
     // Per-category analysis (always return all categories for dropdown)
-    const categoryAnalysis = await prisma.$queryRaw`
-      SELECT
-        ec."CategoryName" as category,
-        COALESCE(SUM(p."Amount"), 0)::float8 as revenue,
-        COUNT(DISTINCT b."BookingID")::int as bookings,
-        COUNT(bd."DetailID")::int as tickets
-      FROM "Payments" p
-      JOIN "Bookings" b ON p."BookingID" = b."BookingID"
-      JOIN "BookingDetails" bd ON bd."BookingID" = b."BookingID"
-      JOIN "Showtimes" s ON bd."ShowtimeID" = s."ShowtimeID"
-      JOIN "Events" e ON s."EventID" = e."EventID"
-      JOIN "EventCategories" ec ON e."CategoryID" = ec."CategoryID"
-      WHERE p."StatusID" = 2
-        AND p."PaidAt" >= ${start}
-        AND p."PaidAt" <  ${end}
-        AND (${catFilter}::text IS NULL OR ec."CategoryName" = ${catFilter})
-        AND (${venueFilter}::int IS NULL OR s."VenueID" = ${venueFilter})
-      GROUP BY ec."CategoryName"
-      ORDER BY revenue DESC
-    `;
+    const categoryAnalysis = factSources.hasPaymentFacts
+      ? await prisma.$queryRaw`
+          SELECT
+            f."CategoryName" as category,
+            COALESCE(SUM(f."Amount"), 0)::float8 as revenue,
+            COUNT(DISTINCT f."BookingID")::int as bookings,
+            COUNT(f."DetailID")::int as tickets
+          FROM "ReportPaymentDetailFacts" f
+          WHERE f."PaidAt" >= ${start}
+            AND f."PaidAt" <  ${end}
+            AND (${catFilter}::text IS NULL OR f."CategoryName" = ${catFilter})
+            AND (${venueFilter}::int IS NULL OR f."VenueID" = ${venueFilter})
+          GROUP BY f."CategoryName"
+          ORDER BY revenue DESC
+        `
+      : await prisma.$queryRaw`
+          SELECT
+            ec."CategoryName" as category,
+            COALESCE(SUM(p."Amount"), 0)::float8 as revenue,
+            COUNT(DISTINCT b."BookingID")::int as bookings,
+            COUNT(bd."DetailID")::int as tickets
+          FROM "Payments" p
+          JOIN "Bookings" b ON p."BookingID" = b."BookingID"
+          JOIN "BookingDetails" bd ON bd."BookingID" = b."BookingID"
+          JOIN "Showtimes" s ON bd."ShowtimeID" = s."ShowtimeID"
+          JOIN "Events" e ON s."EventID" = e."EventID"
+          JOIN "EventCategories" ec ON e."CategoryID" = ec."CategoryID"
+          WHERE p."StatusID" = 2
+            AND p."PaidAt" >= ${start}
+            AND p."PaidAt" <  ${end}
+            AND (${catFilter}::text IS NULL OR ec."CategoryName" = ${catFilter})
+            AND (${venueFilter}::int IS NULL OR s."VenueID" = ${venueFilter})
+          GROUP BY ec."CategoryName"
+          ORDER BY revenue DESC
+        `;
 
     const categories = categoryAnalysis.map(c => ({
       name:     c.category,
@@ -128,26 +179,41 @@ exports.getRevenueByCategory = asyncHandler(async (req, res) => {
     const { category } = req.query;
     const { start, end, months } = getDateRange(req.query);
     const catFilter = category && category !== 'all' ? category : null;
+    const factSources = await getReportFactSources();
 
-    const rows = await prisma.$queryRaw`
-      SELECT
-        ec."CategoryName" as category,
-        EXTRACT(YEAR FROM p."PaidAt")::int as yr,
-        EXTRACT(MONTH FROM p."PaidAt")::int as month,
-        COALESCE(SUM(p."Amount"), 0)::float8 as revenue
-      FROM "Payments" p
-      JOIN "Bookings" b ON p."BookingID" = b."BookingID"
-      JOIN "BookingDetails" bd ON bd."BookingID" = b."BookingID"
-      JOIN "Showtimes" s ON bd."ShowtimeID" = s."ShowtimeID"
-      JOIN "Events" e ON s."EventID" = e."EventID"
-      JOIN "EventCategories" ec ON e."CategoryID" = ec."CategoryID"
-      WHERE p."StatusID" = 2
-        AND p."PaidAt" >= ${start}
-        AND p."PaidAt" <  ${end}
-        AND (${catFilter}::text IS NULL OR ec."CategoryName" = ${catFilter})
-      GROUP BY ec."CategoryName", EXTRACT(YEAR FROM p."PaidAt"), EXTRACT(MONTH FROM p."PaidAt")
-      ORDER BY yr, month
-    `;
+    const rows = factSources.hasPaymentFacts
+      ? await prisma.$queryRaw`
+          SELECT
+            f."CategoryName" as category,
+            f."PaidYear" as yr,
+            f."PaidMonth" as month,
+            COALESCE(SUM(f."Amount"), 0)::float8 as revenue
+          FROM "ReportPaymentDetailFacts" f
+          WHERE f."PaidAt" >= ${start}
+            AND f."PaidAt" <  ${end}
+            AND (${catFilter}::text IS NULL OR f."CategoryName" = ${catFilter})
+          GROUP BY f."CategoryName", f."PaidYear", f."PaidMonth"
+          ORDER BY yr, month
+        `
+      : await prisma.$queryRaw`
+          SELECT
+            ec."CategoryName" as category,
+            EXTRACT(YEAR FROM p."PaidAt")::int as yr,
+            EXTRACT(MONTH FROM p."PaidAt")::int as month,
+            COALESCE(SUM(p."Amount"), 0)::float8 as revenue
+          FROM "Payments" p
+          JOIN "Bookings" b ON p."BookingID" = b."BookingID"
+          JOIN "BookingDetails" bd ON bd."BookingID" = b."BookingID"
+          JOIN "Showtimes" s ON bd."ShowtimeID" = s."ShowtimeID"
+          JOIN "Events" e ON s."EventID" = e."EventID"
+          JOIN "EventCategories" ec ON e."CategoryID" = ec."CategoryID"
+          WHERE p."StatusID" = 2
+            AND p."PaidAt" >= ${start}
+            AND p."PaidAt" <  ${end}
+            AND (${catFilter}::text IS NULL OR ec."CategoryName" = ${catFilter})
+          GROUP BY ec."CategoryName", EXTRACT(YEAR FROM p."PaidAt"), EXTRACT(MONTH FROM p."PaidAt")
+          ORDER BY yr, month
+        `;
 
     const labels = monthLabels(months);
     const datasets = { Concert: [], Movie: [], Seminar: [] };
@@ -194,27 +260,42 @@ exports.getRevenueByVenue = asyncHandler(async (req, res) => {
     const { category } = req.query;
     const { start, end, months } = getDateRange(req.query);
     const catFilter = category && category !== 'all' ? category : null;
+    const factSources = await getReportFactSources();
 
-    const rows = await prisma.$queryRaw`
-      SELECT
-        v."VenueName" as venue,
-        EXTRACT(YEAR FROM p."PaidAt")::int as yr,
-        EXTRACT(MONTH FROM p."PaidAt")::int as month,
-        COALESCE(SUM(p."Amount"), 0)::float8 as revenue
-      FROM "Payments" p
-      JOIN "Bookings" b ON p."BookingID" = b."BookingID"
-      JOIN "BookingDetails" bd ON bd."BookingID" = b."BookingID"
-      JOIN "Showtimes" s ON bd."ShowtimeID" = s."ShowtimeID"
-      JOIN "Venues" v ON s."VenueID" = v."VenueID"
-      JOIN "Events" e ON s."EventID" = e."EventID"
-      JOIN "EventCategories" ec ON e."CategoryID" = ec."CategoryID"
-      WHERE p."StatusID" = 2
-        AND p."PaidAt" >= ${start}
-        AND p."PaidAt" <  ${end}
-        AND (${catFilter}::text IS NULL OR ec."CategoryName" = ${catFilter})
-      GROUP BY v."VenueName", EXTRACT(YEAR FROM p."PaidAt"), EXTRACT(MONTH FROM p."PaidAt")
-      ORDER BY yr, month
-    `;
+    const rows = factSources.hasPaymentFacts
+      ? await prisma.$queryRaw`
+          SELECT
+            f."VenueName" as venue,
+            f."PaidYear" as yr,
+            f."PaidMonth" as month,
+            COALESCE(SUM(f."Amount"), 0)::float8 as revenue
+          FROM "ReportPaymentDetailFacts" f
+          WHERE f."PaidAt" >= ${start}
+            AND f."PaidAt" <  ${end}
+            AND (${catFilter}::text IS NULL OR f."CategoryName" = ${catFilter})
+          GROUP BY f."VenueName", f."PaidYear", f."PaidMonth"
+          ORDER BY yr, month
+        `
+      : await prisma.$queryRaw`
+          SELECT
+            v."VenueName" as venue,
+            EXTRACT(YEAR FROM p."PaidAt")::int as yr,
+            EXTRACT(MONTH FROM p."PaidAt")::int as month,
+            COALESCE(SUM(p."Amount"), 0)::float8 as revenue
+          FROM "Payments" p
+          JOIN "Bookings" b ON p."BookingID" = b."BookingID"
+          JOIN "BookingDetails" bd ON bd."BookingID" = b."BookingID"
+          JOIN "Showtimes" s ON bd."ShowtimeID" = s."ShowtimeID"
+          JOIN "Venues" v ON s."VenueID" = v."VenueID"
+          JOIN "Events" e ON s."EventID" = e."EventID"
+          JOIN "EventCategories" ec ON e."CategoryID" = ec."CategoryID"
+          WHERE p."StatusID" = 2
+            AND p."PaidAt" >= ${start}
+            AND p."PaidAt" <  ${end}
+            AND (${catFilter}::text IS NULL OR ec."CategoryName" = ${catFilter})
+          GROUP BY v."VenueName", EXTRACT(YEAR FROM p."PaidAt"), EXTRACT(MONTH FROM p."PaidAt")
+          ORDER BY yr, month
+        `;
 
     const allVenues = await prisma.venue.findMany({
       select: { VenueName: true },
@@ -241,24 +322,37 @@ const getBookingsByMonth = asyncHandler(async (req, res) => {
     const { category } = req.query;
     const { start, end, months } = getDateRange(req.query);
     const catFilter = category && category !== 'all' ? category : null;
+    const factSources = await getReportFactSources();
 
-    const rows = await prisma.$queryRaw`
-      SELECT EXTRACT(YEAR FROM p."PaidAt")::int as yr,
-             EXTRACT(MONTH FROM p."PaidAt")::int as month,
-             COUNT(DISTINCT p."PaymentID")::int as count
-      FROM "Payments" p
-      JOIN "Bookings" b ON p."BookingID" = b."BookingID"
-      JOIN "BookingDetails" bd ON bd."BookingID" = b."BookingID"
-      JOIN "Showtimes" s ON bd."ShowtimeID" = s."ShowtimeID"
-      JOIN "Events" e ON s."EventID" = e."EventID"
-      JOIN "EventCategories" ec ON e."CategoryID" = ec."CategoryID"
-      WHERE p."StatusID" = 2
-        AND p."PaidAt" >= ${start}
-        AND p."PaidAt" <  ${end}
-        AND (${catFilter}::text IS NULL OR ec."CategoryName" = ${catFilter})
-      GROUP BY yr, month
-      ORDER BY yr, month
-    `;
+    const rows = factSources.hasPaymentFacts
+      ? await prisma.$queryRaw`
+          SELECT f."PaidYear" as yr,
+                 f."PaidMonth" as month,
+                 COUNT(DISTINCT f."PaymentID")::int as count
+          FROM "ReportPaymentDetailFacts" f
+          WHERE f."PaidAt" >= ${start}
+            AND f."PaidAt" <  ${end}
+            AND (${catFilter}::text IS NULL OR f."CategoryName" = ${catFilter})
+          GROUP BY yr, month
+          ORDER BY yr, month
+        `
+      : await prisma.$queryRaw`
+          SELECT EXTRACT(YEAR FROM p."PaidAt")::int as yr,
+                 EXTRACT(MONTH FROM p."PaidAt")::int as month,
+                 COUNT(DISTINCT p."PaymentID")::int as count
+          FROM "Payments" p
+          JOIN "Bookings" b ON p."BookingID" = b."BookingID"
+          JOIN "BookingDetails" bd ON bd."BookingID" = b."BookingID"
+          JOIN "Showtimes" s ON bd."ShowtimeID" = s."ShowtimeID"
+          JOIN "Events" e ON s."EventID" = e."EventID"
+          JOIN "EventCategories" ec ON e."CategoryID" = ec."CategoryID"
+          WHERE p."StatusID" = 2
+            AND p."PaidAt" >= ${start}
+            AND p."PaidAt" <  ${end}
+            AND (${catFilter}::text IS NULL OR ec."CategoryName" = ${catFilter})
+          GROUP BY yr, month
+          ORDER BY yr, month
+        `;
 
     const labels = monthLabels(months);
     const data = months.map(({ year, month }) => {
@@ -492,35 +586,59 @@ exports.getCustomerRetention = asyncHandler(async (req, res) => {
     const { category } = req.query;
     const { start, end } = getDateRange(req.query);
     const catFilter = category && category !== 'all' ? category : null;
+    const factSources = await getReportFactSources();
 
-    const rows = await prisma.$queryRaw`
-      WITH booking_scope AS (
-        SELECT DISTINCT b."BookingID", b."UserID", p."Amount"::float8 as amount
-        FROM "Bookings" b
-        JOIN "Payments" p ON p."BookingID" = b."BookingID"
-        JOIN "BookingDetails" bd ON bd."BookingID" = b."BookingID"
-        JOIN "Showtimes" s ON bd."ShowtimeID" = s."ShowtimeID"
-        JOIN "Events" e ON s."EventID" = e."EventID"
-        JOIN "EventCategories" ec ON e."CategoryID" = ec."CategoryID"
-        WHERE p."StatusID" = 2
-          AND p."PaidAt" >= ${start}
-          AND p."PaidAt" <  ${end}
-          AND (${catFilter}::text IS NULL OR ec."CategoryName" = ${catFilter})
-      ),
-      user_counts AS (
-        SELECT "UserID", COUNT(*)::int as booking_count
-        FROM booking_scope
-        GROUP BY "UserID"
-      )
-      SELECT
-        CASE WHEN uc.booking_count > 1 THEN 'Repeat Customers' ELSE 'One-time Customers' END as type,
-        COALESCE(SUM(bs.amount), 0)::float8 as revenue,
-        COUNT(DISTINCT bs."UserID")::int as users,
-        COUNT(DISTINCT bs."BookingID")::int as bookings
-      FROM booking_scope bs
-      JOIN user_counts uc ON uc."UserID" = bs."UserID"
-      GROUP BY type
-    `;
+    const rows = factSources.hasPaymentFacts
+      ? await prisma.$queryRaw`
+          WITH booking_scope AS (
+            SELECT DISTINCT f."BookingID", f."UserID", f."Amount"::float8 as amount
+            FROM "ReportPaymentDetailFacts" f
+            WHERE f."PaidAt" >= ${start}
+              AND f."PaidAt" <  ${end}
+              AND (${catFilter}::text IS NULL OR f."CategoryName" = ${catFilter})
+          ),
+          user_counts AS (
+            SELECT "UserID", COUNT(*)::int as booking_count
+            FROM booking_scope
+            GROUP BY "UserID"
+          )
+          SELECT
+            CASE WHEN uc.booking_count > 1 THEN 'Repeat Customers' ELSE 'One-time Customers' END as type,
+            COALESCE(SUM(bs.amount), 0)::float8 as revenue,
+            COUNT(DISTINCT bs."UserID")::int as users,
+            COUNT(DISTINCT bs."BookingID")::int as bookings
+          FROM booking_scope bs
+          JOIN user_counts uc ON uc."UserID" = bs."UserID"
+          GROUP BY type
+        `
+      : await prisma.$queryRaw`
+          WITH booking_scope AS (
+            SELECT DISTINCT b."BookingID", b."UserID", p."Amount"::float8 as amount
+            FROM "Bookings" b
+            JOIN "Payments" p ON p."BookingID" = b."BookingID"
+            JOIN "BookingDetails" bd ON bd."BookingID" = b."BookingID"
+            JOIN "Showtimes" s ON bd."ShowtimeID" = s."ShowtimeID"
+            JOIN "Events" e ON s."EventID" = e."EventID"
+            JOIN "EventCategories" ec ON e."CategoryID" = ec."CategoryID"
+            WHERE p."StatusID" = 2
+              AND p."PaidAt" >= ${start}
+              AND p."PaidAt" <  ${end}
+              AND (${catFilter}::text IS NULL OR ec."CategoryName" = ${catFilter})
+          ),
+          user_counts AS (
+            SELECT "UserID", COUNT(*)::int as booking_count
+            FROM booking_scope
+            GROUP BY "UserID"
+          )
+          SELECT
+            CASE WHEN uc.booking_count > 1 THEN 'Repeat Customers' ELSE 'One-time Customers' END as type,
+            COALESCE(SUM(bs.amount), 0)::float8 as revenue,
+            COUNT(DISTINCT bs."UserID")::int as users,
+            COUNT(DISTINCT bs."BookingID")::int as bookings
+          FROM booking_scope bs
+          JOIN user_counts uc ON uc."UserID" = bs."UserID"
+          GROUP BY type
+        `;
 
     const result = {};
     for (const r of rows) {
@@ -552,23 +670,37 @@ exports.getInterestByCategory = asyncHandler(async (req, res) => {
     const { category } = req.query;
     const { start, end, months } = getDateRange(req.query);
     const catFilter = category && category !== 'all' ? category : null;
+    const factSources = await getReportFactSources();
 
-    const rows = await prisma.$queryRaw`
-      SELECT ec."CategoryName" as category,
-             EXTRACT(YEAR FROM b."BookingTimestamp")::int as yr,
-             EXTRACT(MONTH FROM b."BookingTimestamp")::int as month,
-             COUNT(bd."DetailID")::int as count
-      FROM "BookingDetails" bd
-      JOIN "Bookings" b ON bd."BookingID" = b."BookingID"
-      JOIN "Showtimes" s ON bd."ShowtimeID" = s."ShowtimeID"
-      JOIN "Events" e ON s."EventID" = e."EventID"
-      JOIN "EventCategories" ec ON e."CategoryID" = ec."CategoryID"
-      WHERE b."BookingTimestamp" >= ${start}
-        AND b."BookingTimestamp" <  ${end}
-        AND (${catFilter}::text IS NULL OR ec."CategoryName" = ${catFilter})
-      GROUP BY ec."CategoryName", EXTRACT(YEAR FROM b."BookingTimestamp"), EXTRACT(MONTH FROM b."BookingTimestamp")
-      ORDER BY yr, month
-    `;
+    const rows = factSources.hasBookingFacts
+      ? await prisma.$queryRaw`
+          SELECT f."CategoryName" as category,
+                 f."BookingYear" as yr,
+                 f."BookingMonth" as month,
+                 COUNT(f."DetailID")::int as count
+          FROM "ReportBookingDetailFacts" f
+          WHERE f."BookingTimestamp" >= ${start}
+            AND f."BookingTimestamp" <  ${end}
+            AND (${catFilter}::text IS NULL OR f."CategoryName" = ${catFilter})
+          GROUP BY f."CategoryName", f."BookingYear", f."BookingMonth"
+          ORDER BY yr, month
+        `
+      : await prisma.$queryRaw`
+          SELECT ec."CategoryName" as category,
+                 EXTRACT(YEAR FROM b."BookingTimestamp")::int as yr,
+                 EXTRACT(MONTH FROM b."BookingTimestamp")::int as month,
+                 COUNT(bd."DetailID")::int as count
+          FROM "BookingDetails" bd
+          JOIN "Bookings" b ON bd."BookingID" = b."BookingID"
+          JOIN "Showtimes" s ON bd."ShowtimeID" = s."ShowtimeID"
+          JOIN "Events" e ON s."EventID" = e."EventID"
+          JOIN "EventCategories" ec ON e."CategoryID" = ec."CategoryID"
+          WHERE b."BookingTimestamp" >= ${start}
+            AND b."BookingTimestamp" <  ${end}
+            AND (${catFilter}::text IS NULL OR ec."CategoryName" = ${catFilter})
+          GROUP BY ec."CategoryName", EXTRACT(YEAR FROM b."BookingTimestamp"), EXTRACT(MONTH FROM b."BookingTimestamp")
+          ORDER BY yr, month
+        `;
 
     const labels   = monthLabels(months);
     const datasets = { Concert: [], Movie: [], Seminar: [] };

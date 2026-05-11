@@ -29,6 +29,7 @@
 - Staff event management.
 - Admin platform management.
 - Analytical reports.
+- Paginated admin data views.
 
 ### Short Demo Flow
 
@@ -36,4 +37,4 @@
 - Event browsing, search, details, showtimes, and pricing.
 - Seat map, group booking, and double-booking prevention.
 - Booking lifecycle, payment processing, and ticket generation.
-- Staff and admin management features, reports, and analytics.
+- Staff and admin management, reports, analytics, and pagination.

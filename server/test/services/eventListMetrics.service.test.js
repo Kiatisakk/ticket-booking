@@ -104,7 +104,7 @@ test('getEventList uses one SQL aggregate query instead of per-event queries', a
   assert.equal(result[0].hasBookings, true);
 });
 
-test('getEventList caches normal list calls until invalidated', async () => {
+test('getEventList does not cache normal list calls', async () => {
   invalidateEventListCache();
   let queryCount = 0;
   const db = {
@@ -116,11 +116,11 @@ test('getEventList caches normal list calls until invalidated', async () => {
 
   await getEventList(db, {});
   await getEventList(db, {});
-  assert.equal(queryCount, 1);
+  assert.equal(queryCount, 2);
 
   invalidateEventListCache();
   await getEventList(db, {});
-  assert.equal(queryCount, 2);
+  assert.equal(queryCount, 3);
 });
 
 test('getEventList returns offset pagination payload when requested', async () => {

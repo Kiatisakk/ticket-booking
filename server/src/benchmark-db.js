@@ -5,7 +5,7 @@ const { execFileSync } = require('child_process');
 const prisma = require('./config/prisma');
 const adminController = require('./controllers/admin.controller');
 const staffController = require('./controllers/staff.controller');
-const bookingService = require('./services/booking.service');
+const bookingController = require('./controllers/booking.controller');
 const showtimeRepository = require('./repositories/showtime.repository');
 const bookingRepository = require('./repositories/booking.repository');
 
@@ -33,13 +33,19 @@ function summarize(samples) {
   };
 }
 
-async function measure(fn) {
+async function measure(fn, { beforeEach = null } = {}) {
   for (let i = 0; i < WARMUP; i += 1) {
+    if (beforeEach) {
+      await beforeEach({ phase: 'warmup', iteration: i });
+    }
     await fn();
   }
 
   const samples = [];
   for (let i = 0; i < ITERATIONS; i += 1) {
+    if (beforeEach) {
+      await beforeEach({ phase: 'measure', iteration: i });
+    }
     const start = performance.now();
     await fn();
     samples.push(performance.now() - start);
@@ -47,8 +53,8 @@ async function measure(fn) {
   return summarize(samples);
 }
 
-async function measureNamed(name, fn) {
-  return [name, await measure(fn)];
+async function measureNamed(name, fn, options) {
+  return [name, await measure(fn, options)];
 }
 
 function invokeController(handler, { query = {}, params = {}, user = {} } = {}) {
@@ -74,7 +80,7 @@ function invokeController(handler, { query = {}, params = {}, user = {} } = {}) 
 }
 
 async function getFixtures() {
-  const [booking, showtime, statuses] = await Promise.all([
+  const [booking, showtime, statuses, venue] = await Promise.all([
     prisma.booking.findFirst({
       orderBy: { BookingID: 'desc' },
       select: { BookingID: true, UserID: true }
@@ -86,11 +92,15 @@ async function getFixtures() {
     prisma.bookingStatus.findMany({
       where: { StatusName: { in: ['Pending', 'Completed'] } },
       select: { StatusID: true, StatusName: true }
+    }),
+    prisma.venue.findFirst({
+      orderBy: { VenueID: 'asc' },
+      select: { VenueID: true }
     })
   ]);
 
-  if (!booking || !showtime) {
-    throw new Error('Benchmark needs seeded bookings and showtimes. Run db:seed-historical first.');
+  if (!booking || !showtime || !venue) {
+    throw new Error('Benchmark needs seeded bookings, showtimes, and venues. Run db:seed-historical first.');
   }
 
   const seats = await prisma.seat.findMany({
@@ -108,6 +118,7 @@ async function getFixtures() {
   return {
     userId: booking.UserID,
     showtimeId: showtime.ShowtimeID,
+    venueId: venue.VenueID,
     seatIds: seats.map(seat => seat.SeatID),
     pendingStatusId: pendingStatus.StatusID,
     completedStatusId: completedStatus.StatusID
@@ -117,18 +128,39 @@ async function getFixtures() {
 async function runBenchmarks() {
   const fixtures = await getFixtures();
   const rowCounts = await getRowCounts();
+  const eventListDefaultQuery = {
+    pagination: 'cursor',
+    page: '1',
+    pageSize: '20',
+    sortBy: 'eventId',
+    sortOrder: 'desc'
+  };
+  const eventListStartDateQuery = {
+    pagination: 'offset',
+    page: '1',
+    pageSize: '20',
+    sortBy: 'startDateTime',
+    sortOrder: 'asc'
+  };
   const tasks = [
     {
-      name: 'Admin event list',
-      run: () => invokeController(adminController.getAllEvents, { query: {} })
+      name: 'Admin event list (ID sort)',
+      run: () => invokeController(adminController.getAllEvents, { query: eventListDefaultQuery })
     },
     {
-      name: 'Staff event list',
-      run: () => invokeController(staffController.getAllEvents, { query: {} })
+      name: 'Admin event list (start date sort)',
+      run: () => invokeController(adminController.getAllEvents, { query: eventListStartDateQuery })
     },
     {
-      name: 'My bookings',
-      run: () => bookingService.getMyBookings(fixtures.userId)
+      name: 'Staff event list (ID sort)',
+      run: () => invokeController(staffController.getAllEvents, { query: eventListDefaultQuery })
+    },
+    {
+      name: 'My bookings page',
+      run: () => invokeController(bookingController.getMyBookings, {
+        query: { pagination: 'cursor', page: '1', pageSize: '20', status: 'all' },
+        user: { userId: fixtures.userId }
+      })
     },
     {
       name: 'Admin bookings page',
@@ -140,6 +172,25 @@ async function runBenchmarks() {
       name: 'Admin transactions page',
       run: () => invokeController(adminController.getAllTransactions, {
         query: { page: '1', pageSize: '20', sortBy: 'date', sortOrder: 'desc' }
+      })
+    },
+    {
+      name: 'Admin users page',
+      run: () => invokeController(adminController.getAllUsers, {
+        query: { pagination: 'cursor', page: '1', pageSize: '20', sortBy: 'registered', sortOrder: 'desc' }
+      })
+    },
+    {
+      name: 'Admin venues page',
+      run: () => invokeController(adminController.getAdminVenues, {
+        query: { pagination: 'offset', page: '1', pageSize: '12' }
+      })
+    },
+    {
+      name: 'Admin venue seats page',
+      run: () => invokeController(adminController.getVenueSeats, {
+        params: { venueId: String(fixtures.venueId) },
+        query: { pagination: 'offset', page: '1', pageSize: '100' }
       })
     },
     {
@@ -157,12 +208,20 @@ async function runBenchmarks() {
           now: new Date()
         })
       )
+    },
+    {
+      name: 'Reports KPI',
+      run: () => invokeController(adminController.getReportKpi, { query: {} })
+    },
+    {
+      name: 'Revenue by category report',
+      run: () => invokeController(adminController.getRevenueByCategory, { query: {} })
     }
   ];
 
   const results = {};
   for (const task of tasks) {
-    results[task.name] = await measure(task.run);
+    results[task.name] = await measure(task.run, { beforeEach: task.beforeEach });
   }
 
   return {
@@ -218,47 +277,59 @@ async function legacyEventList() {
 }
 
 function runNpmScript(script) {
-  const npmCli = process.env.NPM_CLI_JS || 'C:\\Program Files\\nodejs\\node_modules\\npm\\bin\\npm-cli.js';
-  execFileSync(process.execPath, [npmCli, 'run', script], {
+  const npmCli = process.env.NPM_CLI_JS || process.env.npm_execpath;
+  const childOptions = {
     cwd: SERVER_DIR,
     stdio: 'inherit',
     env: process.env
-  });
+  };
+
+  if (npmCli) {
+    execFileSync(process.execPath, [npmCli, 'run', script], childOptions);
+    return;
+  }
+
+  execFileSync('npm', ['run', script], childOptions);
 }
 
 function compareRows(beforeResults, afterResults) {
   return Object.entries(afterResults).map(([name, after]) => {
     const before = beforeResults[name];
-    const avgFaster = ((before.avg - after.avg) / before.avg) * 100;
-    const p50Faster = ((before.p50 - after.p50) / before.p50) * 100;
+    const avgFaster = before.avg === 0 ? null : ((before.avg - after.avg) / before.avg) * 100;
+    const p50Faster = before.p50 === 0 ? null : ((before.p50 - after.p50) / before.p50) * 100;
+    const speedup = after.avg === 0 ? null : before.avg / after.avg;
     return {
       query: name,
       before_avg_ms: before.avg,
       after_avg_ms: after.avg,
       before_p50_ms: before.p50,
       after_p50_ms: after.p50,
-      avg_faster: `${avgFaster.toFixed(1)}%`,
-      p50_faster: `${p50Faster.toFixed(1)}%`,
-      speedup: `${(before.avg / after.avg).toFixed(2)}x`
+      avg_faster: avgFaster === null ? 'n/a' : `${avgFaster.toFixed(1)}%`,
+      p50_faster: p50Faster === null ? 'n/a' : `${p50Faster.toFixed(1)}%`,
+      speedup: speedup === null ? 'n/a' : `${speedup.toFixed(2)}x`
     };
   });
 }
 
 async function runAbBenchmark() {
   console.log('=== A/B DB Benchmark ===');
-  console.log('Step 1/5: dropping performance indexes...');
+  console.log('Step 1/6: dropping report materialized views...');
+  runNpmScript('db:drop-report-views');
+
+  console.log('Step 2/6: dropping performance indexes...');
   runNpmScript('db:drop-indexes');
 
-  console.log('Step 2/5: running no-index benchmark...');
+  console.log('Step 3/6: running no-index/no-report-view benchmark...');
   const noIndex = await runBenchmarks();
 
-  console.log('Step 3/5: applying performance indexes...');
+  console.log('Step 4/6: applying performance indexes and report materialized views...');
   runNpmScript('db:optimize-indexes');
+  runNpmScript('db:optimize-reports');
 
-  console.log('Step 4/5: running indexed benchmark...');
+  console.log('Step 5/6: running indexed/report-view benchmark...');
   const indexed = await runBenchmarks();
 
-  console.log('Step 5/5: comparing legacy vs optimized event list...');
+  console.log('Step 6/6: comparing legacy vs optimized event list...');
   const eventListPairs = await Promise.all([
     measureNamed('Legacy event list', legacyEventList),
     measureNamed('Optimized event list', () => invokeController(adminController.getAllEvents, { query: {} }))

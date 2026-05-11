@@ -102,12 +102,14 @@ npm run dev
 ## Performance Benchmark
 
 Database optimization and A/B benchmark details are documented in [PERFORMANCE_BENCHMARK.md](PERFORMANCE_BENCHMARK.md).
+Project-wide optimization notes are documented in [QUERY_OPTIMIZATION_SUMMARY.md](QUERY_OPTIMIZATION_SUMMARY.md).
 
 Quick benchmark command:
 
 ```powershell
 cd server
 $env:BENCHMARK_ITERATIONS='100'
+$env:BENCHMARK_WARMUP='3'
 node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run db:benchmark:ab
 ```
 
@@ -115,13 +117,21 @@ Latest A/B result summary:
 
 | Workload | Improvement |
 | --- | ---: |
-| My bookings | 44.5% faster |
-| Admin bookings page | 41.2% faster |
-| Admin transactions page | 44.7% faster |
-| Showtime seat availability | 20.7% faster |
-| Booking seat recheck | 46.0% faster |
-| Event list SQL aggregate refactor | 45.2% faster |
-| Event list cached repeat reads | 0.01-0.02 ms on cache hit |
+| My bookings page | 70.9% faster |
+| Admin bookings page | 77.2% faster |
+| Admin transactions page | 65.3% faster |
+| Admin venue seats page | 84.9% faster |
+| Showtime seat availability | 72.7% faster |
+| Booking seat recheck | 90.9% faster |
+| Reports KPI | 74.7% faster |
+| Revenue by category report | 65.9% faster |
+
+Recent admin UX improvements related to large datasets:
+
+- Admin Events supports server-side sorting with cursor or offset fallback.
+- Admin Bookings, Users, and Transactions support cursor pagination.
+- Admin Reports tables now use paged table controls for easier browsing of long result sets.
+- Admin Reports use materialized fact views for KPI and revenue-heavy analytics.
 
 ---
 
@@ -290,7 +300,7 @@ ticket-booking/
 - **Ticket Price**: `BasePrice x SeatType.PriceModifier`
 - **RESTRICT Deletion**: Users with bookings and events with bookings cannot be deleted
 - **Role Management**: Admin can change user roles between Staff and Customer
-- **Event List Performance**: Admin/Staff event lists use one aggregate query and a short cache that is invalidated after event create/update/delete
+- **Event List Performance**: Admin/Staff event lists use one aggregate query with server-side sorting and pagination support
 
 ---
 
@@ -310,6 +320,9 @@ ticket-booking/
 | `npm run db:seed-big`        | Seed deterministic benchmark data |
 | `npm run db:optimize-indexes` | Apply performance indexes       |
 | `npm run db:drop-indexes`    | Drop performance indexes for A/B testing |
+| `npm run db:optimize-reports` | Apply report materialized views |
+| `npm run db:refresh-report-views` | Refresh report materialized views |
+| `npm run db:drop-report-views` | Drop report materialized views for A/B testing |
 | `npm run db:benchmark`       | Run current benchmark            |
 | `npm run db:benchmark:ab`    | Run no-index vs indexed A/B benchmark |
 

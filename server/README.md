@@ -66,8 +66,11 @@ server/
 - `npm run db:seed-big` - Seed deterministic synthetic big data for performance testing
 - `npm run db:optimize-indexes` - Apply performance indexes
 - `npm run db:drop-indexes` - Drop performance indexes for A/B testing
+- `npm run db:optimize-reports` - Apply report materialized views
+- `npm run db:refresh-report-views` - Refresh report materialized views after report data changes
+- `npm run db:drop-report-views` - Drop report materialized views for A/B testing
 - `npm run db:benchmark` - Run the current database benchmark
-- `npm run db:benchmark:ab` - Run no-index vs indexed A/B benchmark
+- `npm run db:benchmark:ab` - Run no-index/no-report-view vs indexed/report-view A/B benchmark
 
 ## 🔐 Authentication
 

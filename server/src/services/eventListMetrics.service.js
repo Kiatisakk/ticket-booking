@@ -1,24 +1,7 @@
-const EVENT_LIST_CACHE_TTL_MS = Number(process.env.EVENT_LIST_CACHE_TTL_MS || 5000);
-const eventListCache = new Map();
 const { decodeCursor, encodeCursor, offsetPayload, parsePagination } = require('../utils/pagination');
 
-function getCacheKey({ search, category, categoryId, status, sortBy, sortOrder, page, pageSize, cursor, direction }) {
-  return JSON.stringify({
-    search: search || '',
-    category: category || '',
-    categoryId: categoryId || '',
-    status: status || '',
-    sortBy: sortBy || '',
-    sortOrder: sortOrder || '',
-    page: page || '',
-    pageSize: pageSize || '',
-    cursor: cursor || '',
-    direction: direction || ''
-  });
-}
-
 function invalidateEventListCache() {
-  eventListCache.clear();
+  return undefined;
 }
 
 function buildEventListWhere({ search, category, categoryId }) {
@@ -316,15 +299,6 @@ async function getEventList(db, options = {}) {
   const { search, category, categoryId, status, sortBy = 'eventId', sortOrder = 'desc' } = options;
   const now = options.now || new Date();
   const page = parsePagination(options, { defaultPageSize: 12 });
-  const canUseCache = !Object.prototype.hasOwnProperty.call(options, 'now') && EVENT_LIST_CACHE_TTL_MS > 0;
-  const cacheKey = getCacheKey({ search, category, categoryId, status, sortBy, sortOrder, ...page });
-
-  if (canUseCache) {
-    const cached = eventListCache.get(cacheKey);
-    if (cached && cached.expiresAt > Date.now()) {
-      return cached.value;
-    }
-  }
 
   const { whereSql, params } = buildEventListWhere({ search, category, categoryId });
   const nowParamIndex = params.length + 1;
@@ -508,16 +482,7 @@ async function getEventList(db, options = {}) {
   `;
 
   const rows = await db.$queryRawUnsafe(sql, ...params, now);
-  const result = mapEventListRows(rows);
-
-  if (canUseCache) {
-    eventListCache.set(cacheKey, {
-      value: result,
-      expiresAt: Date.now() + EVENT_LIST_CACHE_TTL_MS
-    });
-  }
-
-  return result;
+  return mapEventListRows(rows);
 }
 
 module.exports = {

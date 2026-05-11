@@ -1,0 +1,2 @@
+DROP MATERIALIZED VIEW IF EXISTS "ReportPaymentDetailFacts";
+DROP MATERIALIZED VIEW IF EXISTS "ReportBookingDetailFacts";
