@@ -99,6 +99,31 @@ npm run dev
 
 ---
 
+## Performance Benchmark
+
+Database optimization and A/B benchmark details are documented in [PERFORMANCE_BENCHMARK.md](PERFORMANCE_BENCHMARK.md).
+
+Quick benchmark command:
+
+```powershell
+cd server
+$env:BENCHMARK_ITERATIONS='100'
+node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run db:benchmark:ab
+```
+
+Latest A/B result summary:
+
+| Workload | Improvement |
+| --- | ---: |
+| My bookings | 44.5% faster |
+| Admin bookings page | 41.2% faster |
+| Admin transactions page | 44.7% faster |
+| Showtime seat availability | 20.7% faster |
+| Booking seat recheck | 46.0% faster |
+| Event list code refactor | 26.3% faster |
+
+---
+
 ## Sample Login Credentials
 
 | Role     | Email / Login     | Password    | URL                               |
