@@ -120,7 +120,8 @@ Latest A/B result summary:
 | Admin transactions page | 44.7% faster |
 | Showtime seat availability | 20.7% faster |
 | Booking seat recheck | 46.0% faster |
-| Event list code refactor | 26.3% faster |
+| Event list SQL aggregate refactor | 45.2% faster |
+| Event list cached repeat reads | 0.01-0.02 ms on cache hit |
 
 ---
 
@@ -137,75 +138,36 @@ Latest A/B result summary:
 ## Project Structure
 
 ```
-db_proj4/
-├── client/                          # React Frontend
-│   └── src/
-│       ├── App.jsx                  # Router & route definitions
-│       ├── App.css
-│       ├── components/
-│       │   ├── Navbar.jsx           # User navigation bar
-│       │   └── Navbar.css
-│       ├── context/
-│       │   ├── AuthContext.jsx       # Customer authentication context
-│       │   ├── AdminAuthContext.jsx  # Admin authentication context
-│       │   └── BookingContext.jsx    # Booking/cart state management
-│       └── pages/
-│           ├── user/                # Customer-facing pages
-│           │   ├── login/           # Login page
-│           │   ├── register/        # Registration page
-│           │   ├── event/           # Event listing
-│           │   ├── eventdetail/     # Event detail & showtime selection
-│           │   ├── seatSelection/   # Interactive seat map
-│           │   ├── BookingCart/      # Booking cart
-│           │   ├── payment/         # Payment processing
-│           │   └── tickets/         # My Tickets (QR codes, expiry timer)
-│           ├── admin/               # Admin panel pages
-│           │   ├── login/           # Admin login
-│           │   ├── layout/          # Admin sidebar layout
-│           │   ├── events/          # Event CRUD (list, add, edit)
-│           │   ├── users/           # User management (role change, delete)
-│           │   ├── transactions/    # Transaction management (mark paid, refund)
-│           │   └── reports/         # Analytics & reports (12 chart types)
-│           └── staff/               # Staff panel pages
-│               ├── login/           # Staff login
-│               ├── layout/          # Staff sidebar layout
-│               ├── dashboard/       # Staff dashboard (stats overview)
-│               ├── events/          # Staff event management (own events)
-│               └── transactions/    # Staff transaction view
-│
-├── server/                          # Express.js Backend
-│   ├── index.js                     # Server entry point
-│   ├── prisma/
-│   │   ├── schema.prisma            # Database schema & relations
-│   │   ├── seed.js                  # Sample data seeder
-│   │   └── migrations/              # Prisma migrations
-│   └── src/
-│       ├── config/
-│       │   └── prisma.js            # Prisma client instance
-│       ├── middleware/
-│       │   ├── auth.middleware.js        # Customer JWT auth
-│       │   ├── adminAuth.middleware.js   # Admin JWT auth
-│       │   └── staffAuth.middleware.js   # Staff JWT auth
-│       ├── routes/
-│       │   └── index.js             # All API route definitions
-│       ├── controllers/
-│       │   ├── auth.controller.js       # Register, login
-│       │   ├── event.controller.js      # Public event queries
-│       │   ├── venue.controller.js      # Venue & seat type queries
-│       │   ├── showtime.controller.js   # Showtime & booked seats
-│       │   ├── booking.controller.js    # Create/cancel bookings
-│       │   ├── payment.controller.js    # Payment processing & ticket generation
-│       │   ├── ticket.controller.js     # Ticket retrieval & QR verification
-│       │   ├── admin.controller.js      # Admin: events, users, transactions, reports
-│       │   └── staff.controller.js      # Staff: own events, transactions, dashboard
-│       └── seed-historical.js       # Historical data generator for reports
-│
-├── docker-compose.yml               # Docker services (PostgreSQL, Adminer)
-└── .env                             # Environment variables (not committed)
+ticket-booking/
+  client/                          # React frontend
+    src/
+      App.jsx                      # Router and route definitions
+      components/                  # Shared UI components
+      context/                     # Auth and booking contexts
+      pages/
+        user/                      # Customer browsing, booking, payment, tickets
+        admin/                     # Admin login, layout, events, master data, users, bookings, transactions, reports
+        staff/                     # Staff login, layout, event management
+  server/                          # Express.js backend
+    index.js                       # Server entry point
+    prisma/
+      schema.prisma                # Database schema and relations
+      seed.js                      # Sample data seeder
+      migrations/                  # Prisma and raw SQL migrations
+    src/
+      config/prisma.js             # Prisma client instance
+      middleware/                  # Customer, Admin, Staff JWT auth
+      routes/index.js              # API route definitions
+      controllers/                 # HTTP controllers
+      services/                    # Business logic and aggregate queries
+      repositories/                # Database access helpers
+      seed-historical.js           # Historical data generator for reports
+      seed-big-data.js             # Synthetic benchmark data generator
+  docker-compose.yml               # PostgreSQL and Adminer services
+  .env                             # Local environment variables
 ```
 
 ---
-
 ## API Routes
 
 ### Public
@@ -214,14 +176,19 @@ db_proj4/
 | ------ | --------------------------------- | ------------------------- |
 | POST   | `/api/auth/register`              | Register new user         |
 | POST   | `/api/auth/login`                 | User login                |
+| GET    | `/api/payment-methods`            | Available payment methods |
+| GET    | `/api/tickets/verify/:ticketNo`   | Verify ticket by QR code  |
+
+### Authenticated Browsing
+
+| Method | Route                             | Description               |
+| ------ | --------------------------------- | ------------------------- |
 | GET    | `/api/events`                     | List all events           |
 | GET    | `/api/events/:id`                 | Event detail              |
 | GET    | `/api/venues`                     | List venues               |
 | GET    | `/api/seat-types`                 | List seat types           |
 | GET    | `/api/showtimes/event/:eventId`   | Showtimes for an event    |
 | GET    | `/api/showtimes/:id/booked-seats` | Booked seats for showtime |
-| GET    | `/api/payment-methods`            | Available payment methods |
-| GET    | `/api/tickets/verify/:ticketNo`   | Verify ticket by QR code  |
 
 ### Customer (requires auth)
 
@@ -248,26 +215,33 @@ db_proj4/
 | PATCH  | `/api/admin/users/:id/role`             | Change user role        |
 | DELETE | `/api/admin/users/:id`                  | Delete user (RESTRICT)  |
 | GET    | `/api/admin/transactions`               | List all transactions   |
-| PATCH  | `/api/admin/transactions/:id/mark-paid` | Mark failed as paid     |
-| PATCH  | `/api/admin/transactions/:id/refund`    | Refund transaction      |
 | GET    | `/api/admin/categories`                 | Event categories        |
 | GET    | `/api/admin/venues`                     | Venues with capacity    |
+| POST   | `/api/admin/venues`                     | Create venue            |
+| PUT    | `/api/admin/venues/:id`                 | Update venue            |
+| DELETE | `/api/admin/venues/:id`                 | Delete venue            |
+| GET    | `/api/admin/venues/:venueId/seats`      | List venue seats        |
+| POST   | `/api/admin/seats`                      | Create seat             |
+| PUT    | `/api/admin/seats/:id`                  | Update seat             |
+| DELETE | `/api/admin/seats/:id`                  | Delete seat             |
+| GET    | `/api/admin/settings`                   | System settings         |
+| PATCH  | `/api/admin/settings/payment-methods/:id` | Toggle payment method |
 | POST   | `/api/admin/staff/add`                  | Add staff user          |
 | GET    | `/api/admin/staff`                      | List staff              |
-| GET    | `/api/admin/reports/*`                  | 13 report endpoints     |
+| GET    | `/api/admin/reports/*`                  | Analytics report endpoints |
 
 ### Staff (requires staff auth)
 
 | Method | Route                     | Description                 |
 | ------ | ------------------------- | --------------------------- |
 | POST   | `/api/staff/auth/login`   | Staff login                 |
-| GET    | `/api/staff/events`       | List own events             |
-| GET    | `/api/staff/events/:id`   | Own event detail            |
+| GET    | `/api/staff/categories`   | Event categories            |
+| GET    | `/api/staff/venues`       | Venues for showtime setup   |
+| GET    | `/api/staff/events`       | List all events             |
+| GET    | `/api/staff/events/:id`   | Event detail                |
 | POST   | `/api/staff/events`       | Create event                |
-| PUT    | `/api/staff/events/:id`   | Update own event            |
-| DELETE | `/api/staff/events/:id`   | Delete own event (RESTRICT) |
-| GET    | `/api/staff/transactions` | Own event transactions      |
-| GET    | `/api/staff/dashboard`    | Dashboard stats             |
+| PUT    | `/api/staff/events/:id`   | Update event                |
+| DELETE | `/api/staff/events/:id`   | Delete event (RESTRICT)     |
 
 ---
 
@@ -280,7 +254,7 @@ db_proj4/
 | Roles           | Admin, Staff, Customer                       |
 | Users           | User accounts with role-based access         |
 | EventCategories | Movie, Concert, Seminar                      |
-| Events          | Events with category and creator tracking    |
+| Events          | Events with category                         |
 | Venues          | Venue information                            |
 | SeatTypes       | VIP (2x), Standard (1x), Sofa Bed (1.5x)     |
 | Seats           | Individual seats linked to venue and type    |
@@ -289,7 +263,7 @@ db_proj4/
 | Bookings        | User bookings with 15-minute expiration      |
 | BookingDetails  | Individual seat reservations per booking     |
 | PaymentMethods  | Credit Card, PromptPay, TrueMoney, ShopeePay |
-| PaymentStatuses | Pending, Success, Failed, Refunded           |
+| PaymentStatuses | Pending, Success, Failed                     |
 | Payments        | Payment records linked to bookings           |
 | Tickets         | Generated after payment with unique TicketNo |
 
@@ -301,9 +275,9 @@ db_proj4/
 | User -> Booking           | RESTRICT    | Cannot delete user with bookings         |
 | Event -> Showtime         | CASCADE     | Delete event removes its showtimes       |
 | Showtime -> BookingDetail | RESTRICT    | Cannot delete showtime with bookings     |
-| Booking -> Payment        | CASCADE     | Delete booking removes payment           |
-| Booking -> BookingDetail  | CASCADE     | Delete booking removes seat reservations |
-| BookingDetail -> Ticket   | CASCADE     | Delete detail removes ticket             |
+| Booking -> Payment        | RESTRICT    | Cannot delete booking with payment       |
+| Booking -> BookingDetail  | RESTRICT    | Cannot delete booking with seat reservations |
+| BookingDetail -> Ticket   | RESTRICT    | Cannot delete detail with generated ticket |
 
 ---
 
@@ -316,6 +290,7 @@ db_proj4/
 - **Ticket Price**: `BasePrice x SeatType.PriceModifier`
 - **RESTRICT Deletion**: Users with bookings and events with bookings cannot be deleted
 - **Role Management**: Admin can change user roles between Staff and Customer
+- **Event List Performance**: Admin/Staff event lists use one aggregate query and a short cache that is invalidated after event create/update/delete
 
 ---
 
@@ -332,6 +307,11 @@ db_proj4/
 | `npm run db:push`            | Push schema to database          |
 | `npm run db:seed`            | Seed sample data                 |
 | `npm run db:seed-historical` | Seed historical data for reports |
+| `npm run db:seed-big`        | Seed deterministic benchmark data |
+| `npm run db:optimize-indexes` | Apply performance indexes       |
+| `npm run db:drop-indexes`    | Drop performance indexes for A/B testing |
+| `npm run db:benchmark`       | Run current benchmark            |
+| `npm run db:benchmark:ab`    | Run no-index vs indexed A/B benchmark |
 
 ### Client (`cd client`)
 
