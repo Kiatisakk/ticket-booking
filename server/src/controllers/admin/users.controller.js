@@ -64,3 +64,62 @@ exports.getAllUsers = asyncHandler(async (req, res) => {
 
   res.json(payload);
 });
+
+exports.deleteUser = asyncHandler(async (req, res) => {
+  const userId = parseInt(req.params.id, 10);
+
+  const user = await prisma.user.findUnique({
+    where: { UserID: userId },
+    include: { Role: true }
+  });
+
+  if (!user) {
+    return res.status(404).json({ error: 'User not found' });
+  }
+
+  if (user.Role?.RoleName === 'Admin') {
+    return res.status(403).json({ error: 'Cannot delete admin users' });
+  }
+
+  const bookingCount = await prisma.booking.count({ where: { UserID: userId } });
+  if (bookingCount > 0) {
+    return res.status(400).json({ error: 'Cannot delete user with existing booking history' });
+  }
+
+  await prisma.user.delete({ where: { UserID: userId } });
+  res.json({ message: 'User deleted successfully' });
+});
+
+exports.updateUserRole = asyncHandler(async (req, res) => {
+  const userId = parseInt(req.params.id, 10);
+  const { roleId } = req.body;
+
+  if (!roleId) {
+    return res.status(400).json({ error: 'Role is required' });
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { UserID: userId },
+    include: { Role: true }
+  });
+
+  if (!user) {
+    return res.status(404).json({ error: 'User not found' });
+  }
+
+  if (user.Role?.RoleName === 'Admin') {
+    return res.status(403).json({ error: 'Cannot change admin user role' });
+  }
+
+  const role = await prisma.role.findUnique({ where: { RoleID: parseInt(roleId, 10) } });
+  if (!role || role.RoleName === 'Admin') {
+    return res.status(400).json({ error: 'Invalid role' });
+  }
+
+  await prisma.user.update({
+    where: { UserID: userId },
+    data: { RoleID: role.RoleID }
+  });
+
+  res.json({ message: 'User role updated successfully', role: role.RoleName });
+});
