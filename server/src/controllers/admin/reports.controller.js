@@ -1,4 +1,5 @@
 const prisma = require('../../config/prisma');
+const asyncHandler = require('../../utils/asyncHandler');
 
 // ─── Report Helpers ───────────────────────────────────────────────────────────
 
@@ -80,8 +81,7 @@ function formatTimeBucket(date, grain) {
   };
 }
 
-exports.getReportKpi = async (req, res) => {
-  try {
+exports.getReportKpi = asyncHandler(async (req, res) => {
     const { category, venueId } = req.query;
     const { start, end } = getDateRange(req.query);
     const catFilter = category && category !== 'all' ? category : null;
@@ -153,16 +153,11 @@ exports.getReportKpi = async (req, res) => {
     const topCategory = categories[0]?.name || 'N/A';
 
     res.json({ totalRevenue, totalBookings, topCategory, categories });
-  } catch (error) {
-    console.error('getReportKpi error:', error);
-    res.status(500).json({ error: 'Failed to fetch KPI data' });
-  }
-};
+});
 
 // ─── Report 1: Revenue by Category ───────────────────────────────────────────
 
-exports.getRevenueByCategory = async (req, res) => {
-  try {
+exports.getRevenueByCategory = asyncHandler(async (req, res) => {
     const { category } = req.query;
     const { start, end, months } = getDateRange(req.query);
     const catFilter = category && category !== 'all' ? category : null;
@@ -198,16 +193,11 @@ exports.getRevenueByCategory = async (req, res) => {
     }
 
     res.json({ labels, datasets });
-  } catch (error) {
-    console.error('getRevenueByCategory error:', error);
-    res.status(500).json({ error: 'Failed to fetch revenue by category' });
-  }
-};
+});
 
 // ─── Report 3: User Growth ────────────────────────────────────────────────────
 
-exports.getUserGrowth = async (req, res) => {
-  try {
+exports.getUserGrowth = asyncHandler(async (req, res) => {
     const { start, end, months } = getDateRange(req.query);
 
     const rows = await prisma.$queryRaw`
@@ -229,16 +219,11 @@ exports.getUserGrowth = async (req, res) => {
     }
 
     res.json({ labels, data });
-  } catch (error) {
-    console.error('getUserGrowth error:', error);
-    res.status(500).json({ error: 'Failed to fetch user growth' });
-  }
-};
+});
 
 // ─── Report 4: Revenue by Venue ───────────────────────────────────────────────
 
-exports.getRevenueByVenue = async (req, res) => {
-  try {
+exports.getRevenueByVenue = asyncHandler(async (req, res) => {
     const { category } = req.query;
     const { start, end, months } = getDateRange(req.query);
     const catFilter = category && category !== 'all' ? category : null;
@@ -281,16 +266,11 @@ exports.getRevenueByVenue = async (req, res) => {
     }
 
     res.json({ labels, datasets });
-  } catch (error) {
-    console.error('getRevenueByVenue error:', error);
-    res.status(500).json({ error: 'Failed to fetch revenue by venue' });
-  }
-};
+});
 
 // ─── Report 5: Bookings by Hour ───────────────────────────────────────────────
 
-exports.getBookingsByHour = async (req, res) => {
-  try {
+exports.getBookingsByHour = asyncHandler(async (req, res) => {
     const { category } = req.query;
     const { start, end } = getDateRange(req.query);
     const catFilter = category && category !== 'all' ? category : null;
@@ -318,16 +298,11 @@ exports.getBookingsByHour = async (req, res) => {
     const data = rows.map(row => Number(row.count || 0));
 
     res.json({ labels, data, granularity: bucketConfig.label });
-  } catch (error) {
-    console.error('getBookingsByHour error:', error);
-    res.status(500).json({ error: 'Failed to fetch bookings by hour' });
-  }
-};
+});
 
 // ─── Report 6: Booking vs Capacity ───────────────────────────────────────────
 
-exports.getBookingVsCapacity = async (req, res) => {
-  try {
+exports.getBookingVsCapacity = asyncHandler(async (req, res) => {
     const { category, venueId } = req.query;
     const { start, end } = getDateRange(req.query);
     const catFilter = category && category !== 'all' ? category : null;
@@ -441,16 +416,11 @@ exports.getBookingVsCapacity = async (req, res) => {
     }));
 
     res.json(result.reverse()); // chronological order
-  } catch (error) {
-    console.error('getBookingVsCapacity error:', error);
-    res.status(500).json({ error: 'Failed to fetch booking vs capacity' });
-  }
-};
+});
 
 // ─── Report 7: Venue Utilization ─────────────────────────────────────────────
 
-exports.getVenueUtilization = async (req, res) => {
-  try {
+exports.getVenueUtilization = asyncHandler(async (req, res) => {
     const { category } = req.query;
     const { start, end } = getDateRange(req.query);
     const catFilter = category && category !== 'all' ? category : null;
@@ -481,16 +451,11 @@ exports.getVenueUtilization = async (req, res) => {
     }
 
     res.json({ labels: venues, datasets });
-  } catch (error) {
-    console.error('getVenueUtilization error:', error);
-    res.status(500).json({ error: 'Failed to fetch venue utilization' });
-  }
-};
+});
 
 // ─── Report 8: Seat Type Revenue ─────────────────────────────────────────────
 
-exports.getSeatTypeRevenue = async (req, res) => {
-  try {
+exports.getSeatTypeRevenue = asyncHandler(async (req, res) => {
     const { category } = req.query;
     const { start, end } = getDateRange(req.query);
     const catFilter = category && category !== 'all' ? category : null;
@@ -527,16 +492,11 @@ exports.getSeatTypeRevenue = async (req, res) => {
         avgDaysInAdvance: Number(r.avgDaysInAdvance || 0)
       }))
     });
-  } catch (error) {
-    console.error('getSeatTypeRevenue error:', error);
-    res.status(500).json({ error: 'Failed to fetch seat type velocity' });
-  }
-};
+});
 
 // ─── Report 9: Customer Retention ────────────────────────────────────────────
 
-exports.getCustomerRetention = async (req, res) => {
-  try {
+exports.getCustomerRetention = asyncHandler(async (req, res) => {
     const { category } = req.query;
     const { start, end } = getDateRange(req.query);
     const catFilter = category && category !== 'all' ? category : null;
@@ -592,16 +552,11 @@ exports.getCustomerRetention = async (req, res) => {
         { segment: 'One-time Customers', ...(result['One-time Customers'] || { revenue: 0, users: 0, bookings: 0 }) }
       ]
     });
-  } catch (error) {
-    console.error('getCustomerRetention error:', error);
-    res.status(500).json({ error: 'Failed to fetch customer retention' });
-  }
-};
+});
 
 // ─── Report 10: Interest by Category ─────────────────────────────────────────
 
-exports.getInterestByCategory = async (req, res) => {
-  try {
+exports.getInterestByCategory = asyncHandler(async (req, res) => {
     const { category } = req.query;
     const { start, end, months } = getDateRange(req.query);
     const catFilter = category && category !== 'all' ? category : null;
@@ -634,16 +589,11 @@ exports.getInterestByCategory = async (req, res) => {
     }
 
     res.json({ labels, datasets });
-  } catch (error) {
-    console.error('getInterestByCategory error:', error);
-    res.status(500).json({ error: 'Failed to fetch interest by category' });
-  }
-};
+});
 
 // ─── Report 11: Peak Showtime Hours ──────────────────────────────────────────
 
-exports.getPeakShowtimeHours = async (req, res) => {
-  try {
+exports.getPeakShowtimeHours = asyncHandler(async (req, res) => {
     const { category } = req.query;
     const { start, end } = getDateRange(req.query);
     const catFilter = category && category !== 'all' ? category : null;
@@ -687,16 +637,11 @@ exports.getPeakShowtimeHours = async (req, res) => {
     }
 
     res.json({ labels, datasets, rows: detailRows });
-  } catch (error) {
-    console.error('getPeakShowtimeHours error:', error);
-    res.status(500).json({ error: 'Failed to fetch peak showtime hours' });
-  }
-};
+});
 
 // ─── Report 2: Seat Heatmap ───────────────────────────────────────────────────
 
-exports.getSeatHeatmap = async (req, res) => {
-  try {
+exports.getSeatHeatmap = asyncHandler(async (req, res) => {
     const { category, venueId } = req.query;
     const { start, end } = getDateRange(req.query);
     const catFilter = category && category !== 'all' ? category : null;
@@ -747,11 +692,7 @@ exports.getSeatHeatmap = async (req, res) => {
     );
 
     res.json({ rows: rowLabels, cols: colLabels, data });
-  } catch (error) {
-    console.error('getSeatHeatmap error:', error);
-    res.status(500).json({ error: 'Failed to fetch seat heatmap' });
-  }
-};
+});
 
 // ─── Report 12: Cancelled Booking Rate ────────────────────────────────────────
 
@@ -766,8 +707,7 @@ function buildCancelRateMatrix(rows, rowKey, colKey, rowLabels, colLabels) {
   );
 }
 
-exports.getCancellationHeatmap = async (req, res) => {
-  try {
+exports.getCancellationHeatmap = asyncHandler(async (req, res) => {
     const { category, venueId } = req.query;
     const { start, end } = getDateRange(req.query);
     const catFilter = category && category !== 'all' ? category : null;
@@ -879,8 +819,4 @@ exports.getCancellationHeatmap = async (req, res) => {
         }
       ]
     });
-  } catch (error) {
-    console.error('getCancellationHeatmap error:', error);
-    res.status(500).json({ error: 'Failed to fetch cancellation heatmap' });
-  }
-};
+});

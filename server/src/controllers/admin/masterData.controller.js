@@ -133,32 +133,25 @@ exports.createSeat = asyncHandler(async (req, res) => {
     return res.status(400).json({ error: 'Venue, seat type, row, and seat number are required' });
   }
 
-  try {
-    const seat = await prisma.seat.create({
-      data: {
-        VenueID: parsedVenueId,
-        SeatTypeID: parsedSeatTypeId,
-        RowLabel: row,
-        SeatNumber: number
-      },
-      include: { SeatType: true }
-    });
+  const seat = await prisma.seat.create({
+    data: {
+      VenueID: parsedVenueId,
+      SeatTypeID: parsedSeatTypeId,
+      RowLabel: row,
+      SeatNumber: number
+    },
+    include: { SeatType: true }
+  });
 
-    res.status(201).json({
-      id: seat.SeatID,
-      venueId: seat.VenueID,
-      seatTypeId: seat.SeatTypeID,
-      seatTypeName: seat.SeatType?.TypeName || 'Unknown',
-      rowLabel: seat.RowLabel,
-      seatNumber: seat.SeatNumber,
-      bookingCount: 0
-    });
-  } catch (error) {
-    const message = error.code === 'P2002'
-      ? 'Seat row and number already exist for this venue'
-      : 'Failed to create seat';
-    res.status(error.code === 'P2002' ? 400 : 500).json({ error: message });
-  }
+  res.status(201).json({
+    id: seat.SeatID,
+    venueId: seat.VenueID,
+    seatTypeId: seat.SeatTypeID,
+    seatTypeName: seat.SeatType?.TypeName || 'Unknown',
+    rowLabel: seat.RowLabel,
+    seatNumber: seat.SeatNumber,
+    bookingCount: 0
+  });
 });
 
 exports.updateSeat = asyncHandler(async (req, res) => {
@@ -177,32 +170,25 @@ exports.updateSeat = asyncHandler(async (req, res) => {
     return res.status(400).json({ error: 'Cannot edit a seat that has booking history' });
   }
 
-  try {
-    const seat = await prisma.seat.update({
-      where: { SeatID: seatId },
-      data: {
-        SeatTypeID: parsedSeatTypeId,
-        RowLabel: row,
-        SeatNumber: number
-      },
-      include: { SeatType: true }
-    });
+  const seat = await prisma.seat.update({
+    where: { SeatID: seatId },
+    data: {
+      SeatTypeID: parsedSeatTypeId,
+      RowLabel: row,
+      SeatNumber: number
+    },
+    include: { SeatType: true }
+  });
 
-    res.json({
-      id: seat.SeatID,
-      venueId: seat.VenueID,
-      seatTypeId: seat.SeatTypeID,
-      seatTypeName: seat.SeatType?.TypeName || 'Unknown',
-      rowLabel: seat.RowLabel,
-      seatNumber: seat.SeatNumber,
-      bookingCount: 0
-    });
-  } catch (error) {
-    const message = error.code === 'P2002'
-      ? 'Seat row and number already exist for this venue'
-      : 'Failed to update seat';
-    res.status(error.code === 'P2002' ? 400 : 500).json({ error: message });
-  }
+  res.json({
+    id: seat.SeatID,
+    venueId: seat.VenueID,
+    seatTypeId: seat.SeatTypeID,
+    seatTypeName: seat.SeatType?.TypeName || 'Unknown',
+    rowLabel: seat.RowLabel,
+    seatNumber: seat.SeatNumber,
+    bookingCount: 0
+  });
 });
 
 exports.deleteSeat = asyncHandler(async (req, res) => {

@@ -27,7 +27,9 @@ exports.addStaffUser = asyncHandler(async (req, res) => {
 
   const staffRole = await prisma.role.findFirst({ where: { RoleName: 'Staff' } });
   if (!staffRole) {
-    return res.status(500).json({ error: 'Staff role not found' });
+    const error = new Error('Staff role not found');
+    error.statusCode = 500;
+    throw error;
   }
 
   const hashedPassword = await bcrypt.hash(password, 10);
