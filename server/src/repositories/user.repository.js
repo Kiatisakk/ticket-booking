@@ -2,14 +2,15 @@ const prisma = require('../config/prisma');
 
 function createUserRepository(db = prisma) {
   return {
-    findByEmail(email) {
+    findByEmail(email, options = {}) {
       return db.user.findFirst({
         where: {
           Email: {
             equals: email,
             mode: 'insensitive'
           }
-        }
+        },
+        ...(options.include ? { include: options.include } : {})
       });
     },
 

@@ -9,6 +9,7 @@ function toPublicUser(user) {
     id: user.UserID,
     fullName: user.FullName,
     email: user.Email,
+    ...(user.Role ? { role: user.Role.RoleName } : {}),
     roleId: user.RoleID
   };
 }
@@ -61,7 +62,22 @@ function createAuthService({
     },
 
     async login({ email, password }) {
-      const user = await users.findByEmail(normalizeEmail(email));
+      return this.loginWithRole({ email, password });
+    },
+
+    async loginWithRole({
+      email,
+      password,
+      allowedRoleNames = null,
+      forbiddenMessage = 'Required role missing',
+      successMessage = 'Login successful'
+    }) {
+      const normalizedEmail = normalizeEmail(email);
+      if (!normalizedEmail || !password) {
+        throw new HttpError(400, 'Email and password are required');
+      }
+
+      const user = await users.findByEmail(normalizedEmail, { include: { Role: true } });
       if (!user) {
         throw new HttpError(401, 'Invalid credentials');
       }
@@ -71,8 +87,12 @@ function createAuthService({
         throw new HttpError(401, 'Invalid credentials');
       }
 
+      if (allowedRoleNames?.length && !allowedRoleNames.includes(user.Role?.RoleName)) {
+        throw new HttpError(403, forbiddenMessage);
+      }
+
       return {
-        message: 'Login successful',
+        message: successMessage,
         token: tokenSigner(user),
         user: toPublicUser(user)
       };

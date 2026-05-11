@@ -28,6 +28,8 @@ function UserManagement() {
   const [cursor, setCursor] = useState(null);
   const [cursorDirection, setCursorDirection] = useState('next');
   const [cursorMeta, setCursorMeta] = useState({ hasNextPage: false, hasPrevPage: false, nextCursor: null, prevCursor: null });
+  const [totalPages, setTotalPages] = useState(1);
+  const [paginationMode, setPaginationMode] = useState('cursor');
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
@@ -36,23 +38,30 @@ function UserManagement() {
         headers: { Authorization: `Bearer ${adminToken}` },
         params: {
           pagination: 'cursor',
+          page,
           pageSize,
           cursor: cursor || undefined,
           direction: cursorDirection,
           search: search || undefined,
-          role: roleFilter
+          role: roleFilter,
+          sortBy: sortConfig.key,
+          sortOrder: sortConfig.direction
         }
       });
       const payload = Array.isArray(res.data) ? { data: res.data, total: res.data.length } : res.data;
       setUsers(payload.data || []);
       setTotalRows(payload.total || 0);
-      setCursorMeta(payload.pagination || { hasNextPage: false, hasPrevPage: false, nextCursor: null, prevCursor: null });
+      setPaginationMode(payload.pagination?.type || 'page');
+      setCursorMeta(payload.pagination?.type === 'cursor'
+        ? payload.pagination
+        : { hasNextPage: false, hasPrevPage: false, nextCursor: null, prevCursor: null });
+      setTotalPages(payload.totalPages || Math.max(Math.ceil((payload.total || 0) / pageSize), 1));
     } catch (error) {
       console.error('Failed to fetch users:', error);
     } finally {
       setLoading(false);
     }
-  }, [adminToken, pageSize, cursor, cursorDirection, search, roleFilter]);
+  }, [adminToken, page, pageSize, cursor, cursorDirection, search, roleFilter, sortConfig]);
 
   useEffect(() => {
     fetchUsers();
@@ -207,22 +216,28 @@ function UserManagement() {
         </div>
         {!loading && users.length > 0 && (
           <TableControls
-            mode="cursor"
+            mode={paginationMode === 'cursor' ? 'cursor' : 'page'}
             page={page}
             pageSize={pageSize}
             totalRows={totalRows}
-            totalPages={1}
+            totalPages={totalPages}
             hasPrevPage={cursorMeta.hasPrevPage}
             hasNextPage={cursorMeta.hasNextPage}
             onPrev={() => {
               setCursor(cursorMeta.prevCursor);
               setCursorDirection('prev');
+              setPage(current => Math.max(current - 1, 1));
             }}
             onNext={() => {
               setCursor(cursorMeta.nextCursor);
               setCursorDirection('next');
+              setPage(current => current + 1);
             }}
-            onPageChange={setPage}
+            onPageChange={(nextPage) => {
+              setPage(nextPage);
+              setCursor(null);
+              setCursorDirection('next');
+            }}
             onPageSizeChange={(size) => {
               setPageSize(size);
               setCursor(null);

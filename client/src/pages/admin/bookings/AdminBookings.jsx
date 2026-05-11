@@ -35,6 +35,7 @@ function AdminBookings() {
   const [cursor, setCursor] = useState(null);
   const [cursorDirection, setCursorDirection] = useState('next');
   const [cursorMeta, setCursorMeta] = useState({ hasNextPage: false, hasPrevPage: false, nextCursor: null, prevCursor: null });
+  const [paginationMode, setPaginationMode] = useState('cursor');
   const serverSortableKeys = new Set(['bookingId', 'user', 'amount', 'bookingDate', 'status']);
   const serverMode = serverSortableKeys.has(sortConfig.key);
 
@@ -45,13 +46,12 @@ function AdminBookings() {
         pagination: 'cursor',
         cursor: cursor || undefined,
         direction: cursorDirection,
+        page,
+        pageSize,
         sortBy: sortConfig.key,
         sortOrder: sortConfig.direction,
         search: search || undefined
       };
-      if (serverMode) {
-        params.pageSize = pageSize;
-      }
       if (statusFilter !== 'All') params.status = statusFilter;
 
       const res = await axios.get(`${API_URL}/admin/bookings`, {
@@ -63,7 +63,10 @@ function AdminBookings() {
         : res.data;
       setBookings(payload.data || []);
       setTotalRows(payload.total || 0);
-      setCursorMeta(payload.pagination || { hasNextPage: false, hasPrevPage: false, nextCursor: null, prevCursor: null });
+      setPaginationMode(payload.pagination?.type || 'page');
+      setCursorMeta(payload.pagination?.type === 'cursor'
+        ? payload.pagination
+        : { hasNextPage: false, hasPrevPage: false, nextCursor: null, prevCursor: null });
       setTotalPages(payload.totalPages || getTotalPages(payload.total || 0, pageSize));
     } catch {
       setBookings([]);
@@ -72,7 +75,7 @@ function AdminBookings() {
     } finally {
       setLoading(false);
     }
-  }, [adminToken, search, statusFilter, sortConfig, pageSize, serverMode, cursor, cursorDirection]);
+  }, [adminToken, search, statusFilter, sortConfig, page, pageSize, serverMode, cursor, cursorDirection]);
 
   useEffect(() => {
     fetchBookings();
@@ -195,7 +198,7 @@ function AdminBookings() {
         </div>
         {!loading && bookings.length > 0 && (
           <TableControls
-            mode="cursor"
+            mode={paginationMode === 'cursor' ? 'cursor' : 'page'}
             page={Math.min(page, effectiveTotalPages)}
             pageSize={pageSize}
             totalRows={effectiveTotalRows}
@@ -205,12 +208,18 @@ function AdminBookings() {
             onPrev={() => {
               setCursor(cursorMeta.prevCursor);
               setCursorDirection('prev');
+              setPage(current => Math.max(current - 1, 1));
             }}
             onNext={() => {
               setCursor(cursorMeta.nextCursor);
               setCursorDirection('next');
+              setPage(current => current + 1);
             }}
-            onPageChange={setPage}
+            onPageChange={(nextPage) => {
+              setPage(nextPage);
+              setCursor(null);
+              setCursorDirection('next');
+            }}
             onPageSizeChange={(size) => {
               setPageSize(size);
               setCursor(null);

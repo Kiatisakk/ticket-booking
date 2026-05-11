@@ -44,6 +44,7 @@ function Transactions() {
   const [cursor, setCursor] = useState(null);
   const [cursorDirection, setCursorDirection] = useState('next');
   const [cursorMeta, setCursorMeta] = useState({ hasNextPage: false, hasPrevPage: false, nextCursor: null, prevCursor: null });
+  const [paginationMode, setPaginationMode] = useState('cursor');
 
   const fetchTransactions = useCallback(async () => {
     setLoading(true);
@@ -53,6 +54,7 @@ function Transactions() {
         pagination: 'cursor',
         cursor: cursor || undefined,
         direction: cursorDirection,
+        page,
         pageSize,
         sortBy: sortConfig.key,
         sortOrder: sortConfig.direction,
@@ -70,8 +72,11 @@ function Transactions() {
         : res.data;
       setTransactions(payload.data || []);
       setTotalRows(payload.total || 0);
-      setCursorMeta(payload.pagination || { hasNextPage: false, hasPrevPage: false, nextCursor: null, prevCursor: null });
-      setTotalPages(payload.totalPages || 1);
+      setPaginationMode(payload.pagination?.type || 'page');
+      setCursorMeta(payload.pagination?.type === 'cursor'
+        ? payload.pagination
+        : { hasNextPage: false, hasPrevPage: false, nextCursor: null, prevCursor: null });
+      setTotalPages(payload.totalPages || Math.max(Math.ceil((payload.total || 0) / pageSize), 1));
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to load transactions');
       setTransactions([]);
@@ -80,7 +85,7 @@ function Transactions() {
     } finally {
       setLoading(false);
     }
-  }, [adminToken, search, statusFilter, methodFilter, sortConfig, cursor, cursorDirection, pageSize]);
+  }, [adminToken, search, statusFilter, methodFilter, sortConfig, cursor, cursorDirection, page, pageSize]);
 
   useEffect(() => {
     fetchTransactions();
@@ -181,7 +186,7 @@ function Transactions() {
         </div>
         {!loading && transactions.length > 0 && (
           <TableControls
-            mode="cursor"
+            mode={paginationMode === 'cursor' ? 'cursor' : 'page'}
             page={Math.min(page, totalPages)}
             pageSize={pageSize}
             totalRows={totalRows}
@@ -191,12 +196,18 @@ function Transactions() {
             onPrev={() => {
               setCursor(cursorMeta.prevCursor);
               setCursorDirection('prev');
+              setPage(current => Math.max(current - 1, 1));
             }}
             onNext={() => {
               setCursor(cursorMeta.nextCursor);
               setCursorDirection('next');
+              setPage(current => current + 1);
             }}
-            onPageChange={setPage}
+            onPageChange={(nextPage) => {
+              setPage(nextPage);
+              setCursor(null);
+              setCursorDirection('next');
+            }}
             onPageSizeChange={(size) => {
               setPageSize(size);
               setCursor(null);

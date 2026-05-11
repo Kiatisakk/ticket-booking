@@ -91,3 +91,61 @@ test('login rejects invalid credentials', async () => {
     { statusCode: 401, message: 'Invalid credentials' }
   );
 });
+
+test('loginWithRole allows matching role and preserves role in public user', async () => {
+  const service = createAuthService({
+    users: {
+      findByEmail: async () => ({
+        UserID: 8,
+        FullName: 'Admin User',
+        Email: 'admin@example.com',
+        Password: 'hashed-password',
+        RoleID: 1,
+        Role: { RoleName: 'Admin' }
+      })
+    },
+    passwordHasher: {
+      compare: async () => true
+    },
+    tokenSigner: () => 'admin-token'
+  });
+
+  const result = await service.loginWithRole({
+    email: 'admin@example.com',
+    password: 'secret1',
+    allowedRoleNames: ['Admin'],
+    successMessage: 'Admin login successful'
+  });
+
+  assert.equal(result.message, 'Admin login successful');
+  assert.equal(result.token, 'admin-token');
+  assert.equal(result.user.role, 'Admin');
+});
+
+test('loginWithRole rejects users outside the allowed role list', async () => {
+  const service = createAuthService({
+    users: {
+      findByEmail: async () => ({
+        UserID: 9,
+        FullName: 'Customer User',
+        Email: 'customer@example.com',
+        Password: 'hashed-password',
+        RoleID: 3,
+        Role: { RoleName: 'Customer' }
+      })
+    },
+    passwordHasher: {
+      compare: async () => true
+    }
+  });
+
+  await assert.rejects(
+    () => service.loginWithRole({
+      email: 'customer@example.com',
+      password: 'secret1',
+      allowedRoleNames: ['Admin'],
+      forbiddenMessage: 'Admin access required'
+    }),
+    { statusCode: 403, message: 'Admin access required' }
+  );
+});

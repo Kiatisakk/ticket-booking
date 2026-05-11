@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-const { JWT_SECRET } = require('../middleware/auth.middleware');
+const { JWT_SECRET } = require('../config/auth');
 
 const DEFAULT_JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
 
