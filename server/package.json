@@ -24,6 +24,8 @@
     "db:drop-report-summaries": "prisma db execute --schema prisma/schema.prisma --file prisma/migrations/drop_report_summary_materialized_views.sql",
     "db:optimize-seat-availability": "prisma db execute --schema prisma/schema.prisma --file prisma/migrations/seat_availability_view_optimization.sql",
     "db:restore-seat-availability-view": "prisma db execute --schema prisma/schema.prisma --file prisma/migrations/seat_availability_view_legacy.sql",
+    "db:optimize-all": "node src/apply-db-optimizations.js --apply",
+    "db:refresh-optimized-views": "node src/apply-db-optimizations.js --refresh",
     "db:seed": "node prisma/seed.js",
     "db:seed-historical": "node src/seed-historical.js",
     "db:seed-big": "node src/seed-big-data.js",
