@@ -274,6 +274,12 @@
   position: relative;
 }
 
+.rp-table-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
 .rp-table-wrap {
   width: 100%;
   max-width: 100%;

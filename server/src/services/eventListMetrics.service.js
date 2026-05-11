@@ -44,13 +44,16 @@ function buildEventListWhere({ search, category, categoryId }) {
   };
 }
 
-function normalizeSort({ sortBy = 'eventId', sortOrder = 'desc' } = {}) {
+function normalizeSort({ sortBy = 'eventId', sortOrder = 'desc' } = {}, alias = 'pe') {
   const direction = String(sortOrder).toLowerCase() === 'asc' ? 'ASC' : 'DESC';
   const sortMap = {
-    eventId: 'pe."EventID"',
-    title: 'pe."Title"',
-    startDateTime: 'pe."FirstShowtime"',
-    category: 'pe."CategoryName"'
+    eventId: `${alias}."EventID"`,
+    title: `${alias}."Title"`,
+    startDateTime: `${alias}."FirstShowtime"`,
+    category: `${alias}."CategoryName"`,
+    venue: `${alias}."VenueName"`,
+    basePrice: `${alias}."BasePrice"`,
+    status: `${alias}."IsPast"`
   };
 
   return {
@@ -70,7 +73,7 @@ function statusClause(status) {
   return '';
 }
 
-function cursorClause({ cursor, direction, sortOrder }) {
+function cursorClause({ cursor, direction, sortOrder, alias = 'pe' }) {
   const decoded = decodeCursor(cursor, 'EventID');
   const id = Number(decoded?.id ?? decoded?.value);
   if (!Number.isFinite(id)) return '';
@@ -78,7 +81,7 @@ function cursorClause({ cursor, direction, sortOrder }) {
   const isAsc = String(sortOrder).toLowerCase() === 'asc';
   const isPrev = direction === 'prev';
   const moveForward = isPrev ? !isAsc : isAsc;
-  return `pe."EventID" ${moveForward ? '>' : '<'} ${id}`;
+  return `${alias}."EventID" ${moveForward ? '>' : '<'} ${id}`;
 }
 
 function buildEventListSql({
@@ -100,7 +103,7 @@ function buildEventListSql({
   const statusSql = statusClause(status).replaceAll('$NOW_PARAM', `$${nowParamIndex}`);
   if (statusSql) filters.push(statusSql);
   if (includePage && normalizedSort.sortBy === 'eventId' && cursor) {
-    const clause = cursorClause({ cursor, direction, sortOrder });
+    const clause = cursorClause({ cursor, direction, sortOrder, alias: 'fe' });
     if (clause) filters.push(clause);
   }
   const eventFilterSql = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
@@ -129,18 +132,41 @@ function buildEventListSql({
       LEFT JOIN "Showtimes" s ON s."EventID" = fe."EventID"
       GROUP BY fe."EventID"
     ),
-    page_events AS MATERIALIZED (
+    first_showtime_meta AS (
+      SELECT DISTINCT ON (s."EventID")
+        s."EventID",
+        s."VenueID",
+        s."BasePrice",
+        v."VenueName"
+      FROM "Showtimes" s
+      JOIN filtered_events fe ON fe."EventID" = s."EventID"
+      JOIN "Venues" v ON v."VenueID" = s."VenueID"
+      ORDER BY s."EventID", s."StartDateTime" ASC
+    ),
+    page_source AS MATERIALIZED (
       SELECT
         fe.*,
         eb."FirstShowtime",
-        eb."LatestShowtime"
+        eb."LatestShowtime",
+        COALESCE(fsm."VenueName", '-') AS "VenueName",
+        fsm."VenueID" AS "VenueID",
+        COALESCE(fsm."BasePrice", 0) AS "BasePrice",
+        CASE
+          WHEN eb."LatestShowtime" IS NULL THEN false
+          ELSE eb."LatestShowtime" < $${nowParamIndex}
+        END AS "IsPast"
       FROM filtered_events fe
       LEFT JOIN event_bounds eb ON eb."EventID" = fe."EventID"
+      LEFT JOIN first_showtime_meta fsm ON fsm."EventID" = fe."EventID"
       ${eventFilterSql}
-      ORDER BY ${normalizedSort.sortSql} ${normalizedSort.direction}, pe."EventID" ${normalizedSort.direction}
+    ),
+    page_events AS MATERIALIZED (
+      SELECT *
+      FROM page_source ps
+      ORDER BY ${normalizeSort({ sortBy, sortOrder }, 'ps').sortSql} ${normalizedSort.direction}, ps."EventID" ${normalizedSort.direction}
       ${pageSql}
     )
-  `.replaceAll('pe.', 'fe.');
+  `;
 
   if (countOnly) {
     return `
@@ -224,7 +250,7 @@ function buildEventListSql({
     LEFT JOIN booking_event_flags bef ON bef."EventID" = pe."EventID"
     LEFT JOIN venue_capacity vc ON vc."VenueID" = fs."VenueID"
     LEFT JOIN active_booked_first_showtime ab ON ab."ShowtimeID" = fs."ShowtimeID"
-    ORDER BY ${normalizeSort({ sortBy, sortOrder }).sortSql.replaceAll('pe.', 'pe.')} ${normalizeSort({ sortBy, sortOrder }).direction}, pe."EventID" ${normalizeSort({ sortBy, sortOrder }).direction}
+    ORDER BY ${normalizeSort({ sortBy, sortOrder }, 'pe').sortSql} ${normalizeSort({ sortBy, sortOrder }).direction}, pe."EventID" ${normalizeSort({ sortBy, sortOrder }).direction}
   `;
 }
 

@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -12,6 +12,7 @@ import {
   Legend
 } from 'chart.js';
 import { Bar, Line, Doughnut } from 'react-chartjs-2';
+import TableControls from '../../../components/TableControls';
 
 ChartJS.register(
   CategoryScale,
@@ -816,29 +817,59 @@ function buildReportTable(report, data) {
 
 function ReportTable({ report, data }) {
   const table = useMemo(() => buildReportTable(report, data), [report, data]);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  useEffect(() => {
+    setPage(1);
+  }, [report.id, data]);
 
   if (!table.columns.length || !table.rows.length) return <NoData />;
 
+  const totalRows = table.rows.length;
+  const totalPages = Math.max(1, Math.ceil(totalRows / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const start = (safePage - 1) * pageSize;
+  const visibleRows = table.rows.slice(start, start + pageSize);
+
   return (
-    <div className={`rp-table-wrap${report.id === 'cancellation-rate' ? ' wide' : ''}`}>
-      <table className="rp-table">
-        <thead>
-          <tr>
-            {table.columns.map(column => (
-              <th key={column}>{column}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {table.rows.map((row, rowIndex) => (
-            <tr key={`${report.id}-${rowIndex}`}>
-              {row.map((cell, cellIndex) => (
-                <td key={`${report.id}-${rowIndex}-${cellIndex}`}>{formatCellValue(cell)}</td>
+    <div className="rp-table-section">
+      <div className={`rp-table-wrap${report.id === 'cancellation-rate' ? ' wide' : ''}`}>
+        <table className="rp-table">
+          <thead>
+            <tr>
+              {table.columns.map(column => (
+                <th key={column}>{column}</th>
               ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {visibleRows.map((row, rowIndex) => (
+              <tr key={`${report.id}-${safePage}-${rowIndex}`}>
+                {row.map((cell, cellIndex) => (
+                  <td key={`${report.id}-${safePage}-${rowIndex}-${cellIndex}`}>{formatCellValue(cell)}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <TableControls
+        mode="cursor"
+        page={safePage}
+        pageSize={pageSize}
+        totalRows={totalRows}
+        totalPages={totalPages}
+        hasPrevPage={safePage > 1}
+        hasNextPage={safePage < totalPages}
+        onPrev={() => setPage(current => Math.max(current - 1, 1))}
+        onNext={() => setPage(current => Math.min(current + 1, totalPages))}
+        onPageSizeChange={(nextSize) => {
+          setPageSize(nextSize);
+          setPage(1);
+        }}
+      />
     </div>
   );
 }

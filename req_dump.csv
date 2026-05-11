@@ -1,0 +1,220 @@
+--- Sheet: Summary ---
+Section,Sheet Name,Checklist Items
+User Management,User Management,12
+Event Browsing and Discovery,Event Browsing and Discovery,8
+Showtime and Venue Management,Showtime and Venue Management,12
+Booking and Group Reservations,Booking and Group Reservations,16
+Double-Booking Prevention,Double-Booking Prevention,10
+Booking Lifecycle and Session Timeout,Booking Lifecycle Timeout,7
+Payment Processing,Payment Processing,12
+Ticket Generation and Verification,Ticket Generation Verification,7
+Seat Map and Venue Layout,Seat Map and Venue Layout,5
+Administrator Dashboard,Administrator Dashboard,12
+Database Constraints,Database Constraints,45
+Database Views,Database Views,4
+Data Dictionary Tables,Data Dictionary Tables,15
+
+--- Sheet: User Management ---
+Done,Section,Type,Requirement / Note,Description
+,User Management,Requirement,User Registration,"New users can create an account using full name, email, and password."
+,User Management,Requirement,User Login,Registered users can log in using email and password.
+,User Management,Requirement,Password Security,"Passwords are stored using hashing, not plain text."
+,User Management,Requirement,Role-Based Access Control,"The system supports Admin, Staff, and Customer roles."
+,User Management,Requirement,Session Management,"The system uses JWT session tokens with configurable expiration, default 7 days."
+,User Management,Requirement,Email Uniqueness,Each email address can only be registered once.
+,User Management,Requirement,Password Validation,Passwords must be at least 6 characters long.
+,User Management,Requirement,User Role Assignment,"One role can be assigned to many users, and each user has exactly one role."
+,User Management,Note,Auto-assign Customer Role Note,New registered users are automatically assigned the Customer role.
+,User Management,Note,Customer Permissions Note,"Customer can browse events, select seats, make bookings, process payments, view own booking history, and cancel pending bookings."
+,User Management,Note,Staff Permissions Note,Staff has all Customer permissions plus event management permissions.
+,User Management,Note,Admin Permissions Note,Admin has all Staff permissions plus ability to view all bookings and manage system settings.
+
+--- Sheet: Event Browsing and Discovery ---
+Done,Section,Type,Requirement / Note,Description
+,Event Browsing and Discovery,Requirement,Event Listing,Users can view all available events with title and category.
+,Event Browsing and Discovery,Requirement,Category Filtering,"Users can filter events by category such as Movie, Concert, and Seminar."
+,Event Browsing and Discovery,Requirement,Search by Title,Users can search events by entering keywords in the event title.
+,Event Browsing and Discovery,Requirement,Event Details,Users can view full event details including description and related showtimes.
+,Event Browsing and Discovery,Requirement,Event Creation,"Admin and Staff users can create new events with title, description, and category."
+,Event Browsing and Discovery,Requirement,Category Event Assignment,"One category can contain many events, and each event belongs to exactly one category."
+,Event Browsing and Discovery,Note,Category Assignment Note,Every event must belong to exactly one category.
+,Event Browsing and Discovery,Note,Event Visibility Note,All events are visible to authenticated users.
+
+--- Sheet: Showtime and Venue Management ---
+Done,Section,Type,Requirement / Note,Description
+,Showtime and Venue Management,Requirement,Showtime Scheduling,Admin or Staff can create showtimes linking an event to a venue with date/time and base price.
+,Showtime and Venue Management,Requirement,Venue Listing,Users can view all available venues with name and location.
+,Showtime and Venue Management,Requirement,Seat Definition,"Each venue defines seats with row label, seat number, and seat type."
+,Showtime and Venue Management,Requirement,Seat Type Pricing,"Seat types such as VIP, Standard, and Sofa Bed apply a price multiplier to the showtime base price."
+,Showtime and Venue Management,Requirement,Showtime Listing,Users can view all showtimes for a specific event.
+,Showtime and Venue Management,Requirement,Venue Seat Ownership,"One venue can have many seats, and each seat belongs to exactly one venue."
+,Showtime and Venue Management,Requirement,Seat Type Assignment,"One seat type can be assigned to many seats, and each seat has exactly one seat type."
+,Showtime and Venue Management,Requirement,Event Showtime Scheduling,"One event can have many showtimes, and each showtime links to exactly one event."
+,Showtime and Venue Management,Requirement,Venue Showtime Hosting,"One venue can host many showtimes, and each showtime is held at exactly one venue."
+,Showtime and Venue Management,Requirement,Seat-Venue Consistency,The booking transaction validates that the selected seat belongs to the same venue as the referenced showtime before inserting a BookingDetail.
+,Showtime and Venue Management,Requirement,Seat Type Modifier Validity,Each seat type price modifier must be greater than zero.
+,Showtime and Venue Management,Note,Pricing Formula Note,Seat Price = Showtime Base Price x Seat Type Price Modifier.
+
+--- Sheet: Booking and Group Reservations ---
+Done,Section,Type,Requirement / Note,Description
+,Booking and Group Reservations,Requirement,Create Booking,Users can create a booking containing one or more seats for a specific showtime.
+,Booking and Group Reservations,Requirement,Group Bookings,A single booking can include multiple seats.
+,Booking and Group Reservations,Requirement,Booking History,Users can view their own booking history ordered by most recent.
+,Booking and Group Reservations,Requirement,Booking Details,"Each booking displays event name, showtime, seats, total amount, and status."
+,Booking and Group Reservations,Requirement,Cancel Booking,Users can cancel bookings that are in Pending status.
+,Booking and Group Reservations,Requirement,User Booking Ownership,"One user can have many bookings, and each booking belongs to exactly one user."
+,Booking and Group Reservations,Requirement,Booking Status Assignment,"One status can be applied to many bookings, and each booking has exactly one status at a time."
+,Booking and Group Reservations,Requirement,Booking Detail Grouping,"One booking can contain many booking details, and each detail belongs to exactly one booking."
+,Booking and Group Reservations,Requirement,Showtime Booking Detail,"One showtime can have many booking details, and each detail references exactly one showtime."
+,Booking and Group Reservations,Requirement,Seat Booking Detail,"One seat can appear in many booking details across different showtimes, and each detail references exactly one seat."
+,Booking and Group Reservations,Requirement,Booking Expiry Validity,Booking expiration time must be after booking creation time.
+,Booking and Group Reservations,Requirement,Booking Amount Validity,Total booking amount must be non-negative.
+,Booking and Group Reservations,Note,Total Calculation Note,Booking Total = Sum of all individual seat prices.
+,Booking and Group Reservations,Note,Status Lifecycle Note,Bookings transition from Pending to Completed on payment or Cancelled by user.
+,Booking and Group Reservations,Note,Cancellation Restriction Note,Only Pending bookings can be cancelled by the user.
+,Booking and Group Reservations,Note,Cancellation Handling Note,Cancelled bookings are preserved in the database and updated by status instead of being physically deleted.
+
+--- Sheet: Double-Booking Prevention ---
+Done,Section,Type,Requirement / Note,Description
+,Double-Booking Prevention,Requirement,Seat Availability Check,The system verifies seat availability before creating a booking.
+,Double-Booking Prevention,Requirement,Atomic Booking Creation,"If any requested seat is already booked, the entire booking request fails."
+,Double-Booking Prevention,Requirement,Booked Seat Indication,The seat map visually indicates which seats are already booked.
+,Double-Booking Prevention,Requirement,Showtime Seat View,The system maintains a view of all seats per showtime with availability status and calculated seat price.
+,Double-Booking Prevention,Requirement,Venue Consistency Check,"Before inserting booking details, the transaction validates that the selected seat belongs to the same venue as the referenced showtime."
+,Double-Booking Prevention,Note,Seat Unavailable Note,A seat is unavailable if a BookingDetail exists for the same showtime and is linked to a Completed booking or an unexpired Pending booking.
+,Double-Booking Prevention,Note,Seat Release Note,Cancelled bookings and expired pending bookings release seats back to available.
+,Double-Booking Prevention,Note,All-or-Nothing Note,"If any requested seat is unavailable during transactional recheck, the entire booking request fails."
+,Double-Booking Prevention,Note,Seat Availability Source Note,Seat availability and pricing are queried from the ShowtimeAvailableSeats view filtered by ShowtimeID.
+,Double-Booking Prevention,Note,Transactional Recheck Note,"Before inserting booking details, the system rechecks active bookings for the same ShowtimeID and SeatID within a transaction."
+
+--- Sheet: Booking Lifecycle Timeout ---
+Done,Section,Type,Requirement / Note,Description
+,Booking Lifecycle and Session Timeout,Requirement,Auto-set Expiry,All bookings are created with expiration time 15 minutes after creation.
+,Booking Lifecycle and Session Timeout,Requirement,Expired Booking Rejection,The system rejects payment attempts for expired bookings.
+,Booking Lifecycle and Session Timeout,Requirement,Status Transition,"On successful payment, booking status changes from Pending to Completed."
+,Booking Lifecycle and Session Timeout,Requirement,Showtime-Based Booking Deadline,Users cannot create a new booking if the showtime StartDateTime has already passed.
+,Booking Lifecycle and Session Timeout,Requirement,Expired Seat Release,Expired pending bookings are treated as inactive so their seats become available again.
+,Booking Lifecycle and Session Timeout,Note,15-Minute Window Note,ExpiresAt = NOW() + 15 minutes.
+,Booking Lifecycle and Session Timeout,Note,Expired Pending Release Note,Pending bookings whose ExpiresAt has passed are inactive for seat availability and cannot be paid.
+
+--- Sheet: Payment Processing ---
+Done,Section,Type,Requirement / Note,Description
+,Payment Processing,Requirement,Payment Method Selection,"Users can select from available payment methods such as PromptPay, Credit Card, TrueMoney, and ShopeePay."
+,Payment Processing,Requirement,Payment Processing,"The system creates a payment record with status, transaction ID, and amount."
+,Payment Processing,Requirement,Transaction ID Generation,A unique transaction ID is auto-generated for each payment.
+,Payment Processing,Requirement,One Payment per Booking,Each booking has exactly one payment record.
+,Payment Processing,Requirement,Payment Timestamp,The system records the exact timestamp of successful payment.
+,Payment Processing,Requirement,Booking Payment Record,"Each booking has at most one payment record, and each payment links to exactly one booking."
+,Payment Processing,Requirement,Payment Method Assignment,"One payment method can be used in many payments, and each payment uses exactly one method."
+,Payment Processing,Requirement,Payment Status Assignment,"One status can be applied to many payments, and each payment has exactly one status at a time."
+,Payment Processing,Requirement,Payment Amount Validity,Payment amount must be non-negative.
+,Payment Processing,Requirement,Active Payment Method,The system only allows payment methods that are currently active.
+,Payment Processing,Note,Unique Transaction ID Note,Each payment has a unique TransactionID.
+,Payment Processing,Note,Owner-only Payment Note,Only the booking owner can process payment.
+
+--- Sheet: Ticket Generation Verification ---
+Done,Section,Type,Requirement / Note,Description
+,Ticket Generation and Verification,Requirement,Ticket Generation,One ticket is generated per seat in a completed booking.
+,Ticket Generation and Verification,Requirement,Ticket Number,Each ticket has a unique ticket number.
+,Ticket Generation and Verification,Requirement,Ticket Details,"Each ticket displays event name, venue, showtime, seat info, and price."
+,Ticket Generation and Verification,Requirement,Ticket Verification,Tickets can be verified by ticket number without authentication.
+,Ticket Generation and Verification,Requirement,Ticket Listing,Users can view all tickets from their bookings.
+,Ticket Generation and Verification,Requirement,Booking Detail Ticket,"Each booking detail generates exactly one ticket, and each ticket corresponds to exactly one booking detail."
+,Ticket Generation and Verification,Requirement,Ticket Price Validity,Final ticket price must be non-negative.
+
+--- Sheet: Seat Map and Venue Layout ---
+Done,Section,Type,Requirement / Note,Description
+,Seat Map and Venue Layout,Requirement,Seat Map Display,The system displays all seats for a venue grouped by row with seat numbers.
+,Seat Map and Venue Layout,Requirement,Seat Type Visualization,"Seats are color-coded by type such as VIP, Standard, and Sofa Bed."
+,Seat Map and Venue Layout,Requirement,Availability Indication,Booked seats are visually distinguished from available seats.
+,Seat Map and Venue Layout,Requirement,Seat Selection,Users can click seats to select and deselect them.
+,Seat Map and Venue Layout,Requirement,Running Total,The system displays the running total of selected seats.
+
+--- Sheet: Administrator Dashboard ---
+Done,Section,Type,Requirement / Note,Description
+,Administrator Dashboard,Requirement,Revenue by Event Category,Admin can analyze how total revenue for each event category changes month to month.
+,Administrator Dashboard,Requirement,Venue Seats Popularity,Admin can analyze seat zones where customers consistently prefer to sit.
+,Administrator Dashboard,Requirement,Platform User Growth,Admin can analyze how quickly the platform expands month to month.
+,Administrator Dashboard,Requirement,Monthly Revenue Trends by Venue,Admin can analyze how total revenue for each venue changes month to month.
+,Administrator Dashboard,Requirement,Booking by Hours,Admin can analyze total bookings during each hour of the day.
+,Administrator Dashboard,Requirement,Booking vs Capacity by Showtime,Admin can compare sold tickets with total venue capacity for each showtime.
+,Administrator Dashboard,Requirement,In-period Venue Utilization by Event Category,Admin can analyze how many showtimes are hosted at each venue in a period.
+,Administrator Dashboard,Requirement,Seat Type Velocity and Pricing Optimization,Admin can analyze how quickly each seat type sells out before showtime and how much revenue each type generates.
+,Administrator Dashboard,Requirement,Customer Retention and Repeat Purchase Value,Admin can compare ticket revenue from repeat buyers and one-time buyers.
+,Administrator Dashboard,Requirement,Monthly Customer Interest Trend by Event Category,Admin can analyze customer interest trends by event category month to month.
+,Administrator Dashboard,Requirement,Peak Showtime Hours for Each Category,Admin can identify which hour has the highest ticket activity for each category each month.
+,Administrator Dashboard,Requirement,Canceled Rate of Booking,Admin can analyze cancellation factors for each event.
+
+--- Sheet: Database Constraints ---
+Done,Section,Type,Requirement / Note,Description
+,Database Constraints,Requirement,Primary Key Constraints,Every table has a single-column auto-incrementing integer primary key.
+,Database Constraints,Requirement,Foreign Key Constraints,All foreign keys are NOT NULL and include explicit ON DELETE behavior.
+,Database Constraints,Requirement,Users Role Foreign Key,Users.RoleID references Roles.RoleID with SET DEFAULT behavior.
+,Database Constraints,Requirement,Events Category Foreign Key,Events.CategoryID references EventCategories.CategoryID with RESTRICT behavior.
+,Database Constraints,Requirement,Seats Venue Foreign Key,Seats.VenueID references Venues.VenueID with CASCADE behavior.
+,Database Constraints,Requirement,Seats Seat Type Foreign Key,Seats.SeatTypeID references SeatTypes.SeatTypeID with RESTRICT behavior.
+,Database Constraints,Requirement,Showtimes Event Foreign Key,Showtimes.EventID references Events.EventID with CASCADE behavior.
+,Database Constraints,Requirement,Showtimes Venue Foreign Key,Showtimes.VenueID references Venues.VenueID with RESTRICT behavior.
+,Database Constraints,Requirement,Bookings User Foreign Key,Bookings.UserID references Users.UserID with RESTRICT behavior.
+,Database Constraints,Requirement,Bookings Status Foreign Key,Bookings.StatusID references BookingStatuses.StatusID with RESTRICT behavior.
+,Database Constraints,Requirement,BookingDetails Booking Foreign Key,BookingDetails.BookingID references Bookings.BookingID with RESTRICT behavior.
+,Database Constraints,Requirement,BookingDetails Showtime Foreign Key,BookingDetails.ShowtimeID references Showtimes.ShowtimeID with RESTRICT behavior.
+,Database Constraints,Requirement,BookingDetails Seat Foreign Key,BookingDetails.SeatID references Seats.SeatID with RESTRICT behavior.
+,Database Constraints,Requirement,Payments Booking Foreign Key,Payments.BookingID references Bookings.BookingID with RESTRICT behavior.
+,Database Constraints,Requirement,Payments Method Foreign Key,Payments.MethodID references PaymentMethods.MethodID with RESTRICT behavior.
+,Database Constraints,Requirement,Payments Status Foreign Key,Payments.StatusID references PaymentStatuses.StatusID with RESTRICT behavior.
+,Database Constraints,Requirement,Tickets Detail Foreign Key,Tickets.DetailID references BookingDetails.DetailID with RESTRICT behavior.
+,Database Constraints,Note,Transactional Data Preservation Note,"Booking, payment, and ticket data are preserved for history, reporting, and verification."
+,Database Constraints,Requirement,Users Email Unique Constraint,Users.Email prevents duplicate user accounts.
+,Database Constraints,Requirement,Payments BookingID Unique Constraint,Payments.BookingID enforces one payment per booking.
+,Database Constraints,Requirement,Payments TransactionID Unique Constraint,Payments.TransactionID enforces unique gateway references.
+,Database Constraints,Requirement,Tickets TicketNo Unique Constraint,Tickets.TicketNo enforces unique ticket verification codes.
+,Database Constraints,Requirement,Tickets DetailID Unique Constraint,Tickets.DetailID enforces one ticket per booking detail.
+,Database Constraints,Requirement,Seats Position Unique Constraint,"Seats has UNIQUE (VenueID, RowLabel, SeatNumber) to prevent duplicate seat positions within a venue."
+,Database Constraints,Requirement,Booking Total Check Constraint,Bookings.TotalAmount must be greater than or equal to 0.
+,Database Constraints,Requirement,Booking Expiry Check Constraint,Bookings.ExpiresAt must be greater than BookingTimestamp.
+,Database Constraints,Requirement,Payment Amount Check Constraint,Payments.Amount must be greater than or equal to 0.
+,Database Constraints,Requirement,Showtime Base Price Check Constraint,Showtimes.BasePrice must be greater than or equal to 0.
+,Database Constraints,Requirement,Seat Type Modifier Check Constraint,SeatTypes.PriceModifier must be greater than 0.
+,Database Constraints,Requirement,Ticket Price Check Constraint,Tickets.FinalPrice must be greater than or equal to 0.
+,Database Constraints,Requirement,CreatedAt Default Value,All tables include CreatedAt with default NOW().
+,Database Constraints,Requirement,UpdatedAt Default Value,All tables include UpdatedAt with auto-updated NOW().
+,Database Constraints,Requirement,BookingTimestamp Default Value,Bookings.BookingTimestamp defaults to NOW().
+,Database Constraints,Requirement,Payment Method Active Default Value,PaymentMethods.IsActive defaults to TRUE.
+,Database Constraints,Requirement,Booking Status Default Value,Bookings.StatusID defaults to Pending.
+,Database Constraints,Requirement,Payment Status Default Value,Payments.StatusID defaults to Pending.
+,Database Constraints,Requirement,User Role Default Value,Users.RoleID defaults to Customer.
+,Database Constraints,Requirement,Users Required Columns,"Users requires FullName, Email, Password, and RoleID."
+,Database Constraints,Requirement,Events Required Columns,Events requires CategoryID and Title.
+,Database Constraints,Requirement,Seats Required Columns,"Seats requires VenueID, SeatTypeID, RowLabel, and SeatNumber."
+,Database Constraints,Requirement,Showtimes Required Columns,"Showtimes requires EventID, VenueID, StartDateTime, and BasePrice."
+,Database Constraints,Requirement,Bookings Required Columns,"Bookings requires UserID, StatusID, and ExpiresAt."
+,Database Constraints,Requirement,BookingDetails Required Columns,"BookingDetails requires BookingID, ShowtimeID, and SeatID."
+,Database Constraints,Requirement,Payments Required Columns,"Payments requires BookingID, MethodID, and StatusID."
+,Database Constraints,Requirement,Tickets Required Columns,Tickets requires DetailID.
+
+--- Sheet: Database Views ---
+Done,Section,Type,Requirement / Note,Description
+,Database Views,Requirement,ShowtimeAvailableSeats View,The view displays all seats per showtime with availability status and calculated seat price.
+,Database Views,Requirement,ShowtimeAvailableSeats Availability Logic,A seat is unavailable when linked to a Completed booking or an unexpired Pending booking.
+,Database Views,Requirement,ShowtimeAvailableSeats Seat Map Usage,The view is used for querying and seat-map display.
+,Database Views,Note,ShowtimeAvailableSeats Transaction Safety Note,Final double-booking prevention is enforced by transactional booking logic that rechecks active non-expired bookings for the same ShowtimeID and SeatID before insert.
+
+--- Sheet: Data Dictionary Tables ---
+Done,Section,Type,Requirement / Note,Description
+,Data Dictionary,Requirement,Roles Table,Stores role-based access control information.
+,Data Dictionary,Requirement,Users Table,Stores registered user account information and credentials.
+,Data Dictionary,Requirement,EventCategories Table,Stores categories for events.
+,Data Dictionary,Requirement,Events Table,Stores details of available events.
+,Data Dictionary,Requirement,Venues Table,Stores physical venue information.
+,Data Dictionary,Requirement,Showtimes Table,Stores event schedules linked to venues.
+,Data Dictionary,Requirement,SeatTypes Table,Stores seat types and pricing modifiers.
+,Data Dictionary,Requirement,Seats Table,Stores seats mapped to venues.
+,Data Dictionary,Requirement,BookingStatuses Table,Stores booking lifecycle statuses.
+,Data Dictionary,Requirement,Bookings Table,Stores user booking transactions.
+,Data Dictionary,Requirement,BookingDetails Table,Stores individual reserved seats for each booking.
+,Data Dictionary,Requirement,Tickets Table,Stores generated tickets for completed bookings.
+,Data Dictionary,Requirement,PaymentMethods Table,Stores supported payment gateways and methods.
+,Data Dictionary,Requirement,PaymentStatuses Table,Stores payment transaction statuses.
+,Data Dictionary,Requirement,Payments Table,Stores payment transaction records linked to bookings.
+

@@ -159,10 +159,10 @@ function EventManagement() {
             <th className="sortable-th"><button type="button" onClick={() => handleSort('eventId')}>Event ID <span className="sort-mark">{sortLabel(sortConfig, 'eventId')}</span></button></th>
             <th className="sortable-th"><button type="button" onClick={() => handleSort('title')}>Title <span className="sort-mark">{sortLabel(sortConfig, 'title')}</span></button></th>
             <th className="sortable-th"><button type="button" onClick={() => handleSort('category')}>Category <span className="sort-mark">{sortLabel(sortConfig, 'category')}</span></button></th>
-            <th>Venue</th>
+            <th className="sortable-th"><button type="button" onClick={() => handleSort('venue')}>Venue <span className="sort-mark">{sortLabel(sortConfig, 'venue')}</span></button></th>
             <th className="sortable-th"><button type="button" onClick={() => handleSort('startDateTime')}>Start Date <span className="sort-mark">{sortLabel(sortConfig, 'startDateTime')}</span></button></th>
-            <th>Base Price</th>
-            <th>Status</th>
+            <th className="sortable-th"><button type="button" onClick={() => handleSort('basePrice')}>Base Price <span className="sort-mark">{sortLabel(sortConfig, 'basePrice')}</span></button></th>
+            <th className="sortable-th"><button type="button" onClick={() => handleSort('status')}>Status <span className="sort-mark">{sortLabel(sortConfig, 'status')}</span></button></th>
             <th>Actions</th>
           </tr>
         </thead>
