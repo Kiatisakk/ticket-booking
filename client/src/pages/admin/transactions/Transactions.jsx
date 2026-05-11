@@ -13,7 +13,6 @@ function getStatusClass(status) {
     case 'failed': return 'tx-badge tx-badge-failed';
     case 'pending': return 'tx-badge tx-badge-pending';
     case 'completed': return 'tx-badge tx-badge-completed';
-    case 'refunded': return 'tx-badge tx-badge-refunded';
     default: return 'tx-badge tx-badge-pending';
   }
 }
@@ -123,7 +122,6 @@ function Transactions() {
           <option value="Pending">Pending</option>
           <option value="Success">Success</option>
           <option value="Failed">Failed</option>
-          <option value="Refunded">Refunded</option>
         </select>
         <select className="tx-filter-select" value={methodFilter} onChange={e => setMethodFilter(e.target.value)}>
           <option value="All">All Methods</option>

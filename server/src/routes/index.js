@@ -122,7 +122,7 @@ router.put('/staff/events/:id', authenticateStaff, staffController.updateEvent);
 router.delete('/staff/events/:id', authenticateStaff, staffController.deleteEvent);
 
 // Seat Lock Routes
-router.post('/seats/lock', seatLockController.lockSeat);
-router.post('/seats/unlock', seatLockController.unlockSeats);
+router.post('/seats/lock', authenticateToken, seatLockController.lockSeat);
+router.post('/seats/unlock', authenticateToken, seatLockController.unlockSeats);
 
 module.exports = router;

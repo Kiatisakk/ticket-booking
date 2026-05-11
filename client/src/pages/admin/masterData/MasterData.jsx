@@ -32,12 +32,12 @@ function MasterData() {
   }, [adminToken]);
 
   const loadSeatTypes = useCallback(async () => {
-    const { data } = await axios.get(`${API_URL}/seat-types`);
+    const { data } = await axios.get(`${API_URL}/seat-types`, { headers });
     setSeatTypes(data);
     setSeatForm(current => current.seatTypeId
       ? current
       : { ...current, seatTypeId: data[0]?.SeatTypeID ? String(data[0].SeatTypeID) : '' });
-  }, []);
+  }, [adminToken]);
 
   const loadSeats = useCallback(async (venueId) => {
     if (!venueId) {

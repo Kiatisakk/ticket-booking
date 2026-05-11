@@ -39,7 +39,7 @@ const StaffLogin = () => {
       localStorage.setItem('staffUser', JSON.stringify(data.user));
       setAuthSession(data.user, data.token);
 
-      navigate('/staff/dashboard');
+      navigate('/staff/events');
     } catch (err) {
       setError('An error occurred. Please try again.');
       console.error('Login error:', err);

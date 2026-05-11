@@ -41,7 +41,6 @@ test('createEvent trims title and sends required category id', async () => {
   assert.deepEqual(result, {
     title: 'Test Event',
     description: 'Description',
-    categoryId: 2,
-    createdByUserId: 1
+    categoryId: 2
   });
 });

@@ -36,8 +36,7 @@ function createEventService({
       return events.create({
         title: title.trim(),
         description,
-        categoryId: Number(categoryId),
-        createdByUserId: user.userId
+        categoryId: Number(categoryId)
       });
     }
   };

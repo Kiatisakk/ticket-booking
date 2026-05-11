@@ -159,11 +159,6 @@ exports.getAllStaff = async (req, res) => {
 
     const staff = await prisma.user.findMany({
       where: { RoleID: staffRole.RoleID },
-      include: {
-        _count: {
-          select: { EventsCreatedByUser: true }
-        }
-      },
       orderBy: { CreatedAt: 'desc' }
     });
 
@@ -171,7 +166,6 @@ exports.getAllStaff = async (req, res) => {
       id: s.UserID,
       fullName: s.FullName,
       email: s.Email,
-      eventsCreated: s._count.EventsCreatedByUser,
       createdAt: s.CreatedAt
     }));
 
@@ -344,8 +338,7 @@ exports.createEvent = async (req, res) => {
       data: {
         Title:           title.trim(),
         Description:     description?.trim() || '',
-        CategoryID:      parsedCategoryId,
-        CreatedByUserID: req.user.userId
+        CategoryID:      parsedCategoryId
       }
     });
 

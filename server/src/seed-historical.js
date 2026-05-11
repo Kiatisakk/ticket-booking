@@ -462,7 +462,7 @@ async function main() {
    * @param {Date}     opts.bookingTimestamp
    * @param {number}   opts.bookingStatusID — 2=Completed, 3=Cancelled
    * @param {number}   opts.paymentMethodID — 1-4
-   * @param {number}   opts.paymentStatusID — 2=Success, 3=Failed, 4=Refunded
+   * @param {number}   opts.paymentStatusID — 2=Success, 3=Failed
    */
   async function createHistoricalBooking(opts) {
     const {

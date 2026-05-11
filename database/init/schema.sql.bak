@@ -189,7 +189,7 @@ COMMENT ON COLUMN "EventCategories"."CategoryName" IS 'Movie, Concert, Seminar';
 COMMENT ON COLUMN "SeatTypes"."TypeName" IS 'VIP, Standard, Sofa Bed';
 COMMENT ON COLUMN "Bookings"."ExpiresAt" IS 'Session Timeout';
 COMMENT ON COLUMN "PaymentMethods"."MethodName" IS 'PromptPay, Credit Card, TrueMoney, ShopeePay';
-COMMENT ON COLUMN "PaymentStatuses"."StatusName" IS 'Pending, Success, Failed, Refunded';
+COMMENT ON COLUMN "PaymentStatuses"."StatusName" IS 'Pending, Success, Failed';
 COMMENT ON COLUMN "Payments"."TransactionID" IS 'Gateway reference code';
 
 CREATE OR REPLACE VIEW "ShowtimeAvailableSeats" AS

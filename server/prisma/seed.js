@@ -65,8 +65,7 @@ async function main() {
     data: [
       { StatusID: 1, StatusName: 'Pending' },
       { StatusID: 2, StatusName: 'Success' },
-      { StatusID: 3, StatusName: 'Failed' },
-      { StatusID: 4, StatusName: 'Refunded' }
+      { StatusID: 3, StatusName: 'Failed' }
     ]
   });
 
@@ -196,8 +195,7 @@ async function main() {
     data: {
       Title: 'Avengers: Secret Wars',
       Description: 'The epic conclusion to the Multiverse Saga.\n\nCast: Robert Downey Jr., Chris Evans, Tom Holland, Benedict Cumberbatch',
-      CategoryID: categories[0].CategoryID, // Movie
-      CreatedByUserID: adminUser.UserID
+      CategoryID: categories[0].CategoryID // Movie
     }
   });
 
@@ -205,8 +203,7 @@ async function main() {
     data: {
       Title: 'Coldplay Live in Bangkok',
       Description: 'Experience Coldplay\'s Music of the Spheres World Tour live!\n\nPerformers: Chris Martin, Guy Berryman, Jonny Buckland, Will Champion',
-      CategoryID: categories[1].CategoryID, // Concert
-      CreatedByUserID: staffUser.UserID
+      CategoryID: categories[1].CategoryID // Concert
     }
   });
 
@@ -214,8 +211,7 @@ async function main() {
     data: {
       Title: 'Tech Innovation Summit 2025',
       Description: 'Join industry leaders discussing the future of AI, Web3, and Cloud Computing.\n\nSpeakers: Sam Altman (OpenAI), Jensen Huang (NVIDIA), Vitalik Buterin (Ethereum)',
-      CategoryID: categories[2].CategoryID, // Seminar
-      CreatedByUserID: adminUser.UserID
+      CategoryID: categories[2].CategoryID // Seminar
     }
   });
 

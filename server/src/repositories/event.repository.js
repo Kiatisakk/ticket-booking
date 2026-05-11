@@ -38,13 +38,12 @@ function createEventRepository(db = prisma) {
       });
     },
 
-    create({ title, description, categoryId, createdByUserId }) {
+    create({ title, description, categoryId }) {
       return db.event.create({
         data: {
           Title: title,
           Description: description,
-          CategoryID: categoryId,
-          CreatedByUserID: createdByUserId
+          CategoryID: categoryId
         }
       });
     }

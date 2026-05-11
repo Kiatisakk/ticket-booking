@@ -137,6 +137,8 @@ function Payment() {
         if (summarySeats.length > 0) {
           await axios.post(`${API_URL}/seats/unlock`, {
             seats: summarySeats.map(seat => seat.SeatID)
+          }, {
+            headers: { Authorization: `Bearer ${token}` }
           });
           setSelectedSeats([]);
         }

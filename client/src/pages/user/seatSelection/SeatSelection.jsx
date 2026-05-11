@@ -90,6 +90,8 @@ function SeatSelection() {
       try {
         await axios.post(`${API_URL}/seats/unlock`, {
           seats: selectedSeats.map(s => s.SeatID)
+        }, {
+          headers: { Authorization: `Bearer ${token}` }
         }).catch(() => {});
       } catch (error) {
         console.error('Error unlocking seats on tab switch:', error);
@@ -112,7 +114,9 @@ function SeatSelection() {
 
     if (alreadySelected) {
       try {
-        await axios.post(`${API_URL}/seats/unlock`, { seats: [seat.SeatID] }).catch(() => {});
+        await axios.post(`${API_URL}/seats/unlock`, { seats: [seat.SeatID] }, {
+          headers: { Authorization: `Bearer ${token}` }
+        }).catch(() => {});
         setSelectedSeats(prev => prev.filter(s => s.SeatID !== seat.SeatID));
       } catch (error) {
         console.error('Error unlocking seat:', error);
@@ -124,6 +128,8 @@ function SeatSelection() {
       const response = await axios.post(`${API_URL}/seats/lock`, {
         seatId: seat.SeatID,
         showtimeId: showtime.ShowtimeID
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
       });
 
       if (response.data.success) {

@@ -43,3 +43,14 @@ test('staff backend scope excludes bookings, transactions, and dashboard routes'
 test('generic event creation route is closed in favor of admin/staff event routes', () => {
   assert.equal(findRoute('/events', 'post'), undefined);
 });
+
+test('seat lock helper routes require authentication', () => {
+  [
+    ['/seats/lock', 'post'],
+    ['/seats/unlock', 'post']
+  ].forEach(([path, method]) => {
+    const route = findRoute(path, method);
+    assert.ok(route, `${method.toUpperCase()} ${path} route should exist`);
+    assert.equal(route.handlers[0], 'authenticateToken');
+  });
+});
