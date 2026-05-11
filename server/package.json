@@ -16,6 +16,7 @@
     "db:seed": "node prisma/seed.js",
     "db:seed-historical": "node src/seed-historical.js",
     "db:seed-big": "node src/seed-big-data.js",
+    "db:seed-synthetic-py": "python scripts/synthetic_seed.py",
     "db:benchmark": "node src/benchmark-db.js",
     "db:benchmark:baseline": "node src/benchmark-db.js --save-baseline",
     "db:benchmark:compare": "node src/benchmark-db.js --compare",

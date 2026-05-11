@@ -1,0 +1,17 @@
+{
+  "prefix": "demo",
+  "profile": "festival",
+  "seed": 20260512,
+  "users": 1200,
+  "events": 70,
+  "venues": 6,
+  "bookings": 9000,
+  "min_showtimes": 2,
+  "max_showtimes": 6,
+  "start_date": "2025-01-01",
+  "months": 18,
+  "max_seats_per_booking": 5,
+  "completed_rate": 0.8,
+  "cancelled_rate": 0.12,
+  "pending_rate": 0.08
+}
