@@ -1,0 +1,12 @@
+DROP INDEX IF EXISTS idx_bookings_user_timestamp;
+DROP INDEX IF EXISTS idx_bookings_timestamp;
+DROP INDEX IF EXISTS idx_bookings_status_expires;
+DROP INDEX IF EXISTS idx_bookingdetails_showtime_seat;
+DROP INDEX IF EXISTS idx_bookingdetails_booking;
+DROP INDEX IF EXISTS idx_showtimes_event_start;
+DROP INDEX IF EXISTS idx_showtimes_venue;
+DROP INDEX IF EXISTS idx_seats_venue_type;
+DROP INDEX IF EXISTS idx_payments_status_created;
+DROP INDEX IF EXISTS idx_payments_created;
+DROP INDEX IF EXISTS idx_payments_method_created;
+DROP INDEX IF EXISTS idx_payments_booking;

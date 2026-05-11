@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { useAdminAuth } from '../../../context/AdminAuthContext';
 import TableControls from '../../../components/TableControls';
-import { getPageRows, getTotalPages, nextSortConfig, sortLabel, sortRows } from '../../../utils/tableView';
+import { nextSortConfig, sortLabel } from '../../../utils/tableView';
 import './Transactions.css';
 
 const API_URL = 'http://localhost:4000/api';
@@ -39,12 +39,20 @@ function Transactions() {
   const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'desc' });
   const [pageSize, setPageSize] = useState(10);
   const [page, setPage] = useState(1);
+  const [totalRows, setTotalRows] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
 
   const fetchTransactions = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      const params = {};
+      const params = {
+        page,
+        pageSize,
+        sortBy: sortConfig.key,
+        sortOrder: sortConfig.direction,
+        search: search || undefined
+      };
       if (statusFilter !== 'All') params.status = statusFilter;
       if (methodFilter !== 'All') params.method = methodFilter;
 
@@ -52,42 +60,27 @@ function Transactions() {
         headers: { Authorization: `Bearer ${adminToken}` },
         params
       });
-      setTransactions(res.data);
+      const payload = Array.isArray(res.data)
+        ? { data: res.data, total: res.data.length, totalPages: 1 }
+        : res.data;
+      setTransactions(payload.data || []);
+      setTotalRows(payload.total || 0);
+      setTotalPages(payload.totalPages || 1);
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to load transactions');
       setTransactions([]);
+      setTotalRows(0);
+      setTotalPages(1);
     } finally {
       setLoading(false);
     }
-  }, [adminToken, statusFilter, methodFilter]);
+  }, [adminToken, search, statusFilter, methodFilter, sortConfig, page, pageSize]);
 
   useEffect(() => {
     fetchTransactions();
   }, [fetchTransactions]);
 
-  const filtered = transactions.filter(t => {
-    const needle = search.toLowerCase();
-    const matchSearch = !needle ||
-      t.bookingId?.toString().includes(needle) ||
-      t.transactionId?.toLowerCase().includes(needle) ||
-      t.user?.toLowerCase().includes(needle);
-    const matchStatus = statusFilter === 'All' || t.status === statusFilter;
-    const matchMethod = methodFilter === 'All' || t.method?.toLowerCase().includes(methodFilter.toLowerCase());
-    return matchSearch && matchStatus && matchMethod;
-  });
-
-  const sortAccessors = {
-    bookingId: t => t.bookingId,
-    transactionId: t => t.transactionId,
-    user: t => t.user,
-    method: t => t.method,
-    amount: t => t.amount,
-    date: t => t.date,
-    status: t => t.status
-  };
-  const sorted = sortRows(filtered, sortConfig, sortAccessors);
-  const totalPages = getTotalPages(sorted.length, pageSize);
-  const pageRows = getPageRows(sorted, Math.min(page, totalPages), pageSize);
+  const pageRows = transactions;
 
   useEffect(() => {
     setPage(1);
@@ -103,7 +96,7 @@ function Transactions() {
       <div className="tx-header">
         <div>
           <div className="tx-title">Transactions</div>
-          <div className="tx-subtitle">{filtered.length} read-only payment records</div>
+          <div className="tx-subtitle">{totalRows} read-only payment records</div>
         </div>
       </div>
 
@@ -136,7 +129,7 @@ function Transactions() {
         <div className="tx-table-scroll">
           {loading ? (
             <div className="tx-loading">Loading transactions...</div>
-          ) : filtered.length === 0 ? (
+          ) : transactions.length === 0 ? (
             <div className="tx-empty">No transactions found</div>
           ) : (
             <table className="tx-table">
@@ -176,11 +169,11 @@ function Transactions() {
             </table>
           )}
         </div>
-        {!loading && filtered.length > 0 && (
+        {!loading && transactions.length > 0 && (
           <TableControls
             page={Math.min(page, totalPages)}
             pageSize={pageSize}
-            totalRows={sorted.length}
+            totalRows={totalRows}
             totalPages={totalPages}
             onPageChange={setPage}
             onPageSizeChange={setPageSize}

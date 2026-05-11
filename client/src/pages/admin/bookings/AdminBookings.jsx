@@ -30,37 +30,48 @@ function AdminBookings() {
   const [sortConfig, setSortConfig] = useState({ key: 'bookingId', direction: 'desc' });
   const [pageSize, setPageSize] = useState(10);
   const [page, setPage] = useState(1);
+  const [totalRows, setTotalRows] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const serverSortableKeys = new Set(['bookingId', 'user', 'amount', 'bookingDate', 'status']);
+  const serverMode = serverSortableKeys.has(sortConfig.key);
 
   const fetchBookings = useCallback(async () => {
     setLoading(true);
     try {
-      const params = {};
+      const params = {
+        sortBy: sortConfig.key,
+        sortOrder: sortConfig.direction,
+        search: search || undefined
+      };
+      if (serverMode) {
+        params.page = page;
+        params.pageSize = pageSize;
+      }
       if (statusFilter !== 'All') params.status = statusFilter;
 
       const res = await axios.get(`${API_URL}/admin/bookings`, {
         headers: { Authorization: `Bearer ${adminToken}` },
         params
       });
-      setBookings(res.data);
+      const payload = Array.isArray(res.data)
+        ? { data: res.data, total: res.data.length, totalPages: 1 }
+        : res.data;
+      setBookings(payload.data || []);
+      setTotalRows(payload.total || 0);
+      setTotalPages(payload.totalPages || getTotalPages(payload.total || 0, pageSize));
     } catch {
       setBookings([]);
+      setTotalRows(0);
+      setTotalPages(1);
     } finally {
       setLoading(false);
     }
-  }, [adminToken, statusFilter]);
+  }, [adminToken, search, statusFilter, sortConfig, page, pageSize, serverMode]);
 
   useEffect(() => {
     fetchBookings();
   }, [fetchBookings]);
 
-  const filtered = bookings.filter(b => {
-    const matchSearch = !search ||
-      b.id?.toString().includes(search) ||
-      b.user?.toLowerCase().includes(search.toLowerCase()) ||
-      b.userEmail?.toLowerCase().includes(search.toLowerCase());
-    const matchStatus = statusFilter === 'All' || b.status === statusFilter;
-    return matchSearch && matchStatus;
-  });
   const sortAccessors = {
     bookingId: b => b.id,
     user: b => b.user,
@@ -71,9 +82,10 @@ function AdminBookings() {
     status: b => b.status,
     payment: b => b.paymentStatus || ''
   };
-  const sorted = sortRows(filtered, sortConfig, sortAccessors);
-  const totalPages = getTotalPages(sorted.length, pageSize);
-  const pageRows = getPageRows(sorted, Math.min(page, totalPages), pageSize);
+  const sorted = serverMode ? bookings : sortRows(bookings, sortConfig, sortAccessors);
+  const effectiveTotalPages = serverMode ? totalPages : getTotalPages(sorted.length, pageSize);
+  const pageRows = serverMode ? bookings : getPageRows(sorted, Math.min(page, effectiveTotalPages), pageSize);
+  const effectiveTotalRows = serverMode ? totalRows : sorted.length;
 
   useEffect(() => {
     setPage(1);
@@ -89,7 +101,7 @@ function AdminBookings() {
       <div className="bk-header">
         <div>
           <div className="bk-title">Bookings</div>
-          <div className="bk-subtitle">{filtered.length} bookings</div>
+          <div className="bk-subtitle">{effectiveTotalRows} bookings</div>
         </div>
       </div>
 
@@ -113,7 +125,7 @@ function AdminBookings() {
         <div className="bk-table-scroll">
           {loading ? (
             <div className="bk-loading">Loading bookings...</div>
-          ) : filtered.length === 0 ? (
+          ) : bookings.length === 0 ? (
             <div className="bk-empty">No bookings found</div>
           ) : (
             <table className="bk-table">
@@ -171,12 +183,12 @@ function AdminBookings() {
             </table>
           )}
         </div>
-        {!loading && filtered.length > 0 && (
+        {!loading && bookings.length > 0 && (
           <TableControls
-            page={Math.min(page, totalPages)}
+            page={Math.min(page, effectiveTotalPages)}
             pageSize={pageSize}
-            totalRows={sorted.length}
-            totalPages={totalPages}
+            totalRows={effectiveTotalRows}
+            totalPages={effectiveTotalPages}
             onPageChange={setPage}
             onPageSizeChange={setPageSize}
           />

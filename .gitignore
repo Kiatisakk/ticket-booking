@@ -44,5 +44,6 @@ Desktop.ini
 # Logs
 logs/
 *.log
+server/benchmark-results/
 
 .vscode/

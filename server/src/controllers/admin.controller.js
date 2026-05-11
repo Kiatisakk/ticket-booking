@@ -1,6 +1,7 @@
 const bcrypt = require('bcrypt');
 const prisma = require('../config/prisma');
 const { signAuthToken } = require('../utils/token');
+const { getEventList } = require('../services/eventListMetrics.service');
 
 function normalizeEmail(email = '') {
   return email.trim().toLowerCase();
@@ -34,6 +35,32 @@ function compareSeatPosition(a, b) {
     numeric: true,
     sensitivity: 'base'
   });
+}
+
+function parsePagination(query) {
+  const page = Math.max(parseInt(query.page || '1', 10) || 1, 1);
+  const pageSize = Math.min(Math.max(parseInt(query.pageSize || '10', 10) || 10, 1), 100);
+  return {
+    page,
+    pageSize,
+    skip: (page - 1) * pageSize,
+    take: pageSize,
+    enabled: query.page !== undefined || query.pageSize !== undefined
+  };
+}
+
+function sortDirection(value) {
+  return String(value).toLowerCase() === 'asc' ? 'asc' : 'desc';
+}
+
+function paginationPayload(data, total, page, pageSize) {
+  return {
+    data,
+    page,
+    pageSize,
+    total,
+    totalPages: Math.max(Math.ceil(total / pageSize), 1)
+  };
 }
 
 // ─── Admin Auth ───────────────────────────────────────────────────────────────
@@ -194,85 +221,7 @@ exports.getAllStaff = async (req, res) => {
 exports.getAllEvents = async (req, res) => {
   try {
     const { search, categoryId } = req.query;
-    const where = {};
-
-    if (search) {
-      where.Title = { contains: search, mode: 'insensitive' };
-    }
-    if (categoryId) {
-      where.CategoryID = parseInt(categoryId);
-    }
-
-    const events = await prisma.event.findMany({
-      where,
-      include: {
-        Category: true,
-        Showtimes: { include: { Venue: true } }
-      },
-      orderBy: { EventID: 'desc' }
-    });
-
-    // Showtime has no TotalSeats/SeatsRemaining/StartTime — use StartDateTime and
-    // compute capacity from Seat count for the venue.
-    const now = new Date();
-    const mapped = await Promise.all(events.map(async e => {
-      const showtime = e.Showtimes?.[0] ?? null;
-      const venueID  = showtime?.VenueID ?? null;
-
-      const totalSeats = venueID
-        ? await prisma.seat.count({ where: { VenueID: venueID } })
-        : 0;
-
-      const bookedCount = showtime
-        ? await prisma.bookingDetail.count({
-            where: {
-              ShowtimeID: showtime.ShowtimeID,
-              Booking: {
-                OR: [
-                  { Status: { StatusName: 'Completed' } },
-                  { Status: { StatusName: 'Pending' }, ExpiresAt: { gt: now } }
-                ]
-              }
-            }
-          })
-        : 0;
-
-      // Check if event has any bookings across all showtimes
-      const allShowtimeIds = e.Showtimes?.map(s => s.ShowtimeID) || [];
-      const totalBookings = allShowtimeIds.length > 0
-        ? await prisma.bookingDetail.count({
-            where: { ShowtimeID: { in: allShowtimeIds } }
-          })
-        : 0;
-
-      // Check if ALL showtimes are in the past
-      const latestShowtime = e.Showtimes?.length > 0
-        ? e.Showtimes.reduce((latest, s) =>
-            new Date(s.StartDateTime) > new Date(latest.StartDateTime) ? s : latest
-          , e.Showtimes[0])
-        : null;
-      const isPast = latestShowtime ? new Date(latestShowtime.StartDateTime) < now : false;
-
-      return {
-        id:            e.EventID,
-        title:         e.Title,
-        description:   e.Description,
-        category:      e.Category?.CategoryName || 'Uncategorized',
-        categoryId:    e.CategoryID,
-        basePrice:     Number(showtime?.BasePrice ?? 0),
-        venue:         showtime?.Venue?.VenueName ?? '-',
-        venueId:       venueID,
-        totalSeats,
-        seatsRemaining: totalSeats - bookedCount,
-        startDateTime: showtime?.StartDateTime ?? null,
-        showtimeId:    showtime?.ShowtimeID ?? null,
-        isPast,
-        hasBookings:   totalBookings > 0,
-        latestShowtime: latestShowtime?.StartDateTime ?? null
-      };
-    }));
-
-    res.json(mapped);
+    res.json(await getEventList(prisma, { search, categoryId }));
   } catch (error) {
     console.error('Admin getAllEvents error:', error);
     res.status(500).json({ error: 'Failed to fetch events' });
@@ -478,7 +427,9 @@ exports.deleteEvent = async (req, res) => {
 
 exports.getAllTransactions = async (req, res) => {
   try {
-    const { search, status, method } = req.query;
+    const { search, status, method, sortBy } = req.query;
+    const { page, pageSize, skip, take, enabled: paginated } = parsePagination(req.query);
+    const direction = sortDirection(req.query.sortOrder);
 
     const where = {};
 
@@ -502,21 +453,61 @@ exports.getAllTransactions = async (req, res) => {
       }
     }
 
-    const payments = await prisma.payment.findMany({
+    if (search) {
+      const searchNum = parseInt(search, 10);
+      where.OR = [
+        { TransactionID: { contains: search, mode: 'insensitive' } },
+        { Booking: { User: { FullName: { contains: search, mode: 'insensitive' } } } },
+        { Booking: { User: { Email: { contains: search, mode: 'insensitive' } } } }
+      ];
+      if (!Number.isNaN(searchNum)) {
+        where.OR.push({ BookingID: searchNum });
+        where.OR.push({ PaymentID: searchNum });
+      }
+    }
+
+    const sortMap = {
+      bookingId: { BookingID: direction },
+      transactionId: { TransactionID: direction },
+      amount: { Amount: direction },
+      date: { CreatedAt: direction },
+      status: { Status: { StatusName: direction } },
+      method: { Method: { MethodName: direction } },
+      user: { Booking: { User: { FullName: direction } } }
+    };
+    const orderBy = sortMap[sortBy] || { CreatedAt: 'desc' };
+
+    const query = {
       where,
-      include: {
+      select: {
+        PaymentID: true,
+        BookingID: true,
+        TransactionID: true,
+        Amount: true,
+        PaidAt: true,
+        CreatedAt: true,
         Booking: {
-          include: {
+          select: {
             User: { select: { FullName: true, Email: true, Role: { select: { RoleName: true } } } }
           }
         },
-        Method: true,
-        Status: true
+        Method: { select: { MethodName: true } },
+        Status: { select: { StatusName: true } }
       },
-      orderBy: { CreatedAt: 'desc' }
-    });
+      orderBy
+    };
 
-    let mapped = payments.map(p => ({
+    if (paginated) {
+      query.skip = skip;
+      query.take = take;
+    }
+
+    const [payments, total] = await Promise.all([
+      prisma.payment.findMany(query),
+      paginated ? prisma.payment.count({ where }) : Promise.resolve(null)
+    ]);
+
+    const mapped = payments.map(p => ({
       id:            p.PaymentID,
       bookingId:     p.BookingID,
       transactionId: p.TransactionID || `TXN-${p.PaymentID}`,
@@ -528,16 +519,7 @@ exports.getAllTransactions = async (req, res) => {
       userRole:      p.Booking?.User?.Role?.RoleName || 'Unknown'
     }));
 
-    // Apply search filter (client-side after DB fetch)
-    if (search) {
-      mapped = mapped.filter(t =>
-        t.bookingId?.toString().includes(search) ||
-        t.transactionId?.includes(search) ||
-        t.user?.toLowerCase().includes(search.toLowerCase())
-      );
-    }
-
-    res.json(mapped);
+    res.json(paginated ? paginationPayload(mapped, total, page, pageSize) : mapped);
   } catch (error) {
     console.error('Admin getAllTransactions error:', error);
     res.status(500).json({ error: 'Failed to fetch transactions' });
@@ -548,7 +530,9 @@ exports.getAllTransactions = async (req, res) => {
 
 exports.getAllBookings = async (req, res) => {
   try {
-    const { search, status } = req.query;
+    const { search, status, sortBy } = req.query;
+    const { page, pageSize, skip, take, enabled: paginated } = parsePagination(req.query);
+    const direction = sortDirection(req.query.sortOrder);
 
     const where = {};
 
@@ -575,26 +559,52 @@ exports.getAllBookings = async (req, res) => {
       }
     }
 
-    const bookings = await prisma.booking.findMany({
+    const sortMap = {
+      bookingId: { BookingID: direction },
+      user: { User: { FullName: direction } },
+      amount: { TotalAmount: direction },
+      bookingDate: { BookingTimestamp: direction },
+      status: { Status: { StatusName: direction } }
+    };
+    const orderBy = sortMap[sortBy] || { CreatedAt: 'desc' };
+
+    const query = {
       where,
-      include: {
+      select: {
+        BookingID: true,
+        TotalAmount: true,
+        BookingTimestamp: true,
+        ExpiresAt: true,
         User: { select: { FullName: true, Email: true, Role: { select: { RoleName: true } } } },
-        Status: true,
+        Status: { select: { StatusName: true } },
         BookingDetails: {
-          include: {
+          select: {
             Showtime: {
-              include: {
+              select: {
                 Event: { select: { Title: true, EventID: true } }
               }
             }
           }
         },
         Payment: {
-          include: { Status: true, Method: true }
+          select: {
+            Status: { select: { StatusName: true } },
+            Method: { select: { MethodName: true } }
+          }
         }
       },
-      orderBy: { CreatedAt: 'desc' }
-    });
+      orderBy
+    };
+
+    if (paginated) {
+      query.skip = skip;
+      query.take = take;
+    }
+
+    const [bookings, total] = await Promise.all([
+      prisma.booking.findMany(query),
+      paginated ? prisma.booking.count({ where }) : Promise.resolve(null)
+    ]);
 
     const mapped = bookings.map(b => {
       const events = [...new Set(
@@ -619,7 +629,7 @@ exports.getAllBookings = async (req, res) => {
       };
     });
 
-    res.json(mapped);
+    res.json(paginated ? paginationPayload(mapped, total, page, pageSize) : mapped);
   } catch (error) {
     console.error('Admin getAllBookings error:', error);
     res.status(500).json({ error: 'Failed to fetch bookings' });

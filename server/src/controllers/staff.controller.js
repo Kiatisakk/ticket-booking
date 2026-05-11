@@ -1,77 +1,10 @@
 const prisma = require('../config/prisma');
+const { getEventList } = require('../services/eventListMetrics.service');
 
 exports.getAllEvents = async (req, res) => {
   try {
     const { search, categoryId } = req.query;
-    const where = {};
-
-    if (search) {
-      where.Title = { contains: search, mode: 'insensitive' };
-    }
-    if (categoryId) {
-      where.CategoryID = parseInt(categoryId);
-    }
-
-    const events = await prisma.event.findMany({
-      where,
-      include: {
-        Category: true,
-        Showtimes: { include: { Venue: true } }
-      },
-      orderBy: { EventID: 'desc' }
-    });
-
-    const now = new Date();
-    const mapped = await Promise.all(events.map(async (event) => {
-      const showtime = event.Showtimes?.[0] ?? null;
-      const venueId = showtime?.VenueID ?? null;
-      const totalSeats = venueId ? await prisma.seat.count({ where: { VenueID: venueId } }) : 0;
-      const bookedCount = showtime
-        ? await prisma.bookingDetail.count({
-            where: {
-              ShowtimeID: showtime.ShowtimeID,
-              Booking: {
-                OR: [
-                  { Status: { StatusName: 'Completed' } },
-                  { Status: { StatusName: 'Pending' }, ExpiresAt: { gt: now } }
-                ]
-              }
-            }
-          })
-        : 0;
-
-      const allShowtimeIds = event.Showtimes?.map(s => s.ShowtimeID) || [];
-      const totalBookings = allShowtimeIds.length > 0
-        ? await prisma.bookingDetail.count({ where: { ShowtimeID: { in: allShowtimeIds } } })
-        : 0;
-
-      const latestShowtime = event.Showtimes?.length > 0
-        ? event.Showtimes.reduce((latest, s) =>
-            new Date(s.StartDateTime) > new Date(latest.StartDateTime) ? s : latest,
-          event.Showtimes[0])
-        : null;
-      const isPast = latestShowtime ? new Date(latestShowtime.StartDateTime) < now : false;
-
-      return {
-        id: event.EventID,
-        title: event.Title,
-        description: event.Description,
-        category: event.Category?.CategoryName || 'Uncategorized',
-        categoryId: event.CategoryID,
-        basePrice: Number(showtime?.BasePrice ?? 0),
-        venue: showtime?.Venue?.VenueName ?? '-',
-        venueId,
-        totalSeats,
-        seatsRemaining: totalSeats - bookedCount,
-        startDateTime: showtime?.StartDateTime ?? null,
-        showtimeId: showtime?.ShowtimeID ?? null,
-        isPast,
-        hasBookings: totalBookings > 0,
-        latestShowtime: latestShowtime?.StartDateTime ?? null
-      };
-    }));
-
-    res.json(mapped);
+    res.json(await getEventList(prisma, { search, categoryId }));
   } catch (error) {
     console.error('Staff getAllEvents error:', error);
     res.status(500).json({ error: 'Failed to fetch events' });
