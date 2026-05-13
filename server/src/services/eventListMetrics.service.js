@@ -4,6 +4,21 @@ function invalidateEventListCache() {
   return undefined;
 }
 
+function isMissingEventListMetrics(error) {
+  const text = `${error?.code || ''} ${error?.message || ''}`;
+  return text.includes('EventListMetrics') && (text.includes('42P01') || text.includes('does not exist'));
+}
+
+async function refreshEventListMetrics(db) {
+  if (typeof db?.$executeRawUnsafe !== 'function') return;
+
+  try {
+    await db.$executeRawUnsafe('REFRESH MATERIALIZED VIEW "EventListMetrics"');
+  } catch (error) {
+    if (!isMissingEventListMetrics(error)) throw error;
+  }
+}
+
 function buildEventListWhere({ search, category, categoryId }) {
   const clauses = [];
   const params = [];
@@ -196,11 +211,6 @@ function buildEventSummaryMetricsSql({ clauses, nowParamIndex }) {
     FROM "EventListMetrics" elm
     ${whereFromClauses(clauses)}
   `;
-}
-
-function isMissingEventListMetrics(error) {
-  const text = `${error?.code || ''} ${error?.message || ''}`;
-  return text.includes('EventListMetrics') && (text.includes('42P01') || text.includes('does not exist'));
 }
 
 function buildEventListSql({
@@ -734,6 +744,7 @@ module.exports = {
   buildEventListWhere,
   buildEventSummarySql,
   invalidateEventListCache,
+  refreshEventListMetrics,
   mapEventSummary,
   mapEventListRows
 };

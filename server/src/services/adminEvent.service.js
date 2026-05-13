@@ -1,6 +1,6 @@
 const prisma = require('../config/prisma');
 const HttpError = require('../utils/HttpError');
-const { getEventList, invalidateEventListCache } = require('./eventListMetrics.service');
+const { getEventList, invalidateEventListCache, refreshEventListMetrics } = require('./eventListMetrics.service');
 
 function parseId(value) {
   const id = parseInt(value, 10);
@@ -209,6 +209,7 @@ function createAdminEventService(db = prisma) {
       }
 
       invalidateEventListCache();
+      await refreshEventListMetrics(db);
       return event;
     },
 
@@ -235,6 +236,7 @@ function createAdminEventService(db = prisma) {
       await upsertShowtimes(eventId, showtimes);
 
       invalidateEventListCache();
+      await refreshEventListMetrics(db);
       return updatedEvent;
     },
 
@@ -259,6 +261,7 @@ function createAdminEventService(db = prisma) {
 
       await db.event.delete({ where: { EventID: eventId } });
       invalidateEventListCache();
+      await refreshEventListMetrics(db);
     }
   };
 }
